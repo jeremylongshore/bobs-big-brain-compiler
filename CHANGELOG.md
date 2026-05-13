@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.11.2] - 2026-05-13
+
+- chore(ci): remove obsolete gemini-review workflow (switching to Gemini app) (#48) (e4cab5d)
+
+
 ## [v0.11.1] - 2026-05-02
 
 - chore(test): install audit-harness v0.1.0 (P6 batch) (#38) (fcd5db8)
