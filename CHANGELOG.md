@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.12.0] - 2026-05-14
+
+- feat(compiler+cli): recall card generator (E9-B08) (#49) (ecb472a)
+
+
 ## [v0.11.3] - 2026-05-14
 
 - docs(claude-md): sync state to v0.11.2, drop removed gemini-review workflow (d6b9618)
