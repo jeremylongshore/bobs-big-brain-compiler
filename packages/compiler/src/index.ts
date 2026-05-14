@@ -142,3 +142,12 @@ export {
   type RecallGenerateOptions,
   type RecallGenerateResult,
 } from './recall/generate.js';
+export {
+  parseQuizFile,
+  runQuiz,
+  type QuizMode,
+  type QuizOptions,
+  type QuizQuestion,
+  type QuizResult,
+  type QuizSummary,
+} from './recall/quiz.js';
