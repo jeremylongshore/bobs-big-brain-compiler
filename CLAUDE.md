@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Runtime**: TypeScript, Node.js 22+, pnpm 10.x
 - **CLI**: `ico`
 - **License**: MIT
-- **Current state** (v0.9.3): Epics 1–8 complete; Epic 9 in progress — 6 of 12 beads shipped (B01 Research Task Creation, B02 Collector, B03 Summarizer, B04 Skeptic, B05 Integrator, B06 Orchestrator). 958 tests passing. Next bead: E9-B07 (Research Task Archival) — `archiveTask()` transitions completed → archived, preserves full task directory, CLI subcommand `ico research archive <taskId>`.
+- **Current state** (v0.11.2): Epics 1–8 complete; Epic 9 in progress — 7 of 12 beads shipped (B01 Research Task Creation, B02 Collector, B03 Summarizer, B04 Skeptic, B05 Integrator, B06 Orchestrator, B07 Archival). Audit-harness v0.1.0 vendored (commit `fcd5db8`). Check `bd ready` for the next Epic 9 bead.
 
 ## Current State
 
@@ -169,7 +169,7 @@ Detailed specs live in `000-docs/` (doc-filing v4 naming):
 
 - **CI** (`.github/workflows/ci.yml`): Lint, Typecheck, Test, Security Audit on push/PR to main. Security Audit uses **`google/osv-scanner-action`** (reads `pnpm-lock.yaml` directly via OSV.dev) — `pnpm audit` was retired by npm on 2026-04-15 and must not be reintroduced.
 - **Release** (`.github/workflows/release.yml`): Auto-versioning from conventional commits, CHANGELOG generation, GitHub Release creation. Triggers on push to main or manual dispatch with bump type override.
-- **Gemini PR Review** (`.github/workflows/gemini-review.yml`): Auto-runs on every PR. Uses the **wild-ecosystem shared GCP project** for billing (the dedicated `intentional-cognition-os` GCP project has billing disabled). Workflow combines wild-ecosystem WIF auth with the standalone-template's GitHub MCP server config — without the MCP server, Gemini authenticates and exits without posting comments. Don't switch to the bare wild template.
+- **Gemini PR Review**: The standalone `gemini-review.yml` workflow was removed in commit `e4cab5d` (2026-05). PR review now runs via the GitHub-native Gemini app — no in-repo workflow file. Do not re-add a workflow-based Gemini reviewer.
 
 ## Conventions
 
