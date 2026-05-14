@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.12.1] - 2026-05-14
+
+- chore(sweep): disable dependabot, gitignore .arch/ and beads export-state (#51) (dfadfdb)
+
+
 ## [v0.12.0] - 2026-05-14
 
 - feat(compiler+cli): recall card generator (E9-B08) (#49) (ecb472a)
