@@ -4,11 +4,17 @@
  * Currently implemented:
  *   - `ico recall generate --topic <name>` — Generate flashcards and quiz
  *     questions for a topic from compiled knowledge (E9-B08).
+ *   - `ico recall quiz --topic <name>` — Run an interactive quiz over a
+ *     generated quiz file. Supports `--answers-file <path>` for non-
+ *     interactive use in CI / scripted contexts (E9-B09, audit M13).
  *
- * Future subcommands (B09–B11) will plug into this same group.
+ * Future subcommands (B10–B11) will plug into this same group.
  *
  * @module commands/recall
  */
+
+import { readFileSync } from 'node:fs';
+import { createInterface } from 'node:readline/promises';
 
 import type { Command } from 'commander';
 
@@ -16,7 +22,11 @@ import {
   calculateCost,
   createClaudeClient,
   generateRecall,
+  type QuizMode,
+  type QuizSummary,
   type RecallGenerateResult,
+  runQuiz,
+  slugifyRecall,
 } from '@ico/compiler';
 import {
   closeDatabase,
@@ -26,7 +36,16 @@ import {
   loadConfig,
 } from '@ico/kernel';
 
-import { dim, formatError, formatInfo, formatJSON, formatSuccess } from '../lib/output.js';
+import {
+  bold,
+  dim,
+  formatError,
+  formatHeader,
+  formatInfo,
+  formatJSON,
+  formatSuccess,
+  formatWarning,
+} from '../lib/output.js';
 import { resolveWorkspace } from '../lib/workspace-resolver.js';
 
 // ---------------------------------------------------------------------------
@@ -46,35 +65,29 @@ interface RecallGenerateOpts {
   maxTokens?: number;
 }
 
+interface RecallQuizOpts {
+  topic?: string;
+  mode?: string;
+  model?: string;
+  maxTokens?: number;
+  answersFile?: string;
+}
+
 // ---------------------------------------------------------------------------
-// Core logic (exported for testing)
+// recall generate
 // ---------------------------------------------------------------------------
 
-/**
- * Run the recall card generation pipeline for a single topic.
- *
- * Side effects:
- * - Opens the workspace DB, builds FTS5 index, calls Claude, writes card +
- *   quiz files under `recall/`, emits a `recall.generate` trace.
- * - Prints either the result summary (default) or a JSON document (`--json`).
- *
- * @param topic      - Topic phrase used both for FTS5 search and the quiz filename slug.
- * @param opts       - Subcommand options.
- * @param globalOpts - Global CLI flags (json, verbose, workspace).
- */
 export async function runRecallGenerate(
   topic: string,
   opts: RecallGenerateOpts,
   globalOpts: GlobalOptions,
 ): Promise<{ ok: true; value: RecallGenerateResult } | { ok: false; error: Error }> {
-  // 1. Resolve workspace.
   const wsResolveOpts =
     globalOpts.workspace !== undefined ? { workspace: globalOpts.workspace } : {};
   const wsResult = resolveWorkspace(wsResolveOpts);
   if (!wsResult.ok) return { ok: false, error: wsResult.error };
   const { root: wsPath, dbPath } = wsResult.value;
 
-  // 2. Load config and create Claude client.
   let config: { apiKey: string; model: string };
   try {
     config = loadConfig(wsPath);
@@ -86,13 +99,11 @@ export async function runRecallGenerate(
   }
   const client = createClaudeClient(config.apiKey);
 
-  // 3. Open DB.
   const dbResult = initDatabase(dbPath);
   if (!dbResult.ok) return { ok: false, error: dbResult.error };
   const db = dbResult.value;
 
   try {
-    // 4. Ensure FTS5 index is present and current.
     const createIdx = createSearchIndex(db);
     if (!createIdx.ok) return { ok: false, error: createIdx.error };
     const idxResult = indexCompiledPages(db, wsPath);
@@ -101,7 +112,6 @@ export async function runRecallGenerate(
       process.stdout.write(formatInfo(`Indexed ${idxResult.value} compiled pages`) + '\n');
     }
 
-    // 5. Generate.
     const model = opts.model ?? config.model;
     const result = await generateRecall(db, wsPath, topic, client, {
       ...(opts.maxPages !== undefined && { maxPages: opts.maxPages }),
@@ -110,7 +120,6 @@ export async function runRecallGenerate(
     });
     if (!result.ok) return { ok: false, error: result.error };
 
-    // 6. Emit output.
     if (globalOpts.json === true) {
       process.stdout.write(formatJSON(result.value) + '\n');
     } else {
@@ -137,12 +146,173 @@ export async function runRecallGenerate(
 }
 
 // ---------------------------------------------------------------------------
-// Commander registration
+// recall quiz
 // ---------------------------------------------------------------------------
 
 /**
- * Register `ico recall` and its `generate` subcommand on the root program.
+ * Load and validate `--answers-file`. The file is JSON: either a top-level
+ * array of strings, or an object with an `answers` array. The latter form
+ * leaves room for richer fixtures (confidence values, timestamps) later
+ * without breaking existing files.
  */
+function loadAnswersFile(path: string): { ok: true; value: string[] } | { ok: false; error: Error } {
+  let raw: string;
+  try {
+    raw = readFileSync(path, 'utf-8');
+  } catch (e) {
+    return { ok: false, error: new Error(`Failed to read answers file ${path}: ${e instanceof Error ? e.message : String(e)}`) };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    return { ok: false, error: new Error(`Answers file is not valid JSON: ${e instanceof Error ? e.message : String(e)}`) };
+  }
+
+  let candidate: unknown = parsed;
+  if (
+    candidate !== null &&
+    typeof candidate === 'object' &&
+    !Array.isArray(candidate) &&
+    'answers' in candidate
+  ) {
+    candidate = (candidate as { answers: unknown }).answers;
+  }
+  if (!Array.isArray(candidate)) {
+    return {
+      ok: false,
+      error: new Error('Answers file must be a JSON array of strings or { "answers": [...] }'),
+    };
+  }
+  const out: string[] = [];
+  for (let i = 0; i < candidate.length; i += 1) {
+    const a: unknown = candidate[i];
+    if (typeof a !== 'string') {
+      return { ok: false, error: new Error(`answers[${i}] is not a string`) };
+    }
+    out.push(a);
+  }
+  return { ok: true, value: out };
+}
+
+/**
+ * Run a quiz session, end-to-end. Interactive by default; non-interactive
+ * when `--answers-file` is passed.
+ */
+export async function runRecallQuiz(
+  opts: RecallQuizOpts,
+  globalOpts: GlobalOptions,
+): Promise<{ ok: true; value: QuizSummary } | { ok: false; error: Error }> {
+  const topic = opts.topic ?? '';
+  if (topic.trim() === '') {
+    return { ok: false, error: new Error('--topic is required') };
+  }
+
+  const wsResolveOpts =
+    globalOpts.workspace !== undefined ? { workspace: globalOpts.workspace } : {};
+  const wsResult = resolveWorkspace(wsResolveOpts);
+  if (!wsResult.ok) return { ok: false, error: wsResult.error };
+  const { root: wsPath, dbPath } = wsResult.value;
+
+  let config: { apiKey: string; model: string };
+  try {
+    config = loadConfig(wsPath);
+  } catch (e) {
+    return { ok: false, error: new Error(`Config error: ${e instanceof Error ? e.message : String(e)}`) };
+  }
+  const client = createClaudeClient(config.apiKey);
+
+  const dbResult = initDatabase(dbPath);
+  if (!dbResult.ok) return { ok: false, error: dbResult.error };
+  const db = dbResult.value;
+
+  try {
+    const topicSlug = slugifyRecall(topic);
+    if (topicSlug === '') {
+      return { ok: false, error: new Error(`Topic '${topic}' produced an empty slug`) };
+    }
+
+    const mode: QuizMode = opts.mode === 'test' ? 'test' : 'review';
+    const model = opts.model ?? config.model;
+
+    // Decide interactive vs non-interactive.
+    let answers: string[] | undefined;
+    if (opts.answersFile !== undefined) {
+      const loaded = loadAnswersFile(opts.answersFile);
+      if (!loaded.ok) return { ok: false, error: loaded.error };
+      answers = loaded.value;
+    }
+
+    let rl: ReturnType<typeof createInterface> | undefined;
+    const prompter = answers === undefined
+      ? async (params: { index: number; total: number; question: string }): Promise<string> => {
+          rl ??= createInterface({ input: process.stdin, output: process.stdout });
+          process.stdout.write('\n');
+          process.stdout.write(formatHeader(`Question ${params.index} of ${params.total}`) + '\n\n');
+          process.stdout.write(`  ${params.question}\n\n`);
+          const answer = await rl.question(`${bold('Your answer:')} `);
+          return answer;
+        }
+      : undefined;
+
+    try {
+      const result = await runQuiz(db, wsPath, topicSlug, client, {
+        mode,
+        model,
+        ...(opts.maxTokens !== undefined && { maxTokens: opts.maxTokens }),
+        ...(answers !== undefined ? { answers } : {}),
+        ...(prompter !== undefined ? { prompter } : {}),
+      });
+      if (!result.ok) return { ok: false, error: result.error };
+
+      if (globalOpts.json === true) {
+        process.stdout.write(formatJSON(result.value) + '\n');
+      } else {
+        printQuizSummary(result.value);
+      }
+
+      return { ok: true, value: result.value };
+    } finally {
+      rl?.close();
+    }
+  } finally {
+    closeDatabase(db);
+  }
+}
+
+function printQuizSummary(summary: QuizSummary): void {
+  process.stdout.write('\n');
+  process.stdout.write(formatHeader('Quiz Complete') + '\n\n');
+  process.stdout.write(formatInfo(`  Topic:      ${summary.topic}`) + '\n');
+  process.stdout.write(formatInfo(`  Session:    ${summary.sessionId}`) + '\n');
+  process.stdout.write(
+    formatInfo(`  Score:      ${summary.correctCount} / ${summary.total}`) + '\n',
+  );
+
+  if (summary.weakConcepts.length > 0) {
+    process.stdout.write(
+      formatWarning(`  Weak areas: ${summary.weakConcepts.join(', ')}`) + '\n',
+    );
+  } else {
+    process.stdout.write(formatSuccess(`  No weak areas detected.`) + '\n');
+  }
+
+  process.stdout.write('\n');
+  process.stdout.write(formatHeader('Per-question results') + '\n\n');
+  for (const r of summary.results) {
+    const marker = r.correct ? formatSuccess('✓') : formatWarning('✗');
+    process.stdout.write(`  ${marker} Q${r.question.index}: ${r.feedback}\n`);
+  }
+  process.stdout.write(
+    dim(`\n  Used ${summary.tokensUsed.toLocaleString()} tokens (model: ${summary.model})\n`),
+  );
+  process.stdout.write('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Commander registration
+// ---------------------------------------------------------------------------
+
 export function register(program: Command): void {
   const recall = program.command('recall').description('Recall, flashcards, and quizzes (Epic 9)');
 
@@ -172,9 +342,42 @@ export function register(program: Command): void {
         ...(globalOpts.workspace !== undefined && { workspace: globalOpts.workspace }),
       };
 
-      // requiredOption ensures topic is defined; assert for the type system.
       const topic = opts.topic ?? '';
       const result = await runRecallGenerate(topic, opts, global);
+      if (!result.ok) {
+        process.stderr.write(formatError(result.error.message) + '\n');
+        process.exit(1);
+      }
+    });
+
+  recall
+    .command('quiz')
+    .description('Run a quiz session over a previously generated quiz file')
+    .requiredOption('--topic <name>', 'Topic to quiz on (same name passed to `recall generate`)')
+    .option('--mode <mode>', 'review | test (default: review)', 'review')
+    .option('--model <model>', 'Claude model override for scoring')
+    .option('--max-tokens <n>', 'Max tokens per scoring call', (v: string) => parseInt(v, 10))
+    .option(
+      '--answers-file <path>',
+      'Read answers from a JSON file (array of strings or { "answers": [...] }) for non-interactive runs',
+    )
+    .addHelpText(
+      'after',
+      [
+        '',
+        'Examples:',
+        '  $ ico recall quiz --topic "transformer attention"',
+        '  $ ico recall quiz --topic attention --answers-file tests/answers.json',
+      ].join('\n'),
+    )
+    .action(async (opts: RecallQuizOpts, cmd: Command) => {
+      const globalOpts = cmd.optsWithGlobals<GlobalOptions>();
+      const global: GlobalOptions = {
+        ...(globalOpts.json !== undefined && { json: globalOpts.json }),
+        ...(globalOpts.verbose !== undefined && { verbose: globalOpts.verbose }),
+        ...(globalOpts.workspace !== undefined && { workspace: globalOpts.workspace }),
+      };
+      const result = await runRecallQuiz(opts, global);
       if (!result.ok) {
         process.stderr.write(formatError(result.error.message) + '\n');
         process.exit(1);
