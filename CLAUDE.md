@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Runtime**: TypeScript, Node.js 22+, pnpm 10.x
 - **CLI**: `ico`
 - **License**: MIT
-- **Current state** (v0.12.0): Epics 1–8 complete; Epic 9 in progress — 10 of 12 beads shipped (B01 Research Task Creation, B02 Collector, B03 Summarizer, B04 Skeptic, B05 Integrator, B06 Orchestrator, B07 Archival, B08 Recall Card Generator, B09 Quiz Runner, B10 Retention Scoring). Audit-harness v0.1.0 vendored. Check `bd ready` for the next Epic 9 bead.
+- **Current state** (v0.12.0): Epics 1–8 complete; Epic 9 in progress — 11 of 12 beads shipped (B01 Research Task Creation, B02 Collector, B03 Summarizer, B04 Skeptic, B05 Integrator, B06 Orchestrator, B07 Archival, B08 Recall Card Generator, B09 Quiz Runner, B10 Retention Scoring, B11 Recall Export). Only B12 (integration tests) remains. Audit-harness v0.1.0 vendored.
 
 ## Current State
 
@@ -36,7 +36,7 @@ pnpm test:coverage                                      # Coverage report
 | `packages/types/` | Complete | Shared TypeScript interfaces, Result<T,E>, Zod schemas, frontmatter schemas |
 | `packages/kernel/` | Complete | Workspace init, SQLite state, mounts, sources, provenance, traces, tasks, wiki index, audit log, FTS5 search, promotion engine, unpromote, recall results (B09), retention scoring (B10) |
 | `packages/compiler/` | Complete + 5 agents + recall | 6 compiler passes, Claude API client, ingest adapters (PDF/MD/web-clip), ask pipeline, report & slide renderers, token tracking, staleness detection. **agents/**: collector, summarizer, skeptic, integrator, orchestrator (Epic 9 stages 1–5). **recall/**: `generateRecall` (E9-B08) and `runQuiz` (E9-B09) operate over `recall/cards/` and `recall/quizzes/`. |
-| `packages/cli/` | Complete | 14 commands (init, mount, ingest, compile, ask, render, lint, promote, unpromote, status, inspect, eval, research, `recall generate`/`recall quiz`/`recall weak`; `recall export` is the only remaining stub) |
+| `packages/cli/` | Complete | 14 commands (init, mount, ingest, compile, ask, render, lint, promote, unpromote, status, inspect, eval, research, `recall generate`/`recall quiz`/`recall weak`/`recall export`) |
 | `evals/` | Not started | Evaluation specs (Epic 10) |
 
 ## Session Startup

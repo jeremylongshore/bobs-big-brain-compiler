@@ -151,3 +151,9 @@ export {
   type QuizResult,
   type QuizSummary,
 } from './recall/quiz.js';
+export {
+  exportRecallAnki,
+  type AnkiCard,
+  type ExportAnkiOptions,
+  type ExportAnkiResult,
+} from './recall/export.js';
