@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.11.3] - 2026-05-14
+
+- docs(claude-md): sync state to v0.11.2, drop removed gemini-review workflow (d6b9618)
+
+
 ## [v0.11.2] - 2026-05-13
 
 - chore(ci): remove obsolete gemini-review workflow (switching to Gemini app) (#48) (e4cab5d)
