@@ -134,3 +134,11 @@ export {
   type Stage,
   type StepConfirmation,
 } from './agents/orchestrator.js';
+export {
+  generateRecall,
+  slugify as slugifyRecall,
+  type CardFile,
+  type QuizFile,
+  type RecallGenerateOptions,
+  type RecallGenerateResult,
+} from './recall/generate.js';
