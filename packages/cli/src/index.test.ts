@@ -153,10 +153,12 @@ describe('stub command exit codes', () => {
     expect(result.stderr).toContain('database');
   });
 
-  it('ico recall exits 1 and mentions Epic 9', () => {
-    const result = runCli(['recall', 'list']);
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain('Epic 9');
+  it('ico recall generate is wired up and requires --topic', () => {
+    // E9-B08 wired up `ico recall generate --topic <name>`. Without --topic,
+    // Commander exits non-zero with a "required option" usage error.
+    const result = runCli(['recall', 'generate']);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/required option|--topic/i);
   });
 
   it('ico promote exits non-zero without --as flag', () => {

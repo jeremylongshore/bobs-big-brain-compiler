@@ -448,10 +448,18 @@ describe('ico CLI integration', { timeout: 30_000 }, () => {
     expect(result.stderr).toContain('database');
   });
 
-  it('ico recall exits 1 and stderr mentions Epic 9', () => {
-    const result = run(['recall', 'list']);
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('Epic 9');
+  it('ico recall generate is registered and requires --topic', () => {
+    // E9-B08 wired up `ico recall generate --topic <name>`. Without --topic,
+    // Commander exits non-zero with a "required option" usage error.
+    const result = run(['recall', 'generate']);
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toMatch(/required option|--topic/i);
+  });
+
+  it('ico recall --help lists the generate subcommand', () => {
+    const result = run(['recall', '--help']);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('generate');
   });
 
   it('ico promote exits non-zero without --as flag', () => {
