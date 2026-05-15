@@ -42,6 +42,16 @@ export {
   type RecordRecallInput,
 } from './recall-results.js';
 
+// Retention
+export {
+  getRetentionByConcept,
+  getRetentionReport,
+  getWeakAreas,
+  type ConceptRetention,
+  type RetentionReport,
+  type WeakAreasOptions,
+} from './retention.js';
+
 // Wiki
 export { rebuildWikiIndex } from './wiki-index.js';
 

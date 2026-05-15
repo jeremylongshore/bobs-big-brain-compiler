@@ -30,10 +30,14 @@ import {
 } from '@ico/compiler';
 import {
   closeDatabase,
+  type ConceptRetention,
   createSearchIndex,
+  getRetentionReport,
+  getWeakAreas,
   indexCompiledPages,
   initDatabase,
   loadConfig,
+  type RetentionReport,
 } from '@ico/kernel';
 
 import {
@@ -71,6 +75,12 @@ interface RecallQuizOpts {
   model?: string;
   maxTokens?: number;
   answersFile?: string;
+}
+
+interface RecallWeakOpts {
+  limit?: number;
+  minSampleSize?: number;
+  report?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -310,6 +320,99 @@ function printQuizSummary(summary: QuizSummary): void {
 }
 
 // ---------------------------------------------------------------------------
+// recall weak
+// ---------------------------------------------------------------------------
+
+/**
+ * List the lowest-retention concepts. With `--report`, prints the full
+ * retention report (overall + weakest + strongest).
+ */
+export function runRecallWeak(
+  opts: RecallWeakOpts,
+  globalOpts: GlobalOptions,
+):
+  | { ok: true; value: { weak: ConceptRetention[]; report: RetentionReport | null } }
+  | { ok: false; error: Error } {
+  const wsResolveOpts =
+    globalOpts.workspace !== undefined ? { workspace: globalOpts.workspace } : {};
+  const wsResult = resolveWorkspace(wsResolveOpts);
+  if (!wsResult.ok) return { ok: false, error: wsResult.error };
+  const { dbPath } = wsResult.value;
+
+  const dbResult = initDatabase(dbPath);
+  if (!dbResult.ok) return { ok: false, error: dbResult.error };
+  const db = dbResult.value;
+
+  try {
+    const weakResult = getWeakAreas(db, {
+      ...(opts.limit !== undefined && { limit: opts.limit }),
+      ...(opts.minSampleSize !== undefined && { minSampleSize: opts.minSampleSize }),
+    });
+    if (!weakResult.ok) return { ok: false, error: weakResult.error };
+
+    let report: RetentionReport | null = null;
+    if (opts.report === true) {
+      const reportResult = getRetentionReport(db, {
+        ...(opts.minSampleSize !== undefined && { minSampleSize: opts.minSampleSize }),
+      });
+      if (!reportResult.ok) return { ok: false, error: reportResult.error };
+      report = reportResult.value;
+    }
+
+    if (globalOpts.json === true) {
+      process.stdout.write(formatJSON({ weak: weakResult.value, report }) + '\n');
+    } else {
+      printWeakAreas(weakResult.value, report);
+    }
+    return { ok: true, value: { weak: weakResult.value, report } };
+  } finally {
+    closeDatabase(db);
+  }
+}
+
+function printWeakAreas(weak: ConceptRetention[], report: RetentionReport | null): void {
+  process.stdout.write('\n');
+  if (report !== null) {
+    process.stdout.write(formatHeader('Retention Report') + '\n\n');
+    process.stdout.write(
+      formatInfo(`  Total answers:  ${report.totalAnswers}`) + '\n',
+    );
+    process.stdout.write(
+      formatInfo(`  Total correct:  ${report.totalCorrect}`) + '\n',
+    );
+    process.stdout.write(
+      formatInfo(`  Overall:        ${(report.overall * 100).toFixed(1)}%`) + '\n',
+    );
+    process.stdout.write(
+      formatInfo(`  Concepts seen:  ${report.conceptCount}`) + '\n',
+    );
+    process.stdout.write('\n');
+    if (report.strongest.length > 0) {
+      process.stdout.write(formatHeader('Strongest concepts') + '\n\n');
+      for (const c of report.strongest) {
+        process.stdout.write(
+          `  ${formatSuccess('●')} ${c.concept.padEnd(40)} ${(c.retention * 100).toFixed(0).padStart(3)}%  ${dim(`(${c.correct}/${c.total})`)}\n`,
+        );
+      }
+      process.stdout.write('\n');
+    }
+  }
+
+  process.stdout.write(formatHeader('Weakest concepts') + '\n\n');
+  if (weak.length === 0) {
+    process.stdout.write(dim('  No recall results recorded yet. Run `ico recall quiz` first.') + '\n');
+    process.stdout.write('\n');
+    return;
+  }
+  for (const c of weak) {
+    process.stdout.write(
+      `  ${formatWarning('●')} ${c.concept.padEnd(40)} ${(c.retention * 100).toFixed(0).padStart(3)}%  ${dim(`(${c.correct}/${c.total})`)}\n`,
+    );
+  }
+  process.stdout.write('\n');
+}
+
+// ---------------------------------------------------------------------------
 // Commander registration
 // ---------------------------------------------------------------------------
 
@@ -378,6 +481,40 @@ export function register(program: Command): void {
         ...(globalOpts.workspace !== undefined && { workspace: globalOpts.workspace }),
       };
       const result = await runRecallQuiz(opts, global);
+      if (!result.ok) {
+        process.stderr.write(formatError(result.error.message) + '\n');
+        process.exit(1);
+      }
+    });
+
+  recall
+    .command('weak')
+    .description('Show the lowest-retention concepts')
+    .option('--limit <n>', 'Max number of weak concepts to show (default: 10)', (v: string) => parseInt(v, 10))
+    .option(
+      '--min-sample-size <n>',
+      'Exclude concepts with fewer than n results (default: 1)',
+      (v: string) => parseInt(v, 10),
+    )
+    .option('--report', 'Include the full retention report (overall + strongest + weakest)')
+    .addHelpText(
+      'after',
+      [
+        '',
+        'Examples:',
+        '  $ ico recall weak',
+        '  $ ico recall weak --limit 5 --report',
+        '  $ ico recall weak --min-sample-size 3',
+      ].join('\n'),
+    )
+    .action((opts: RecallWeakOpts, cmd: Command) => {
+      const globalOpts = cmd.optsWithGlobals<GlobalOptions>();
+      const global: GlobalOptions = {
+        ...(globalOpts.json !== undefined && { json: globalOpts.json }),
+        ...(globalOpts.verbose !== undefined && { verbose: globalOpts.verbose }),
+        ...(globalOpts.workspace !== undefined && { workspace: globalOpts.workspace }),
+      };
+      const result = runRecallWeak(opts, global);
       if (!result.ok) {
         process.stderr.write(formatError(result.error.message) + '\n');
         process.exit(1);

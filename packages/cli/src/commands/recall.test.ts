@@ -25,6 +25,8 @@ vi.mock('@ico/kernel', async () => {
     createSearchIndex: vi.fn(() => ({ ok: true, value: undefined })),
     indexCompiledPages: vi.fn(() => ({ ok: true, value: 3 })),
     loadConfig: vi.fn(() => ({ apiKey: 'sk-test', model: 'claude-sonnet-4-6' })),
+    getWeakAreas: vi.fn(),
+    getRetentionReport: vi.fn(),
   };
 });
 
@@ -48,9 +50,10 @@ vi.mock('../lib/workspace-resolver.js', () => ({
 // ---------------------------------------------------------------------------
 
 import * as compilerModule from '@ico/compiler';
+import * as kernelModule from '@ico/kernel';
 
 import { resolveWorkspace } from '../lib/workspace-resolver.js';
-import { runRecallGenerate, runRecallQuiz } from './recall.js';
+import { runRecallGenerate, runRecallQuiz, runRecallWeak } from './recall.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -356,5 +359,81 @@ describe('runRecallQuiz — error paths', () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.error.message).toContain('Quiz file not found');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runRecallWeak
+// ---------------------------------------------------------------------------
+
+describe('runRecallWeak', () => {
+  it('returns weak areas and forwards limit + minSampleSize', () => {
+    mockWorkspace();
+    vi.mocked(kernelModule.getWeakAreas).mockReturnValue({
+      ok: true,
+      value: [
+        { concept: 'c1', total: 4, correct: 1, retention: 0.25, lastTestedAt: '2026-04-08T12:00:00Z' },
+      ],
+    });
+
+    const r = runRecallWeak({ limit: 3, minSampleSize: 2 }, {});
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.weak).toHaveLength(1);
+    expect(r.value.report).toBeNull();
+
+    const callOpts = vi.mocked(kernelModule.getWeakAreas).mock.calls[0]![1];
+    expect(callOpts).toMatchObject({ limit: 3, minSampleSize: 2 });
+  });
+
+  it('includes the full report when --report is passed', () => {
+    mockWorkspace();
+    vi.mocked(kernelModule.getWeakAreas).mockReturnValue({ ok: true, value: [] });
+    vi.mocked(kernelModule.getRetentionReport).mockReturnValue({
+      ok: true,
+      value: {
+        totalAnswers: 10,
+        totalCorrect: 7,
+        overall: 0.7,
+        conceptCount: 3,
+        weakest: [],
+        strongest: [],
+      },
+    });
+
+    const r = runRecallWeak({ report: true }, {});
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.report?.overall).toBe(0.7);
+    expect(kernelModule.getRetentionReport).toHaveBeenCalledTimes(1);
+  });
+
+  it('emits JSON when --json is passed', () => {
+    mockWorkspace();
+    vi.mocked(kernelModule.getWeakAreas).mockReturnValue({
+      ok: true,
+      value: [
+        { concept: 'c1', total: 2, correct: 0, retention: 0, lastTestedAt: '2026-04-08T12:00:00Z' },
+      ],
+    });
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    runRecallWeak({}, { json: true });
+    const joined = writeSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(joined).toContain('"weak"');
+    expect(joined).toContain('"concept": "c1"');
+    expect(joined).toContain('"report": null');
+    writeSpy.mockRestore();
+  });
+
+  it('propagates kernel errors verbatim', () => {
+    mockWorkspace();
+    vi.mocked(kernelModule.getWeakAreas).mockReturnValue({
+      ok: false,
+      error: new Error('table corrupt'),
+    });
+    const r = runRecallWeak({}, {});
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.message).toContain('table corrupt');
   });
 });
