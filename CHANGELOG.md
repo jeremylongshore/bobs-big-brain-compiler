@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.14.0] - 2026-05-15
+
+- feat(kernel+cli): retention scoring and weak-area tracking (E9-B10) (#56) (42d591a)
+
+
 ## [v0.13.0] - 2026-05-15
 
 - feat(kernel+compiler+cli): quiz runner (E9-B09) (#52) (b2c52ea)
