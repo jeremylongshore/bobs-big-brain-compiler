@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Runtime**: TypeScript, Node.js 22+, pnpm 10.x
 - **CLI**: `ico`
 - **License**: MIT
-- **Current state** (v0.12.0): Epics 1–8 complete; Epic 9 in progress — 11 of 12 beads shipped (B01 Research Task Creation, B02 Collector, B03 Summarizer, B04 Skeptic, B05 Integrator, B06 Orchestrator, B07 Archival, B08 Recall Card Generator, B09 Quiz Runner, B10 Retention Scoring, B11 Recall Export). Only B12 (integration tests) remains. Audit-harness v0.1.0 vendored.
+- **Current state** (v0.12.0): Epics 1–9 complete (all 12 Epic 9 beads shipped: B01 Research Task Creation, B02 Collector, B03 Summarizer, B04 Skeptic, B05 Integrator, B06 Orchestrator, B07 Archival, B08 Recall Card Generator, B09 Quiz Runner, B10 Retention Scoring, B11 Recall Export, B12 Recall Pipeline Integration Tests). Next: Epic 10 (Hardening + Release). Audit-harness v0.1.0 vendored.
 
 ## Current State
 
