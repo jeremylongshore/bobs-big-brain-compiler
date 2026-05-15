@@ -34,6 +34,14 @@ export { createTask, transitionTask, getTask, listTasks, type TaskRecord } from 
 // Archive
 export { archiveTask, type ArchiveResult } from './archive.js';
 
+// Recall
+export {
+  listRecallResults,
+  recordRecallResult,
+  type RecallResultRow,
+  type RecordRecallInput,
+} from './recall-results.js';
+
 // Wiki
 export { rebuildWikiIndex } from './wiki-index.js';
 

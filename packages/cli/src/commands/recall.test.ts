@@ -34,6 +34,7 @@ vi.mock('@ico/compiler', async () => {
     ...actual,
     createClaudeClient: vi.fn(() => ({ createCompletion: vi.fn() })),
     generateRecall: vi.fn(),
+    runQuiz: vi.fn(),
     calculateCost: vi.fn(() => 0.01),
   };
 });
@@ -49,7 +50,7 @@ vi.mock('../lib/workspace-resolver.js', () => ({
 import * as compilerModule from '@ico/compiler';
 
 import { resolveWorkspace } from '../lib/workspace-resolver.js';
-import { runRecallGenerate } from './recall.js';
+import { runRecallGenerate, runRecallQuiz } from './recall.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -182,5 +183,178 @@ describe('runRecallGenerate — error paths', () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.error.message).toContain('No matching pages');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runRecallQuiz
+// ---------------------------------------------------------------------------
+
+import { writeFileSync } from 'node:fs';
+
+function mockQuizSuccess(): void {
+  vi.mocked(compilerModule.runQuiz).mockResolvedValue({
+    ok: true,
+    value: {
+      topic: 'attention',
+      sessionId: 'quiz-test-001',
+      mode: 'review',
+      results: [
+        {
+          question: { index: 1, question: 'Q1', expectedAnswer: 'A1', concept: 'c1', sourcePages: [] },
+          userAnswer: 'mine',
+          correct: true,
+          feedback: 'good',
+          retentionScore: 1,
+          responseTimeMs: 1234,
+          resultId: 'row-1',
+        },
+        {
+          question: { index: 2, question: 'Q2', expectedAnswer: 'A2', concept: 'c2', sourcePages: [] },
+          userAnswer: 'mine',
+          correct: false,
+          feedback: 'missed',
+          retentionScore: 0,
+          responseTimeMs: 2345,
+          resultId: 'row-2',
+        },
+      ],
+      correctCount: 1,
+      total: 2,
+      weakConcepts: ['c2'],
+      tokensUsed: 200,
+      model: 'claude-sonnet-4-6',
+    },
+  });
+}
+
+describe('runRecallQuiz — happy path', () => {
+  it('rejects when --topic is empty', async () => {
+    mockWorkspace();
+    const r = await runRecallQuiz({}, {});
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.message).toContain('--topic is required');
+  });
+
+  it('passes prepared answers from --answers-file', async () => {
+    mockWorkspace();
+    mockQuizSuccess();
+    const answersPath = join(tmpBase, 'answers.json');
+    writeFileSync(answersPath, JSON.stringify(['ans1', 'ans2']), 'utf-8');
+
+    const r = await runRecallQuiz({ topic: 'attention', answersFile: answersPath }, {});
+    expect(r.ok).toBe(true);
+
+    const callOptions = vi.mocked(compilerModule.runQuiz).mock.calls[0]![4];
+    expect(callOptions.answers).toEqual(['ans1', 'ans2']);
+    expect(callOptions.prompter).toBeUndefined();
+  });
+
+  it('accepts answers in object form { answers: [...] }', async () => {
+    mockWorkspace();
+    mockQuizSuccess();
+    const answersPath = join(tmpBase, 'answers.json');
+    writeFileSync(answersPath, JSON.stringify({ answers: ['x', 'y'] }), 'utf-8');
+
+    const r = await runRecallQuiz({ topic: 'attention', answersFile: answersPath }, {});
+    expect(r.ok).toBe(true);
+    const callOptions = vi.mocked(compilerModule.runQuiz).mock.calls[0]![4];
+    expect(callOptions.answers).toEqual(['x', 'y']);
+  });
+
+  it('passes mode through (review|test)', async () => {
+    mockWorkspace();
+    mockQuizSuccess();
+    const answersPath = join(tmpBase, 'a.json');
+    writeFileSync(answersPath, '[]', 'utf-8');
+
+    await runRecallQuiz({ topic: 't', mode: 'test', answersFile: answersPath }, {});
+    const opts = vi.mocked(compilerModule.runQuiz).mock.calls[0]![4];
+    expect(opts.mode).toBe('test');
+  });
+
+  it('defaults mode to "review" when omitted or invalid', async () => {
+    mockWorkspace();
+    mockQuizSuccess();
+    const answersPath = join(tmpBase, 'a.json');
+    writeFileSync(answersPath, '[]', 'utf-8');
+
+    await runRecallQuiz({ topic: 't', mode: 'bogus', answersFile: answersPath }, {});
+    const opts = vi.mocked(compilerModule.runQuiz).mock.calls[0]![4];
+    expect(opts.mode).toBe('review');
+  });
+
+  it('slugifies the topic when looking up the quiz file', async () => {
+    mockWorkspace();
+    mockQuizSuccess();
+    const answersPath = join(tmpBase, 'a.json');
+    writeFileSync(answersPath, '[]', 'utf-8');
+
+    await runRecallQuiz({ topic: 'Transformer Attention', answersFile: answersPath }, {});
+    const slugArg = vi.mocked(compilerModule.runQuiz).mock.calls[0]![2];
+    expect(slugArg).toBe('transformer-attention');
+  });
+
+  it('emits JSON output when --json is passed', async () => {
+    mockWorkspace();
+    mockQuizSuccess();
+    const answersPath = join(tmpBase, 'a.json');
+    writeFileSync(answersPath, '[]', 'utf-8');
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await runRecallQuiz({ topic: 'attention', answersFile: answersPath }, { json: true });
+
+    const joined = writeSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(joined).toContain('"sessionId": "quiz-test-001"');
+    expect(joined).toContain('"correctCount": 1');
+    writeSpy.mockRestore();
+  });
+});
+
+describe('runRecallQuiz — error paths', () => {
+  it('returns err when answers file is missing', async () => {
+    mockWorkspace();
+    const r = await runRecallQuiz(
+      { topic: 'attention', answersFile: join(tmpBase, 'does-not-exist.json') },
+      {},
+    );
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.message).toContain('Failed to read answers file');
+  });
+
+  it('returns err when answers file is not valid JSON', async () => {
+    mockWorkspace();
+    const p = join(tmpBase, 'bad.json');
+    writeFileSync(p, 'not json', 'utf-8');
+    const r = await runRecallQuiz({ topic: 'attention', answersFile: p }, {});
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.message).toContain('not valid JSON');
+  });
+
+  it('returns err when answers file is the wrong shape', async () => {
+    mockWorkspace();
+    const p = join(tmpBase, 'bad.json');
+    writeFileSync(p, JSON.stringify({ foo: 'bar' }), 'utf-8');
+    const r = await runRecallQuiz({ topic: 'attention', answersFile: p }, {});
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.message).toContain('array of strings');
+  });
+
+  it('propagates runQuiz errors verbatim', async () => {
+    mockWorkspace();
+    vi.mocked(compilerModule.runQuiz).mockResolvedValue({
+      ok: false,
+      error: new Error('Quiz file not found'),
+    });
+    const p = join(tmpBase, 'a.json');
+    writeFileSync(p, '[]', 'utf-8');
+    const r = await runRecallQuiz({ topic: 'nope', answersFile: p }, {});
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.message).toContain('Quiz file not found');
   });
 });
