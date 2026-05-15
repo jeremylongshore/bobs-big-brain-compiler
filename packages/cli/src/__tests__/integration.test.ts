@@ -469,10 +469,10 @@ describe('ico CLI integration', { timeout: 30_000 }, () => {
     expect(result.stderr.length).toBeGreaterThan(0);
   });
 
-  it('ico eval exits 1 and stderr mentions Epic 10', () => {
-    const result = run(['eval', 'spec.yaml']);
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('Epic 10');
+  it('ico eval --help lists the run subcommand (E10-B01)', () => {
+    const result = run(['eval', '--help']);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('run');
   });
 
   // -------------------------------------------------------------------------

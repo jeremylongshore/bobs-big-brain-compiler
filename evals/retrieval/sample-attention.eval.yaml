@@ -1,0 +1,15 @@
+# Sample retrieval eval. Requires that a wiki page about self-attention
+# exists at `concepts/self-attention.md` for the eval to pass on the
+# default workspace. Adjust `expected_pages` to your own corpus.
+id: retrieval-attention-001
+name: Retrieval — self-attention question finds canonical page
+description: |
+  Demonstrates the retrieval handler. The question is a typical learner
+  query; the expected page is the canonical compiled concept page. Pass
+  when the page appears in the top 5 FTS5 results.
+type: retrieval
+question: "How does self-attention work in transformers?"
+expected_pages:
+  - concepts/self-attention.md
+k: 5
+threshold: 1.0

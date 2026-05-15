@@ -1,0 +1,93 @@
+/**
+ * Eval framework type definitions (E10-B01).
+ *
+ * An "eval" is a YAML spec that drives a deterministic check against a
+ * workspace and produces a pass/fail with an optional 0..1 score. Specs
+ * live under `evals/` (workspace-relative); each is identified by `id`
+ * and dispatched to a handler by `type`.
+ *
+ * Two handler types ship in B01:
+ *   - `retrieval`: runs FTS5 search and scores recall@k / precision@k
+ *     against an expected-pages list.
+ *   - `smoke`: deterministic invariants over the workspace state (e.g.
+ *     "FTS5 index is non-empty", "no tasks in failed_*").
+ *
+ * Later beads will add `compilation` (B02) and `citation` (B03)
+ * handlers. The spec schema is intentionally permissive on extra fields
+ * so new handlers can land without breaking existing specs.
+ *
+ * @module evals/types
+ */
+
+// ---------------------------------------------------------------------------
+// Spec schema
+// ---------------------------------------------------------------------------
+
+/** Supported handler types. New handlers add to this union. */
+export type EvalType = 'retrieval' | 'smoke';
+
+/** Common fields shared by every eval spec. */
+export interface BaseEvalSpec {
+  /** Stable identifier, e.g. `eval-retrieval-attention-001`. Unique per repo. */
+  id: string;
+  /** Human-readable name shown in reports. */
+  name: string;
+  /** Free-text purpose for future maintainers. */
+  description?: string;
+  /** Handler dispatch key. */
+  type: EvalType;
+  /** Optional target hint surfaced in the `eval.run` trace payload. */
+  target?: string;
+  /** Pass-threshold for the score in `[0, 1]`. Defaults to 1.0 (strict). */
+  threshold?: number;
+}
+
+/** Retrieval handler — measures recall against an expected page list. */
+export interface RetrievalEvalSpec extends BaseEvalSpec {
+  type: 'retrieval';
+  /** Natural-language question fed into FTS5. */
+  question: string;
+  /** Wiki-relative paths that should appear in the top-k results. */
+  expected_pages: string[];
+  /** How many top results to consider. Defaults to 5. */
+  k?: number;
+}
+
+/** Smoke handler — boolean invariants the runner asserts. */
+export interface SmokeEvalSpec extends BaseEvalSpec {
+  type: 'smoke';
+  /** Named check; the handler dispatches on this. */
+  check: 'fts5-index-nonempty' | 'no-failed-tasks' | 'audit-chain-intact';
+}
+
+/** Union of every supported spec shape. */
+export type EvalSpec = RetrievalEvalSpec | SmokeEvalSpec;
+
+// ---------------------------------------------------------------------------
+// Result shape
+// ---------------------------------------------------------------------------
+
+/** Result of a single eval run. */
+export interface EvalResult {
+  spec: EvalSpec;
+  passed: boolean;
+  /** Score in `[0, 1]`. `1.0` on a pure pass/fail handler when passed. */
+  score: number;
+  /** Threshold used for pass/fail. */
+  threshold: number;
+  /** Human-readable summary surfaced in reports and the eval.result trace. */
+  details: string;
+  /** Wall-clock duration in milliseconds. */
+  durationMs: number;
+}
+
+/** Aggregate result over a batch run. */
+export interface EvalBatchResult {
+  total: number;
+  passed: number;
+  failed: number;
+  /** Per-spec results in the order they ran. */
+  results: EvalResult[];
+  /** Sum of per-result durations. */
+  durationMs: number;
+}

@@ -1,0 +1,13 @@
+# Smoke eval — verifies the integrity of the append-only trace chain.
+#
+# Walks every trace JSONL line and checks `prev_hash == SHA-256(prev_line)`.
+# A failure indicates tampering, file corruption, or a bug in writeTrace.
+id: smoke-audit-chain-intact
+name: Audit trace chain hash integrity
+description: |
+  For each daily trace file referenced in the `traces` index table,
+  verifies that every line's `prev_hash` matches SHA-256 of the
+  preceding line. Detects audit-log tampering (audit H4).
+type: smoke
+check: audit-chain-intact
+threshold: 1.0

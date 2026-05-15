@@ -169,9 +169,12 @@ describe('stub command exit codes', () => {
     expect(result.stderr.length).toBeGreaterThan(0);
   });
 
-  it('ico eval exits 1 and mentions Epic 10', () => {
-    const result = runCli(['eval', 'spec.yaml']);
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain('Epic 10');
+  it('ico eval run is registered as a subcommand (E10-B01)', () => {
+    // `ico eval --help` should list the `run` subcommand. Without a
+    // workspace, `ico eval run` itself exits non-zero with a workspace
+    // error, which is enough to prove the wiring.
+    const result = runCli(['eval', '--help']);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('run');
   });
 });

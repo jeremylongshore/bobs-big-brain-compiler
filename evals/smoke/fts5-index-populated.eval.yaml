@@ -1,0 +1,15 @@
+# Smoke eval — verifies the FTS5 index is populated.
+#
+# Trips when the operator has compiled nothing yet (a freshly-init'd
+# workspace). Useful as the first canary in CI: if this fails, every
+# downstream retrieval/citation eval will fail too, so report this one
+# first.
+id: smoke-fts5-index-populated
+name: FTS5 index has at least one compiled page
+description: |
+  Asserts that `pages_fts` contains at least one row. Failure means
+  no compiled wiki pages exist; run `ico compile` before re-running
+  the eval suite.
+type: smoke
+check: fts5-index-nonempty
+threshold: 1.0
