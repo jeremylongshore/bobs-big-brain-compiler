@@ -120,11 +120,12 @@ function parseCardFrontmatter(content: string): { fm: CardFrontmatter; bodyStart
       if (value === '[]' || value === '') {
         inSources = true;
       } else if (value.startsWith('[')) {
-        // Flow-style inline list — best-effort split.
+        // Flow-style inline list — best-effort split. Strip surrounding
+        // quote chars so values match the block-list form.
         fm.sourcePages = value
           .slice(1, -1)
           .split(',')
-          .map((s) => s.trim())
+          .map((s) => s.trim().replace(/^["']|["']$/g, ''))
           .filter((s) => s.length > 0);
       } else {
         inSources = true;
@@ -140,13 +141,18 @@ function parseCardFrontmatter(content: string): { fm: CardFrontmatter; bodyStart
  * them and trim each section's body.
  */
 function extractQA(body: string): { question: string; answer: string } | null {
-  const qIdx = body.indexOf('\n## Question');
-  const aIdx = body.indexOf('\n## Answer');
-  if (qIdx === -1 || aIdx === -1 || aIdx < qIdx) return null;
+  // Multiline match — `## Question` may appear at body start without a
+  // leading newline if the card has no top-level heading.
+  const qMatch = /^## Question[^\n]*\n/m.exec(body);
+  const aMatch = /^## Answer[^\n]*\n/m.exec(body);
+  if (qMatch === null || aMatch === null) return null;
+  const qIdx = qMatch.index;
+  const aIdx = aMatch.index;
+  if (aIdx < qIdx) return null;
 
-  const qStart = body.indexOf('\n', qIdx + 1) + 1;
+  const qStart = qIdx + qMatch[0].length;
   const qEnd = aIdx;
-  const aStart = body.indexOf('\n', aIdx + 1) + 1;
+  const aStart = aIdx + aMatch[0].length;
 
   const question = body.slice(qStart, qEnd).trim();
   const answer = body.slice(aStart).trim();
@@ -209,8 +215,9 @@ export function exportRecallAnki(
 
   let filenames: string[];
   try {
-    filenames = readdirSync(cardsDir)
-      .filter((f) => f.endsWith('.md') && f !== '.gitkeep')
+    filenames = readdirSync(cardsDir, { withFileTypes: true })
+      .filter((d) => d.isFile() && d.name.endsWith('.md') && d.name !== '.gitkeep')
+      .map((d) => d.name)
       .sort();
   } catch (e) {
     return err(e instanceof Error ? e : new Error(String(e)));
@@ -283,6 +290,16 @@ export function exportRecallAnki(
   let writtenPath: string | null = null;
   if (options.outPath !== undefined) {
     const outAbs = resolve(workspacePath, options.outPath);
+    // Reject paths that escape the workspace via `..` or absolute paths.
+    const wsAbs = resolve(workspacePath);
+    const wsPrefix = wsAbs.endsWith('/') ? wsAbs : `${wsAbs}/`;
+    if (outAbs !== wsAbs && !outAbs.startsWith(wsPrefix)) {
+      return err(
+        new Error(
+          `Output path must be inside the workspace: ${options.outPath}`,
+        ),
+      );
+    }
     try {
       const outDir = dirname(outAbs);
       if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });

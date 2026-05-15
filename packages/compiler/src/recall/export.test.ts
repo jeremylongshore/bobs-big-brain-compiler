@@ -279,4 +279,31 @@ describe('exportRecallAnki — error paths', () => {
     if (r.ok) return;
     expect(r.error.message).toContain('frontmatter');
   });
+
+  it('rejects --out paths that escape the workspace via ..', () => {
+    writeCard({ filename: 'a.md', concept: 'A', topic: 't', question: 'q', answer: 'a' });
+    const r = exportRecallAnki(env.wsRoot, { outPath: '../escape.txt' });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.message).toContain('inside the workspace');
+  });
+
+  it('rejects absolute --out paths outside the workspace', () => {
+    writeCard({ filename: 'a.md', concept: 'A', topic: 't', question: 'q', answer: 'a' });
+    const r = exportRecallAnki(env.wsRoot, { outPath: '/tmp/foo.txt' });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.message).toContain('inside the workspace');
+  });
+
+  it('ignores subdirectories that happen to end in .md', () => {
+    writeCard({ filename: 'real.md', concept: 'R', topic: 't', question: 'q', answer: 'a' });
+    // Create a subdirectory whose name ends in .md — readdir-with-filetypes
+    // should skip it without throwing EISDIR.
+    mkdirSync(resolve(env.wsRoot, 'recall', 'cards', 'archive.md'), { recursive: true });
+    const r = exportRecallAnki(env.wsRoot);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.cards).toHaveLength(1);
+  });
 });
