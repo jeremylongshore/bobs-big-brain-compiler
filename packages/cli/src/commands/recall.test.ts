@@ -37,6 +37,7 @@ vi.mock('@ico/compiler', async () => {
     createClaudeClient: vi.fn(() => ({ createCompletion: vi.fn() })),
     generateRecall: vi.fn(),
     runQuiz: vi.fn(),
+    exportRecallAnki: vi.fn(),
     calculateCost: vi.fn(() => 0.01),
   };
 });
@@ -53,7 +54,7 @@ import * as compilerModule from '@ico/compiler';
 import * as kernelModule from '@ico/kernel';
 
 import { resolveWorkspace } from '../lib/workspace-resolver.js';
-import { runRecallGenerate, runRecallQuiz, runRecallWeak } from './recall.js';
+import { runRecallExport, runRecallGenerate, runRecallQuiz, runRecallWeak } from './recall.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -435,5 +436,82 @@ describe('runRecallWeak', () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.error.message).toContain('table corrupt');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runRecallExport
+// ---------------------------------------------------------------------------
+
+function mockExportSuccess(): void {
+  vi.mocked(compilerModule.exportRecallAnki).mockReturnValue({
+    ok: true,
+    value: {
+      tsv: 'front\tback\ttopic:t source:s\n',
+      cards: [
+        {
+          sourcePath: 'recall/cards/c.md',
+          front: 'front',
+          back: 'back',
+          tags: 'topic:t source:s',
+          concept: 'C',
+          topic: 't',
+        },
+      ],
+      outPath: null,
+    },
+  });
+}
+
+describe('runRecallExport', () => {
+  it('writes TSV to stdout when --out is omitted', () => {
+    mockWorkspace();
+    mockExportSuccess();
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    const r = runRecallExport({}, {});
+    expect(r.ok).toBe(true);
+    const joined = writeSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(joined).toContain('front\tback\ttopic:t source:s');
+    writeSpy.mockRestore();
+  });
+
+  it('forwards --topic and --out to the exporter', () => {
+    mockWorkspace();
+    mockExportSuccess();
+    runRecallExport({ topic: 'attention', out: 'recall/exports/x.txt' }, {});
+    const opts = vi.mocked(compilerModule.exportRecallAnki).mock.calls[0]![1];
+    expect(opts).toMatchObject({ topic: 'attention', outPath: 'recall/exports/x.txt' });
+  });
+
+  it('emits JSON when --json is passed', () => {
+    mockWorkspace();
+    mockExportSuccess();
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    runRecallExport({}, { json: true });
+    const joined = writeSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(joined).toContain('"tsv"');
+    expect(joined).toContain('"cards"');
+    writeSpy.mockRestore();
+  });
+
+  it('rejects formats other than anki', () => {
+    mockWorkspace();
+    const r = runRecallExport({ format: 'csv' }, {});
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.message).toContain("Unsupported format 'csv'");
+  });
+
+  it('propagates exporter errors verbatim', () => {
+    mockWorkspace();
+    vi.mocked(compilerModule.exportRecallAnki).mockReturnValue({
+      ok: false,
+      error: new Error('No card files'),
+    });
+    const r = runRecallExport({}, {});
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.message).toContain('No card files');
   });
 });

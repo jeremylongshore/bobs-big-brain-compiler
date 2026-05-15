@@ -21,6 +21,8 @@ import type { Command } from 'commander';
 import {
   calculateCost,
   createClaudeClient,
+  type ExportAnkiResult,
+  exportRecallAnki,
   generateRecall,
   type QuizMode,
   type QuizSummary,
@@ -81,6 +83,12 @@ interface RecallWeakOpts {
   limit?: number;
   minSampleSize?: number;
   report?: boolean;
+}
+
+interface RecallExportOpts {
+  format?: string;
+  topic?: string;
+  out?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -413,6 +421,55 @@ function printWeakAreas(weak: ConceptRetention[], report: RetentionReport | null
 }
 
 // ---------------------------------------------------------------------------
+// recall export
+// ---------------------------------------------------------------------------
+
+/**
+ * Export all recall cards (or a single topic's cards) as an Anki-importable
+ * TSV. Currently `--format anki` is the only supported format; the option is
+ * kept so future formats (CSV, JSON) can plug in without breaking the CLI.
+ */
+export function runRecallExport(
+  opts: RecallExportOpts,
+  globalOpts: GlobalOptions,
+): { ok: true; value: ExportAnkiResult } | { ok: false; error: Error } {
+  const format = opts.format ?? 'anki';
+  if (format !== 'anki') {
+    return {
+      ok: false,
+      error: new Error(`Unsupported format '${format}'. Only 'anki' is supported in v1.`),
+    };
+  }
+
+  const wsResolveOpts =
+    globalOpts.workspace !== undefined ? { workspace: globalOpts.workspace } : {};
+  const wsResult = resolveWorkspace(wsResolveOpts);
+  if (!wsResult.ok) return { ok: false, error: wsResult.error };
+  const { root: wsPath } = wsResult.value;
+
+  const result = exportRecallAnki(wsPath, {
+    ...(opts.topic !== undefined && { topic: opts.topic }),
+    ...(opts.out !== undefined && { outPath: opts.out }),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+
+  // When --out is omitted and --json is not set, dump TSV to stdout so the
+  // user can pipe it (e.g. `ico recall export > deck.txt`).
+  if (globalOpts.json === true) {
+    process.stdout.write(formatJSON(result.value) + '\n');
+  } else if (opts.out === undefined) {
+    process.stdout.write(result.value.tsv);
+  } else {
+    process.stdout.write('\n');
+    process.stdout.write(formatSuccess('Anki deck exported') + '\n');
+    process.stdout.write(formatInfo(`  Cards:  ${result.value.cards.length}`) + '\n');
+    process.stdout.write(formatInfo(`  Out:    ${result.value.outPath}`) + '\n');
+    process.stdout.write('\n');
+  }
+  return { ok: true, value: result.value };
+}
+
+// ---------------------------------------------------------------------------
 // Commander registration
 // ---------------------------------------------------------------------------
 
@@ -515,6 +572,35 @@ export function register(program: Command): void {
         ...(globalOpts.workspace !== undefined && { workspace: globalOpts.workspace }),
       };
       const result = runRecallWeak(opts, global);
+      if (!result.ok) {
+        process.stderr.write(formatError(result.error.message) + '\n');
+        process.exit(1);
+      }
+    });
+
+  recall
+    .command('export')
+    .description('Export recall cards (Anki TSV by default; writes to stdout when --out is omitted)')
+    .option('--format <format>', 'Output format (only "anki" supported)', 'anki')
+    .option('--topic <name>', 'Export only cards for the given topic')
+    .option('--out <path>', 'Workspace-relative output path; omit to write TSV to stdout')
+    .addHelpText(
+      'after',
+      [
+        '',
+        'Examples:',
+        '  $ ico recall export > deck.txt',
+        '  $ ico recall export --topic "transformer attention" --out recall/exports/attn.txt',
+      ].join('\n'),
+    )
+    .action((opts: RecallExportOpts, cmd: Command) => {
+      const globalOpts = cmd.optsWithGlobals<GlobalOptions>();
+      const global: GlobalOptions = {
+        ...(globalOpts.json !== undefined && { json: globalOpts.json }),
+        ...(globalOpts.verbose !== undefined && { verbose: globalOpts.verbose }),
+        ...(globalOpts.workspace !== undefined && { workspace: globalOpts.workspace }),
+      };
+      const result = runRecallExport(opts, global);
       if (!result.ok) {
         process.stderr.write(formatError(result.error.message) + '\n');
         process.exit(1);
