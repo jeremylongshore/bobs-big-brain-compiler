@@ -416,12 +416,20 @@ export async function runQuiz(
   const mode: QuizMode = options.mode ?? 'review';
   const cardCount = questions.length;
 
-  const startTrace = writeTrace(db, workspacePath, 'recall.quiz', {
-    session_id: sessionId,
-    topic,
-    card_count: cardCount,
-    mode,
-  });
+  // session_id is reused as correlation_id so every recall.result for this
+  // quiz can be reconstructed by joining on correlation_id (011-AT-TRSC).
+  const startTrace = writeTrace(
+    db,
+    workspacePath,
+    'recall.quiz',
+    {
+      session_id: sessionId,
+      topic,
+      card_count: cardCount,
+      mode,
+    },
+    { correlationId: sessionId },
+  );
   if (!startTrace.ok) return err(startTrace.error);
 
   // 3. Walk through questions.
@@ -566,14 +574,20 @@ function persistAndTrace(
 
   const retentionScore = computeRetention(db, question.concept);
 
-  const trace = writeTrace(db, workspacePath, 'recall.result', {
-    session_id: sessionId,
-    card_id: record.value.id,
-    concept: question.concept,
-    correct: scored.correct,
-    retention_score: retentionScore,
-    response_time_ms: responseTimeMs,
-  });
+  const trace = writeTrace(
+    db,
+    workspacePath,
+    'recall.result',
+    {
+      session_id: sessionId,
+      card_id: record.value.id,
+      concept: question.concept,
+      correct: scored.correct,
+      retention_score: retentionScore,
+      response_time_ms: responseTimeMs,
+    },
+    { correlationId: sessionId },
+  );
   if (!trace.ok) return err(trace.error);
 
   return ok({
