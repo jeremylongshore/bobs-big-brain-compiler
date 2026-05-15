@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.15.1] - 2026-05-15
+
+- test(compiler): recall pipeline integration test (E9-B12) (#55) (5a07c59)
+
+
 ## [v0.15.0] - 2026-05-15
 
 - feat(compiler+cli): recall export to Anki TSV (E9-B11) (#54) (7d953c3)
