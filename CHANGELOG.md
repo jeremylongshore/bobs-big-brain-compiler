@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.13.0] - 2026-05-15
+
+- feat(kernel+compiler+cli): quiz runner (E9-B09) (#52) (b2c52ea)
+
+
 ## [v0.12.1] - 2026-05-14
 
 - chore(sweep): disable dependabot, gitignore .arch/ and beads export-state (#51) (dfadfdb)
