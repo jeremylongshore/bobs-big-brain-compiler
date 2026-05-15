@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.15.0] - 2026-05-15
+
+- feat(compiler+cli): recall export to Anki TSV (E9-B11) (#54) (7d953c3)
+
+
 ## [v0.14.0] - 2026-05-15
 
 - feat(kernel+cli): retention scoring and weak-area tracking (E9-B10) (#56) (42d591a)
