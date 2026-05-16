@@ -82,15 +82,15 @@ function seedWiki(slug: string, body: string): void {
 // ---------------------------------------------------------------------------
 
 describe('runEvalCommand — discover + run all', () => {
-  it('returns zero-spec batch when evals/ is missing', () => {
-    const r = runEvalCommand({}, {});
+  it('returns zero-spec batch when evals/ is missing', async () => {
+    const r = await runEvalCommand({}, {});
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.value.batch.total).toBe(0);
     expect(r.value.loadErrors).toHaveLength(0);
   });
 
-  it('runs every discovered spec and aggregates pass/fail', () => {
+  it('runs every discovered spec and aggregates pass/fail', async () => {
     writeSpec(
       'evals/smoke/passing.eval.yaml',
       'id: s-pass\nname: Pass\ntype: smoke\ncheck: no-failed-tasks\n',
@@ -100,7 +100,7 @@ describe('runEvalCommand — discover + run all', () => {
       'id: s-fail\nname: Fail\ntype: smoke\ncheck: fts5-index-nonempty\n',
     );
 
-    const r = runEvalCommand({}, {});
+    const r = await runEvalCommand({}, {});
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.value.batch.total).toBe(2);
@@ -108,14 +108,14 @@ describe('runEvalCommand — discover + run all', () => {
     expect(r.value.batch.failed).toBe(1);
   });
 
-  it('surfaces malformed specs in loadErrors but still runs valid ones', () => {
+  it('surfaces malformed specs in loadErrors but still runs valid ones', async () => {
     writeSpec(
       'evals/good.eval.yaml',
       'id: g\nname: G\ntype: smoke\ncheck: no-failed-tasks\n',
     );
     writeSpec('evals/bad.eval.yaml', 'this is not a valid spec\n');
 
-    const r = runEvalCommand({}, {});
+    const r = await runEvalCommand({}, {});
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.value.loadErrors).toHaveLength(1);
@@ -123,7 +123,7 @@ describe('runEvalCommand — discover + run all', () => {
     expect(r.value.batch.passed).toBe(1);
   });
 
-  it('passes retrieval evals when the expected page is indexed', () => {
+  it('passes retrieval evals when the expected page is indexed', async () => {
     seedWiki('self-attention', 'Self-attention scales quadratically in transformers.');
     writeSpec(
       'evals/r.eval.yaml',
@@ -138,7 +138,7 @@ describe('runEvalCommand — discover + run all', () => {
       ].join('\n'),
     );
 
-    const r = runEvalCommand({}, {});
+    const r = await runEvalCommand({}, {});
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.value.batch.passed).toBe(1);
@@ -150,7 +150,7 @@ describe('runEvalCommand — discover + run all', () => {
 // ---------------------------------------------------------------------------
 
 describe('runEvalCommand — --spec', () => {
-  it('runs only the requested spec', () => {
+  it('runs only the requested spec', async () => {
     writeSpec(
       'evals/keep.eval.yaml',
       'id: keep\nname: keep\ntype: smoke\ncheck: no-failed-tasks\n',
@@ -160,15 +160,15 @@ describe('runEvalCommand — --spec', () => {
       'id: skip\nname: skip\ntype: smoke\ncheck: no-failed-tasks\n',
     );
 
-    const r = runEvalCommand({ spec: 'evals/keep.eval.yaml' }, {});
+    const r = await runEvalCommand({ spec: 'evals/keep.eval.yaml' }, {});
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.value.batch.total).toBe(1);
     expect(r.value.batch.results[0]!.spec.id).toBe('keep');
   });
 
-  it('returns err when --spec points to a missing file', () => {
-    const r = runEvalCommand({ spec: 'evals/missing.eval.yaml' }, {});
+  it('returns err when --spec points to a missing file', async () => {
+    const r = await runEvalCommand({ spec: 'evals/missing.eval.yaml' }, {});
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.error.message).toContain('eval spec');
@@ -180,13 +180,13 @@ describe('runEvalCommand — --spec', () => {
 // ---------------------------------------------------------------------------
 
 describe('runEvalCommand — output modes', () => {
-  it('emits JSON when --json is passed', () => {
+  it('emits JSON when --json is passed', async () => {
     writeSpec(
       'evals/s.eval.yaml',
       'id: s\nname: S\ntype: smoke\ncheck: no-failed-tasks\n',
     );
     const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-    runEvalCommand({}, { json: true });
+    await runEvalCommand({}, { json: true });
     const joined = writeSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(joined).toContain('"batch"');
     expect(joined).toContain('"results"');

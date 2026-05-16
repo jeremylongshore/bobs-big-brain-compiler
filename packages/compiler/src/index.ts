@@ -157,3 +157,7 @@ export {
   type ExportAnkiOptions,
   type ExportAnkiResult,
 } from './recall/export.js';
+export {
+  runCompilationEval,
+  type CompilationEvalOptions,
+} from './evals/compilation.js';

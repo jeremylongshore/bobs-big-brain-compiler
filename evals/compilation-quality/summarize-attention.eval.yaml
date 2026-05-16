@@ -1,0 +1,41 @@
+# Summarize-pass quality eval (E10-B02).
+#
+# Scores a source summary against five rubric criteria. Each criterion is
+# rated 1–5 by Claude; final score is mean/5 (normalized to 0–1).
+#
+# Run with: ico eval run --spec evals/compilation-quality/summarize-attention.eval.yaml
+#
+# Adjust `target_page` to a real compiled page in your workspace. The
+# default path is illustrative — if you don't have a wiki/sources/
+# attention-paper.md, the eval will fail with a clear "target_page not
+# found" error.
+id: compile-summarize-attention-001
+name: Summarize quality — attention paper
+description: |
+  Verifies the summarize pass extracted the key claims of a known source
+  without inventing facts, kept the structure intact, and stayed concise.
+type: compilation
+pass: summarize
+target_page: sources/attention-paper.md
+threshold: 0.8     # pass when normalized score >= 0.8 (mean criterion >= 4.0)
+criteria:
+  - id: completeness
+    description: |
+      Captures every major claim from the original source. Missing one
+      core thesis = 1; missing one supporting point = 3; complete = 5.
+  - id: accuracy
+    description: |
+      No invented facts. Every assertion in the summary appears in the
+      source. One paraphrase that distorts meaning = 3; any fabrication = 1.
+  - id: structure
+    description: |
+      Honors the frontmatter schema for source-summary pages (title,
+      type, source_path, summary/key_claims/methods/conclusions sections).
+  - id: citations
+    description: |
+      Inline `[source: <title>]` citations match real source titles and
+      are placed where the claim is made, not lumped at the end.
+  - id: concision
+    description: |
+      No filler. No restating section headings as prose. No "this paper
+      discusses…" preamble. Bullet points or terse paragraphs only.

@@ -21,6 +21,7 @@ import { resolve as resolvePath } from 'node:path';
 
 import type { Command } from 'commander';
 
+import { createClaudeClient, runCompilationEval } from '@ico/compiler';
 import {
   closeDatabase,
   type EvalBatchResult,
@@ -28,9 +29,9 @@ import {
   type EvalSpec,
   initDatabase,
   loadAllEvalSpecs,
+  loadConfig,
   loadEvalSpec,
   runEval,
-  runEvals,
 } from '@ico/kernel';
 
 import {
@@ -62,12 +63,13 @@ interface RunOpts {
 // Core (exported for tests)
 // ---------------------------------------------------------------------------
 
-export function runEvalCommand(
+export async function runEvalCommand(
   opts: RunOpts,
   globalOpts: GlobalOptions,
-):
+): Promise<
   | { ok: true; value: { batch: EvalBatchResult; loadErrors: Array<{ path: string; error: Error }> } }
-  | { ok: false; error: Error } {
+  | { ok: false; error: Error }
+> {
   const wsResolveOpts =
     globalOpts.workspace !== undefined ? { workspace: globalOpts.workspace } : {};
   const wsResult = resolveWorkspace(wsResolveOpts);
@@ -100,38 +102,74 @@ export function runEvalCommand(
       }
     }
 
-    let batch: EvalBatchResult;
-    if (specs.length === 0) {
-      batch = { total: 0, passed: 0, failed: 0, results: [], durationMs: 0 };
-    } else if (specs.length === 1) {
-      // Single-spec path also goes through runEval so the trace
-      // correlation matches what runEvals would emit. Wrap into a
-      // singleton batch.
-      const correlationId = randomUUID();
-      const start = Date.now();
-      const r = runEval(db, wsPath, specs[0]!, { correlationId });
-      const single: EvalResult = r.ok
-        ? r.value
-        : {
-            spec: specs[0]!,
-            passed: false,
-            score: 0,
-            threshold: specs[0]!.threshold ?? 1,
-            details: `Handler crashed: ${r.error.message}`,
-            durationMs: 0,
-          };
-      batch = {
-        total: 1,
-        passed: single.passed ? 1 : 0,
-        failed: single.passed ? 0 : 1,
-        results: [single],
-        durationMs: Date.now() - start,
-      };
-    } else {
-      const result = runEvals(db, wsPath, specs);
-      if (!result.ok) return { ok: false, error: result.error };
-      batch = result.value;
+    // Dispatch each spec by type. Smoke + retrieval go through the kernel
+    // runner; compilation goes through @ico/compiler because it needs a
+    // ClaudeClient. We only initialize the Claude client lazily — when at
+    // least one compilation spec is present — so the CLI stays usable
+    // without an API key for smoke/retrieval-only suites.
+    const batchStart = Date.now();
+    const results: EvalResult[] = [];
+
+    let claudeClient: ReturnType<typeof createClaudeClient> | null = null;
+    const needsClaude = specs.some((s) => s.type === 'compilation');
+    if (needsClaude) {
+      let config: { apiKey: string; model: string };
+      try {
+        config = loadConfig(wsPath);
+      } catch (e) {
+        return {
+          ok: false,
+          error: new Error(
+            `Compilation evals need a Claude key. Config load failed: ${e instanceof Error ? e.message : String(e)}`,
+          ),
+        };
+      }
+      claudeClient = createClaudeClient(config.apiKey);
     }
+
+    for (const spec of specs) {
+      const correlationId = randomUUID();
+      let result: EvalResult;
+      if (spec.type === 'compilation') {
+        // claudeClient is non-null here because we built it above when
+        // any compilation spec was present.
+        const r = await runCompilationEval(db, wsPath, spec, claudeClient!, {
+          correlationId,
+        });
+        result = r.ok
+          ? r.value
+          : {
+              spec,
+              passed: false,
+              score: 0,
+              threshold: spec.threshold ?? 1,
+              details: `Handler crashed: ${r.error.message}`,
+              durationMs: 0,
+            };
+      } else {
+        const r = runEval(db, wsPath, spec, { correlationId });
+        result = r.ok
+          ? r.value
+          : {
+              spec,
+              passed: false,
+              score: 0,
+              threshold: spec.threshold ?? 1,
+              details: `Handler crashed: ${r.error.message}`,
+              durationMs: 0,
+            };
+      }
+      results.push(result);
+    }
+
+    const passed = results.filter((r) => r.passed).length;
+    const batch: EvalBatchResult = {
+      total: results.length,
+      passed,
+      failed: results.length - passed,
+      results,
+      durationMs: Date.now() - batchStart,
+    };
 
     if (globalOpts.json === true) {
       process.stdout.write(formatJSON({ batch, loadErrors }) + '\n');
@@ -203,14 +241,14 @@ export function register(program: Command): void {
         '  $ ico eval run --json',
       ].join('\n'),
     )
-    .action((opts: RunOpts, cmd: Command) => {
+    .action(async (opts: RunOpts, cmd: Command) => {
       const globalOpts = cmd.optsWithGlobals<GlobalOptions>();
       const global: GlobalOptions = {
         ...(globalOpts.json !== undefined && { json: globalOpts.json }),
         ...(globalOpts.verbose !== undefined && { verbose: globalOpts.verbose }),
         ...(globalOpts.workspace !== undefined && { workspace: globalOpts.workspace }),
       };
-      const result = runEvalCommand(opts, global);
+      const result = await runEvalCommand(opts, global);
       if (!result.ok) {
         process.stderr.write(formatError(result.error.message) + '\n');
         process.exit(1);
