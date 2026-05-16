@@ -16,6 +16,7 @@ import { register as registerRender } from './commands/render.js';
 import { register as registerResearch } from './commands/research.js';
 import { register as registerStatus } from './commands/status.js';
 import { register as registerUnpromote } from './commands/unpromote.js';
+import { friendlyError } from './lib/friendly-errors.js';
 
 export function buildProgram(): Command {
   const p = new Command();
@@ -54,11 +55,76 @@ export function buildProgram(): Command {
   return p;
 }
 
+// ---------------------------------------------------------------------------
+// Top-level process-error handlers (E10-B05)
+//
+// Goal: the operator never sees a Node stack trace for a known failure
+// mode. Uncaught exceptions and unhandled promise rejections are caught
+// here, formatted through `friendlyError`, written to stderr with the
+// `[ico]` prefix, and the process exits with code 1.
+//
+// SIGINT: the system relies on the atomic `.tmp + rename` write pattern
+// across the kernel + compiler, so a Ctrl-C mid-operation cannot leave
+// half-written files. The handler just prints a polite line and exits
+// 130 (the conventional Unix code for SIGINT). Children of long-running
+// async ops still get their finally-blocks (DB close, rl.close) on
+// process exit because Node fires those on normal exit paths.
+// ---------------------------------------------------------------------------
+
+/**
+ * Decide whether to print a stack trace alongside the friendly message.
+ *
+ * Two cases warrant the stack:
+ *   1. The error was NOT mapped by `friendlyError` (the friendly message is
+ *      the verbatim original) — debugging an unknown failure needs the trace.
+ *   2. `--verbose` is set on the command line — operator opted in.
+ *
+ * Known categories (ENOSPC, rate_limit_error, etc.) already give an
+ * actionable hint; the stack is noise in the default UI.
+ */
+function shouldEmitStack(err: unknown, friendly: string): boolean {
+  if (!(err instanceof Error) || err.stack === undefined) return false;
+  if (process.argv.includes('--verbose')) return true;
+  return friendly === err.message;
+}
+
+/** Register the process-level error and signal handlers. Idempotent. */
+export function installProcessHandlers(): void {
+  // `installed` flag prevents double-registration in tests that import the
+  // module twice via vitest's worker pool.
+  const g = process as unknown as { __icoHandlersInstalled?: boolean };
+  if (g.__icoHandlersInstalled === true) return;
+  g.__icoHandlersInstalled = true;
+
+  process.on('uncaughtException', (err: unknown) => {
+    const friendly = friendlyError(err);
+    process.stderr.write(`[ico] uncaught exception: ${friendly}\n`);
+    if (shouldEmitStack(err, friendly)) {
+      process.stderr.write(`\n${(err as Error).stack ?? ''}\n`);
+    }
+    process.exit(1);
+  });
+  process.on('unhandledRejection', (reason: unknown) => {
+    const friendly = friendlyError(reason);
+    process.stderr.write(`[ico] unhandled rejection: ${friendly}\n`);
+    if (shouldEmitStack(reason, friendly)) {
+      process.stderr.write(`\n${(reason as Error).stack ?? ''}\n`);
+    }
+    process.exit(1);
+  });
+  process.on('SIGINT', () => {
+    process.stderr.write('\n[ico] interrupted (SIGINT). Exiting.\n');
+    // 128 + signal number (SIGINT = 2) is the Unix convention.
+    process.exit(130);
+  });
+}
+
 // Only parse when run directly as the CLI entry point
 const isMain =
   process.argv[1] !== undefined &&
   (process.argv[1].endsWith('/index.js') || process.argv[1].endsWith('/ico'));
 
 if (isMain) {
+  installProcessHandlers();
   buildProgram().parse();
 }

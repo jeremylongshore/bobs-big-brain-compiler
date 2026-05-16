@@ -12,6 +12,7 @@ import { resolve } from 'node:path';
 import type { Command } from 'commander';
 
 import {
+  appendAuditLog,
   closeDatabase,
   getMountByName,
   initDatabase,
@@ -79,6 +80,12 @@ function handleAdd(
     }
 
     const mount = result.value;
+    // Close B04's gap — mount commands now leave an audit footprint.
+    appendAuditLog(
+      resolve(globalOpts.workspace ?? '.'),
+      'mount.add',
+      `Registered mount "${mount.name}" → ${mount.path}`,
+    );
 
     if (globalOpts.json) {
       console.log(formatJSON(mount));
@@ -181,6 +188,12 @@ function handleRemove(
       console.error(formatError(removeResult.error.message));
       process.exit(1);
     }
+
+    appendAuditLog(
+      resolve(globalOpts.workspace ?? '.'),
+      'mount.remove',
+      `Removed mount "${name}" (id=${mount.id})`,
+    );
 
     if (globalOpts.json) {
       console.log(formatJSON({ removed: true, name, id: mount.id }));
