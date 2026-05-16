@@ -1,7 +1,7 @@
 {
-  "name": "@ico/cli",
-  "version": "0.1.0",
-  "private": true,
+  "name": "intentional-cognition-os",
+  "version": "0.15.1",
+  "description": "Local-first knowledge operating system. Compile knowledge for the machine; distill understanding for the human.",
   "type": "module",
   "bin": {
     "ico": "./dist/index.js"
@@ -13,24 +13,62 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
+  "keywords": [
+    "knowledge-management",
+    "ai",
+    "claude",
+    "anthropic",
+    "rag",
+    "research",
+    "cli",
+    "local-first",
+    "knowledge-graph"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .tsbuildinfo"
+    "clean": "rm -rf dist .tsbuildinfo",
+    "prepublishOnly": "pnpm -w build && pnpm -w lint && pnpm -w typecheck && pnpm -w test",
+    "verify-pack": "bash ../../scripts/verify-npm-pack.sh"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.82.0",
+    "better-sqlite3": "^11.9.0",
+    "commander": "^13.0.0",
+    "gray-matter": "^4.0.3",
+    "js-yaml": "^4.1.1",
+    "pdf-parse": "^2.4.5",
+    "turndown": "^7.2.4"
+  },
+  "devDependencies": {
     "@ico/compiler": "workspace:*",
     "@ico/kernel": "workspace:*",
     "@ico/types": "workspace:*",
-    "commander": "^13.0.0"
-  },
-  "devDependencies": {
     "tsup": "^8.4.0",
     "typescript": "^5.8.0",
     "vitest": "^4.1.2"
-  }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jeremylongshore/intentional-cognition-os.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/jeremylongshore/intentional-cognition-os/issues"
+  },
+  "homepage": "https://github.com/jeremylongshore/intentional-cognition-os#readme",
+  "license": "MIT",
+  "author": "Jeremy Longshore <jeremy@intentsolutions.io> (https://intentsolutions.io)"
 }
