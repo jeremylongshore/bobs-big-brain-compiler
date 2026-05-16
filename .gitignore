@@ -69,3 +69,8 @@ workspace/audit/
 
 # ===== Local design-diagram skill output =====
 .arch/
+
+# ===== npm pack output (verify-npm-pack.sh) =====
+packages/cli/intentional-cognition-os-*.tgz
+packages/cli/README.md
+packages/cli/LICENSE
