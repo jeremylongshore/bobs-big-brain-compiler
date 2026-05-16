@@ -1,0 +1,21 @@
+# Citation-fidelity eval (E10-B03).
+#
+# Scans a markdown artifact for `[source: <title>]` and `[[slug]]`
+# citation markers and asserts every cited target resolves to a real
+# wiki page. Score = verified / total citations; threshold 1.0 = zero
+# hallucinations tolerated.
+#
+# Adjust `target_file` to point at a real rendered report in your
+# workspace (typically `outputs/reports/<topic>.md` after `ico render report`).
+#
+# Run with: ico eval run --spec evals/retrieval-citation/citation-fidelity.eval.yaml
+id: citation-fidelity-001
+name: Citation fidelity — zero hallucinated citations
+description: |
+  Catches the load-bearing LLM failure mode in any grounded knowledge
+  system: a confidently-cited page that doesn't exist. Run this against
+  every artifact before promotion or publication.
+type: citation
+target_file: outputs/reports/sample.md
+require_citations: false   # zero citations is acceptable for some artifacts
+threshold: 1.0             # any hallucination fails the eval

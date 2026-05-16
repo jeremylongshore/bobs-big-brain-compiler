@@ -1,0 +1,28 @@
+# Answer-grounding eval (E10-B03).
+#
+# Asserts a rendered artifact cites the expected source pages — the
+# inverse of citation-fidelity. Citation-fidelity catches hallucinated
+# citations; this eval catches under-grounding (the artifact answers
+# the question but never points at the wiki).
+#
+# Run after rendering a report that should be grounded in specific
+# sources. The artifact passes when:
+#   1. Every citation resolves (score == 1.0)
+#   2. Every page in `expected_citations` actually appears as a
+#      resolved citation in the artifact body
+#
+# Run with: ico eval run --spec evals/retrieval-citation/answer-grounding.eval.yaml
+id: answer-grounding-attention-001
+name: Answer grounding — attention report cites canonical sources
+description: |
+  The attention report should pull from both the self-attention concept
+  page and the transformer-attention topic page. If either is missing
+  from the rendered output, the answer is under-grounded — even if
+  every citation present is real.
+type: citation
+target_file: outputs/reports/attention-summary.md
+threshold: 1.0
+require_citations: true
+expected_citations:
+  - concepts/self-attention.md
+  - topics/transformer-attention.md

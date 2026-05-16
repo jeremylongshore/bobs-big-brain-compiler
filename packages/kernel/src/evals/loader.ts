@@ -22,6 +22,7 @@ const VALID_TYPES: ReadonlySet<EvalType> = new Set([
   'retrieval',
   'smoke',
   'compilation',
+  'citation',
 ]);
 
 const VALID_SMOKE_CHECKS = new Set([
@@ -97,6 +98,18 @@ function validateSpec(raw: unknown, sourcePath: string): Result<EvalSpec, Error>
     if (k !== undefined && (typeof k !== 'number' || k < 1 || !Number.isFinite(k))) {
       return err(new Error(`${sourcePath}: 'k' must be a positive integer`));
     }
+    for (const field of ['min_recall', 'min_precision'] as const) {
+      const v = obj[field];
+      if (
+        v !== undefined &&
+        (typeof v !== 'number' ||
+          Number.isNaN(v) ||
+          v < 0 ||
+          v > 1)
+      ) {
+        return err(new Error(`${sourcePath}: '${field}' must be a number in [0, 1]`));
+      }
+    }
   } else if (type === 'smoke') {
     const check = obj['check'];
     if (typeof check !== 'string' || !VALID_SMOKE_CHECKS.has(check)) {
@@ -105,6 +118,28 @@ function validateSpec(raw: unknown, sourcePath: string): Result<EvalSpec, Error>
           `${sourcePath}: smoke 'check' must be one of ${Array.from(VALID_SMOKE_CHECKS).join(', ')}`,
         ),
       );
+    }
+  } else if (type === 'citation') {
+    const target = obj['target_file'];
+    if (typeof target !== 'string' || target.trim() === '') {
+      return err(
+        new Error(`${sourcePath}: citation spec needs non-empty 'target_file' (workspace-relative)`),
+      );
+    }
+    const requireCit = obj['require_citations'];
+    if (requireCit !== undefined && typeof requireCit !== 'boolean') {
+      return err(new Error(`${sourcePath}: 'require_citations' must be a boolean`));
+    }
+    const expected = obj['expected_citations'];
+    if (expected !== undefined) {
+      if (!Array.isArray(expected)) {
+        return err(new Error(`${sourcePath}: 'expected_citations' must be a string array`));
+      }
+      for (let i = 0; i < expected.length; i += 1) {
+        if (typeof expected[i] !== 'string') {
+          return err(new Error(`${sourcePath}: expected_citations[${i}] must be a string`));
+        }
+      }
     }
   } else if (type === 'compilation') {
     const pass = obj['pass'];
