@@ -71,6 +71,23 @@ export function buildProgram(): Command {
 // process exit because Node fires those on normal exit paths.
 // ---------------------------------------------------------------------------
 
+/**
+ * Decide whether to print a stack trace alongside the friendly message.
+ *
+ * Two cases warrant the stack:
+ *   1. The error was NOT mapped by `friendlyError` (the friendly message is
+ *      the verbatim original) — debugging an unknown failure needs the trace.
+ *   2. `--verbose` is set on the command line — operator opted in.
+ *
+ * Known categories (ENOSPC, rate_limit_error, etc.) already give an
+ * actionable hint; the stack is noise in the default UI.
+ */
+function shouldEmitStack(err: unknown, friendly: string): boolean {
+  if (!(err instanceof Error) || err.stack === undefined) return false;
+  if (process.argv.includes('--verbose')) return true;
+  return friendly === err.message;
+}
+
 /** Register the process-level error and signal handlers. Idempotent. */
 export function installProcessHandlers(): void {
   // `installed` flag prevents double-registration in tests that import the
@@ -80,11 +97,19 @@ export function installProcessHandlers(): void {
   g.__icoHandlersInstalled = true;
 
   process.on('uncaughtException', (err: unknown) => {
-    process.stderr.write(`[ico] uncaught exception: ${friendlyError(err)}\n`);
+    const friendly = friendlyError(err);
+    process.stderr.write(`[ico] uncaught exception: ${friendly}\n`);
+    if (shouldEmitStack(err, friendly)) {
+      process.stderr.write(`\n${(err as Error).stack ?? ''}\n`);
+    }
     process.exit(1);
   });
   process.on('unhandledRejection', (reason: unknown) => {
-    process.stderr.write(`[ico] unhandled rejection: ${friendlyError(reason)}\n`);
+    const friendly = friendlyError(reason);
+    process.stderr.write(`[ico] unhandled rejection: ${friendly}\n`);
+    if (shouldEmitStack(reason, friendly)) {
+      process.stderr.write(`\n${(reason as Error).stack ?? ''}\n`);
+    }
     process.exit(1);
   });
   process.on('SIGINT', () => {

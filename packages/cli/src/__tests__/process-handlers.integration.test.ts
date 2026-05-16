@@ -145,3 +145,80 @@ describe('top-level process handlers — unhandled rejection', () => {
     expect(result.code).toBe(1);
   });
 });
+
+describe('top-level process handlers — stack traces', () => {
+  it('emits a stack trace for unknown errors (friendlyError fall-through)', async () => {
+    const code = `
+      import('${CLI_PATH}').then(({ installProcessHandlers }) => {
+        installProcessHandlers();
+        setImmediate(() => {
+          Promise.reject(new Error('UNIQUE_UNKNOWN_ERROR_MARKER_ZXY'));
+        });
+      });
+    `;
+    const result = await new Promise<SpawnResult>((r) => {
+      const child = spawn('node', ['--input-type=module', '-e', code], {
+        env: { ...process.env, NO_COLOR: '1' },
+      });
+      let stderr = '';
+      child.stderr.on('data', (d: Buffer) => (stderr += d.toString('utf-8')));
+      child.on('close', (c, s) => r({ stdout: '', stderr, code: c, signal: s }));
+    });
+    // Friendly message present.
+    expect(result.stderr).toContain('UNIQUE_UNKNOWN_ERROR_MARKER_ZXY');
+    // Stack trace present (friendlyError didn't recognize it → fell through to verbatim).
+    expect(result.stderr).toMatch(/at\s+/);
+    expect(result.code).toBe(1);
+  });
+
+  it('suppresses the stack trace for known errors by default (no --verbose)', async () => {
+    const code = `
+      import('${CLI_PATH}').then(({ installProcessHandlers }) => {
+        installProcessHandlers();
+        setImmediate(() => {
+          Promise.reject(new Error('Claude API rate_limit_error (HTTP 429): too many'));
+        });
+      });
+    `;
+    const result = await new Promise<SpawnResult>((r) => {
+      const child = spawn('node', ['--input-type=module', '-e', code], {
+        env: { ...process.env, NO_COLOR: '1' },
+      });
+      let stderr = '';
+      child.stderr.on('data', (d: Buffer) => (stderr += d.toString('utf-8')));
+      child.on('close', (c, s) => r({ stdout: '', stderr, code: c, signal: s }));
+    });
+    expect(result.stderr).toMatch(/rate limit/i);
+    // No stack frames — known category mapped to a clean hint.
+    expect(result.stderr).not.toMatch(/^\s+at\s+/m);
+    expect(result.code).toBe(1);
+  });
+
+  it('emits the stack trace for known errors when --verbose is set', async () => {
+    const code = `
+      import('${CLI_PATH}').then(({ installProcessHandlers }) => {
+        installProcessHandlers();
+        setImmediate(() => {
+          Promise.reject(new Error('Claude API rate_limit_error (HTTP 429): too many'));
+        });
+      });
+    `;
+    const result = await new Promise<SpawnResult>((r) => {
+      // Pass --verbose AFTER `--` so Node forwards it to script argv rather
+      // than trying to parse it as a Node flag.
+      const child = spawn(
+        'node',
+        ['--input-type=module', '-e', code, '--', '--verbose'],
+        { env: { ...process.env, NO_COLOR: '1' } },
+      );
+      let stderr = '';
+      child.stderr.on('data', (d: Buffer) => (stderr += d.toString('utf-8')));
+      child.on('close', (c, s) => r({ stdout: '', stderr, code: c, signal: s }));
+    });
+    expect(result.stderr).toMatch(/rate limit/i);
+    // Stack frames in `node -e` scripts are reported as `[stdin]:line:col`
+    // not `*.js:line:col`. Match the `at ` marker instead.
+    expect(result.stderr).toMatch(/^\s+at\s+/m);
+    expect(result.code).toBe(1);
+  });
+});
