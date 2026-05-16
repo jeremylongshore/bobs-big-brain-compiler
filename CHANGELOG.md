@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.16.1] - 2026-05-16
+
+- feat(cli)+docs: trace coverage audit (E10-B04) (#58) (3c6af76)
+
+
 ## [v0.16.0] - 2026-05-16
 
 - feat(kernel+cli): eval framework + YAML spec format (E10-B01) (#57) (1ebb918)

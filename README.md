@@ -83,7 +83,7 @@ Project documentation lives in [`000-docs/`](000-docs/):
 | [Status](000-docs/006-OD-STAT-status.md) | Current state & roadmap |
 | [Master Blueprint](000-docs/007-PP-PLAN-master-blueprint.md) | Authoritative design document |
 | [Execution Plan](000-docs/EXECUTION-PLAN-10-EPICS.md) | 10-epic implementation plan (133 beads) |
-| Standards (0.16.021) | 14 frozen standards documents (see [CLAUDE.md](CLAUDE.md)) |
+| Standards (0.16.121) | 14 frozen standards documents (see [CLAUDE.md](CLAUDE.md)) |
 
 ## Security
 
