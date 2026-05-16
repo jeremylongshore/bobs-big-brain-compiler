@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.16.0] - 2026-05-16
+
+- feat(kernel+cli): eval framework + YAML spec format (E10-B01) (#57) (1ebb918)
+
+
 ## [v0.15.1] - 2026-05-15
 
 - test(compiler): recall pipeline integration test (E9-B12) (#55) (5a07c59)
