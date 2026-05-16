@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Runtime**: TypeScript, Node.js 22+, pnpm 10.x
 - **CLI**: `ico`
 - **License**: MIT
-- **Current state** (v0.15.1): Epics 1–9 complete. Epic 10 in progress — B01 Eval Framework, B04 Trace Coverage Audit, B05 Error Handling Hardening, B07 Docs Finalization, B10 npm Package Prep shipped. CLI published as `intentional-cognition-os` on npm (workspace name changed from `@ico/cli`). `scripts/verify-npm-pack.sh` confirms tarball is publishable. Remaining: B02/B03 (compilation + retrieval/citation eval suites), B06 (perf), B08 (status doc), B09 (test coverage gaps), B11/B12 (release gate + cut). Audit-harness v0.1.0 vendored.
+- **Current state** (v0.15.1): Epics 1–9 complete. Epic 10 in progress (6 of 12 beads shipped: B01, B04, B05, B07, B08, B10). CLI publishes as `intentional-cognition-os` on npm. Live status doc with real metrics + risk matrix: [`000-docs/006-OD-STAT-status.md`](000-docs/006-OD-STAT-status.md). Remaining: B02/B03 (compilation + retrieval/citation eval suites), B06 (perf), B09 (test coverage gaps), B11/B12 (release gate + cut). Audit-harness v0.1.0 vendored.
 
 ## Current State
 
