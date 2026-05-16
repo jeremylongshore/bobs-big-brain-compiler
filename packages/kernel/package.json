@@ -21,8 +21,10 @@
   },
   "dependencies": {
     "@ico/types": "workspace:*",
+    "@types/js-yaml": "^4.0.9",
     "better-sqlite3": "^11.9.0",
-    "gray-matter": "^4.0.3"
+    "gray-matter": "^4.0.3",
+    "js-yaml": "^4.1.1"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",

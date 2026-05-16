@@ -113,3 +113,20 @@ export {
 export { loadConfig, redactSecrets, type IcoConfig } from './config.js';
 export { Logger, createLogger } from './logger.js';
 export { version } from './version.js';
+
+// Evals (Epic 10)
+export {
+  discoverEvalSpecs,
+  loadAllEvalSpecs,
+  loadEvalSpec,
+  runEval,
+  runEvals,
+  type BaseEvalSpec,
+  type EvalBatchResult,
+  type EvalResult,
+  type EvalSpec,
+  type EvalType,
+  type RetrievalEvalSpec,
+  type RunEvalOptions,
+  type SmokeEvalSpec,
+} from './evals/index.js';
