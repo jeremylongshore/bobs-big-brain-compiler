@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Runtime**: TypeScript, Node.js 22+, pnpm 10.x
 - **CLI**: `ico`
 - **License**: MIT
-- **Current state** (v0.15.1): Epics 1–9 complete. Epic 10 in progress — B01 Eval Framework shipped (`ico eval run` discovers `evals/*.eval.yaml`, dispatches to retrieval / smoke handlers, emits `eval.run`/`eval.result` traces). Audit-harness v0.1.0 vendored.
+- **Current state** (v0.15.1): Epics 1–9 complete. Epic 10 in progress — B01 Eval Framework + B04 Trace Coverage Audit shipped. `ico eval run` discovers `evals/*.eval.yaml` and dispatches to retrieval/smoke handlers. `ico lint` now emits `lint.run`/`lint.result` traces (previously missing). Trace coverage report at `000-docs/023-OD-AUDIT-trace-coverage-2026-05-15.md`. Audit-harness v0.1.0 vendored.
 
 ## Current State
 

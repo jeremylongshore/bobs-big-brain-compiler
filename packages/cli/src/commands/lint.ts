@@ -16,6 +16,7 @@
  * @module commands/lint
  */
 
+import { randomUUID } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 
@@ -28,7 +29,7 @@ import {
   validateCompiledPage,
   type ValidationResult,
 } from '@ico/compiler';
-import { closeDatabase, initDatabase } from '@ico/kernel';
+import { appendAuditLog, closeDatabase, initDatabase, writeTrace } from '@ico/kernel';
 
 import {
   formatError,
@@ -230,17 +231,33 @@ export function runLint(workspaceRoot: string, dbPath: string): LintResult {
     }
   }
 
-  // --- 2 & 3. DB-backed checks -----------------------------------------------
+  // --- 2 & 3. DB-backed checks ----------------------------------------------
+  // Emit `lint.run` + `lint.result` traces around the DB-backed work so the
+  // audit layer records every lint pass per 011-AT-TRSC §6.19–6.20. The
+  // correlation_id ties the two events together.
   const dbResult = initDatabase(dbPath);
   if (!dbResult.ok) {
     throw new Error(`Failed to open database: ${dbResult.error.message}`);
   }
   const db = dbResult.value;
 
+  const lintCorrelationId = randomUUID();
+  const lintRunStart = Date.now();
+
   let stalePages: StalePageInfo[];
   let uncompiledSources: Array<{ id: string; path: string; type: string }>;
+  let orphanPaths: string[];
+  let result: LintResult;
 
   try {
+    writeTrace(
+      db,
+      workspaceRoot,
+      'lint.run',
+      { lint_type: 'all', scope: 'all' },
+      { correlationId: lintCorrelationId },
+    );
+
     const staleResult = detectStalePages(db);
     if (!staleResult.ok) {
       throw new Error(`Staleness check failed: ${staleResult.error.message}`);
@@ -252,36 +269,84 @@ export function runLint(workspaceRoot: string, dbPath: string): LintResult {
       throw new Error(`Uncompiled sources check failed: ${uncompiledResult.error.message}`);
     }
     uncompiledSources = uncompiledResult.value;
+
+    // --- 4. Orphan detection ------------------------------------------------
+    orphanPaths = detectOrphans(wikiPath, allPages);
+
+    // --- 5. Aggregate -------------------------------------------------------
+    const issues =
+      schemaErrors.length + stalePages.length + uncompiledSources.length + orphanPaths.length;
+
+    result = {
+      schema: {
+        valid: validCount,
+        invalid: schemaErrors.length,
+        errors: schemaErrors,
+      },
+      staleness: {
+        stale: stalePages.length,
+        pages: stalePages,
+      },
+      uncompiled: {
+        count: uncompiledSources.length,
+        sources: uncompiledSources,
+      },
+      orphans: {
+        count: orphanPaths.length,
+        pages: orphanPaths,
+      },
+      issues,
+    };
+
+    // Per 011-AT-TRSC §6.20: lint.result payload includes `issues_found` and
+    // an `issues` array of {path, severity, message}. Map our typed buckets
+    // into that shape so the trace is queryable by external tools.
+    const issuePayload = [
+      ...schemaErrors.map((e) => ({
+        path: e.path,
+        severity: 'error',
+        message: `schema invalid: ${e.errors.join('; ')}`,
+      })),
+      ...stalePages.map((p) => ({
+        path: p.outputPath,
+        severity: 'warning',
+        message: 'compiled page is stale relative to its source',
+      })),
+      ...uncompiledSources.map((s) => ({
+        path: s.path,
+        severity: 'info',
+        message: 'source has no compilation record',
+      })),
+      ...orphanPaths.map((p) => ({
+        path: p,
+        severity: 'warning',
+        message: 'orphan wiki page — no incoming wikilinks',
+      })),
+    ];
+
+    writeTrace(
+      db,
+      workspaceRoot,
+      'lint.result',
+      {
+        lint_type: 'all',
+        scope: 'all',
+        issues_found: issues,
+        issues: issuePayload,
+        duration_ms: Date.now() - lintRunStart,
+      },
+      { correlationId: lintCorrelationId },
+    );
+    appendAuditLog(
+      workspaceRoot,
+      'lint.result',
+      `Lint reported ${issues} issue(s) across schema/staleness/uncompiled/orphans`,
+    );
   } finally {
     closeDatabase(db);
   }
 
-  // --- 4. Orphan detection --------------------------------------------------
-  const orphanPaths = detectOrphans(wikiPath, allPages);
-
-  // --- 5. Aggregate ---------------------------------------------------------
-  const issues = schemaErrors.length + stalePages.length + uncompiledSources.length + orphanPaths.length;
-
-  return {
-    schema: {
-      valid: validCount,
-      invalid: schemaErrors.length,
-      errors: schemaErrors,
-    },
-    staleness: {
-      stale: stalePages.length,
-      pages: stalePages,
-    },
-    uncompiled: {
-      count: uncompiledSources.length,
-      sources: uncompiledSources,
-    },
-    orphans: {
-      count: orphanPaths.length,
-      pages: orphanPaths,
-    },
-    issues,
-  };
+  return result;
 }
 
 // ---------------------------------------------------------------------------
