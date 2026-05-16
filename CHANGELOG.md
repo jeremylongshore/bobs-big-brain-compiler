@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.16.3] - 2026-05-16
+
+- docs(readme+claude-md): finalize v1 operations docs (E10-B07) (#60) (c241ae5)
+
+
 ## [v0.16.2] - 2026-05-16
 
 - feat(cli)+compiler: error handling hardening (E10-B05) (#59) (292face)
