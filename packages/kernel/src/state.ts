@@ -5,7 +5,7 @@
  * responsible for inspecting `.ok` before using `.value`.
  */
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,8 +41,28 @@ const DatabaseCtor = _require('better-sqlite3') as {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-/** Path to the migrations directory relative to this compiled module. */
-const DEFAULT_MIGRATIONS_DIR = join(__dirname, '..', 'migrations');
+/**
+ * Resolve the migrations directory.
+ *
+ * Search order:
+ *   1. `ICO_MIGRATIONS_DIR` env var — explicit operator override
+ *   2. `<__dirname>/../migrations` — workspace dev layout
+ *      (packages/kernel/dist/state.js → packages/kernel/migrations/)
+ *   3. `<__dirname>/migrations` — bundled CLI layout where tsup's
+ *      `onSuccess` step copied migrations next to `dist/index.js`
+ *
+ * The last path makes the kernel work when bundled into the published
+ * `intentional-cognition-os` CLI tarball; the first two cover dev runs.
+ */
+function resolveMigrationsDir(): string {
+  const envOverride = process.env['ICO_MIGRATIONS_DIR'];
+  if (envOverride !== undefined && envOverride !== '') return envOverride;
+  const devLayout = join(__dirname, '..', 'migrations');
+  const bundledLayout = join(__dirname, 'migrations');
+  return existsSync(devLayout) ? devLayout : bundledLayout;
+}
+
+const DEFAULT_MIGRATIONS_DIR = resolveMigrationsDir();
 
 /** Separator tokens used to split UP and DOWN sections in migration files. */
 const UP_MARKER = '-- === UP ===';

@@ -87,6 +87,24 @@ if [ -z "$BIN_ICO" ]; then
   exit 1
 fi
 
+# CRITICAL: a `workspace:` ref in the published `dependencies` block will
+# break `npm install` for external users — workspace-private packages
+# aren't on the public registry. tsup bundles the workspace deps into
+# dist/, so they must be devDependencies (build-time only), not runtime
+# deps. devDependencies are not installed by end users so it's fine to
+# leave workspace: refs there.
+DEPS_BLOCK=$(echo "$PKG_JSON" | awk '
+  /^  "dependencies":/ { inblock=1; print; next }
+  inblock && /^  },?$/  { inblock=0; print; next }
+  inblock { print }
+')
+if echo "$DEPS_BLOCK" | grep -q '"workspace:'; then
+  echo "✗ package.json runtime 'dependencies' contains workspace: refs:" >&2
+  echo "$DEPS_BLOCK" | grep '"workspace:' | sed 's/^/    /' >&2
+  echo "  Move @ico/* entries from 'dependencies' to 'devDependencies'." >&2
+  exit 1
+fi
+
 echo "→ Cleaning up copied files..."
 rm -f "$CLI_DIR/README.md" "$CLI_DIR/LICENSE"
 

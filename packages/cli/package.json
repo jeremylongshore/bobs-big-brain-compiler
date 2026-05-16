@@ -41,13 +41,18 @@
     "verify-pack": "bash ../../scripts/verify-npm-pack.sh"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.82.0",
+    "better-sqlite3": "^11.9.0",
+    "commander": "^13.0.0",
+    "gray-matter": "^4.0.3",
+    "js-yaml": "^4.1.1",
+    "pdf-parse": "^2.4.5",
+    "turndown": "^7.2.4"
+  },
+  "devDependencies": {
     "@ico/compiler": "workspace:*",
     "@ico/kernel": "workspace:*",
     "@ico/types": "workspace:*",
-    "better-sqlite3": "^11.9.0",
-    "commander": "^13.0.0"
-  },
-  "devDependencies": {
     "tsup": "^8.4.0",
     "typescript": "^5.8.0",
     "vitest": "^4.1.2"
