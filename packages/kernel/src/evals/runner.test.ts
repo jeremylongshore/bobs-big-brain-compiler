@@ -350,7 +350,7 @@ describe('runEval — retrieval', () => {
     if (!r.ok) throw r.error;
     expect(r.value.passed).toBe(true);
     expect(r.value.score).toBe(1);
-    expect(r.value.details).toContain('1/1');
+    expect(r.value.details).toMatch(/recall@5=1\.00/);
   });
 
   it('fails when the expected page is missing', () => {
@@ -370,7 +370,9 @@ describe('runEval — retrieval', () => {
   });
 
   it('honours a lenient threshold (partial recall counts)', () => {
-    // Two expected pages, only one matches → recall 0.5; threshold 0.5 → pass.
+    // Two expected pages, only one matches → recall 0.5; precision = 1/1 = 1
+    // (only one page returned, and it's an expected one); aggregate score = 0.75.
+    // Threshold 0.5 → pass.
     seedWiki('concepts', 'a', 'A Concept', 'Attention in transformers explained.');
     const idx = indexCompiledPages(env.db, env.wsRoot);
     if (!idx.ok) throw idx.error;
@@ -382,7 +384,7 @@ describe('runEval — retrieval', () => {
     );
     if (!r.ok) throw r.error;
     expect(r.value.passed).toBe(true);
-    expect(r.value.score).toBeCloseTo(0.5, 5);
+    expect(r.value.score).toBeCloseTo(0.75, 5);
   });
 });
 
@@ -442,5 +444,250 @@ describe('runEvals — batch', () => {
     expect(r.value.total).toBe(3);
     expect(r.value.passed).toBe(2);
     expect(r.value.failed).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runEval — retrieval precision@k (B03 extension)
+// ---------------------------------------------------------------------------
+
+describe('runEval — retrieval precision', () => {
+  it('reports both recall@k and precision@k in details', () => {
+    seedWiki('concepts', 'self-attention', 'Self-Attention', 'Self-attention quadratic transformers');
+    seedWiki('concepts', 'noise', 'Noise', 'Unrelated transformers content');
+    const idx = indexCompiledPages(env.db, env.wsRoot);
+    if (!idx.ok) throw idx.error;
+
+    const r = runEval(env.db, env.wsRoot, {
+      id: 'r',
+      name: 'R',
+      type: 'retrieval',
+      question: 'attention transformers',
+      expected_pages: ['concepts/self-attention.md'],
+      k: 5,
+      threshold: 0, // accept anything — we just want to read the details string
+    });
+    if (!r.ok) throw r.error;
+    expect(r.value.details).toMatch(/recall@5=\d/);
+    expect(r.value.details).toMatch(/precision@5=\d/);
+    expect(r.value.details).toMatch(/score=\d/);
+  });
+
+  it('fails when min_recall floor is violated even if aggregate ≥ threshold', () => {
+    seedWiki('concepts', 'wanted', 'Wanted', 'attention transformers');
+    seedWiki('concepts', 'noise', 'Noise', 'attention transformers');
+    const idx = indexCompiledPages(env.db, env.wsRoot);
+    if (!idx.ok) throw idx.error;
+
+    // Two expected pages, only one matches → recall 0.5. Aggregate ~0.5.
+    const r = runEval(env.db, env.wsRoot, {
+      id: 'r',
+      name: 'R',
+      type: 'retrieval',
+      question: 'attention',
+      expected_pages: ['concepts/wanted.md', 'concepts/missing.md'],
+      threshold: 0,
+      min_recall: 0.8, // require recall ≥ 0.8 — should fail
+    });
+    if (!r.ok) throw r.error;
+    expect(r.value.passed).toBe(false);
+    expect(r.value.details).toMatch(/recall floor/);
+  });
+
+  it('fails when min_precision floor is violated', () => {
+    seedWiki('concepts', 'wanted', 'Wanted', 'attention transformers');
+    for (let i = 0; i < 4; i += 1) {
+      seedWiki('concepts', `noise-${i}`, `Noise ${i}`, 'attention transformers');
+    }
+    const idx = indexCompiledPages(env.db, env.wsRoot);
+    if (!idx.ok) throw idx.error;
+
+    // 1 expected, 5 hits returned → precision 0.2.
+    const r = runEval(env.db, env.wsRoot, {
+      id: 'r',
+      name: 'R',
+      type: 'retrieval',
+      question: 'attention',
+      expected_pages: ['concepts/wanted.md'],
+      threshold: 0,
+      min_precision: 0.5,
+    });
+    if (!r.ok) throw r.error;
+    expect(r.value.passed).toBe(false);
+    expect(r.value.details).toMatch(/precision floor/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runEval — citation
+// ---------------------------------------------------------------------------
+
+describe('runEval — citation', () => {
+  function seedArtifact(relPath: string, body: string): void {
+    const abs = resolve(env.wsRoot, relPath);
+    mkdirSync(abs.slice(0, abs.lastIndexOf('/')), { recursive: true });
+    writeFileSync(abs, body, 'utf-8');
+  }
+
+  it('verifies every [source: Title] marker against the wiki index', () => {
+    seedWiki(
+      'concepts',
+      'self-attention',
+      'Self-Attention',
+      'Body.',
+    );
+    seedArtifact(
+      'outputs/reports/r1.md',
+      'Attention scales quadratically [source: Self-Attention]. Done.',
+    );
+
+    const r = runEval(env.db, env.wsRoot, {
+      id: 'cit-1',
+      name: 'cit-1',
+      type: 'citation',
+      target_file: 'outputs/reports/r1.md',
+    });
+    if (!r.ok) throw r.error;
+    expect(r.value.passed).toBe(true);
+    expect(r.value.score).toBe(1);
+    expect(r.value.details).toMatch(/1\/1 citations verified/);
+  });
+
+  it('verifies [[slug]] wikilinks against the wiki index', () => {
+    seedWiki('concepts', 'self-attention', 'Self-Attention', 'body');
+    seedArtifact('outputs/r.md', 'See [[self-attention]] for the canonical definition.');
+
+    const r = runEval(env.db, env.wsRoot, {
+      id: 'c',
+      name: 'c',
+      type: 'citation',
+      target_file: 'outputs/r.md',
+    });
+    if (!r.ok) throw r.error;
+    expect(r.value.passed).toBe(true);
+  });
+
+  it('flags hallucinated citations as failures and names them', () => {
+    seedWiki('concepts', 'self-attention', 'Self-Attention', 'body');
+    seedArtifact(
+      'outputs/bad.md',
+      'Real [source: Self-Attention] and made-up [source: Fictional Theorem].',
+    );
+
+    const r = runEval(env.db, env.wsRoot, {
+      id: 'c',
+      name: 'c',
+      type: 'citation',
+      target_file: 'outputs/bad.md',
+    });
+    if (!r.ok) throw r.error;
+    expect(r.value.passed).toBe(false);
+    expect(r.value.score).toBeCloseTo(0.5, 5);
+    expect(r.value.details).toContain('hallucinated');
+    expect(r.value.details).toContain('Fictional Theorem');
+  });
+
+  it('vacuously passes when artifact has zero citations by default', () => {
+    seedArtifact('outputs/r.md', 'No citations anywhere in this file.');
+    const r = runEval(env.db, env.wsRoot, {
+      id: 'c',
+      name: 'c',
+      type: 'citation',
+      target_file: 'outputs/r.md',
+    });
+    if (!r.ok) throw r.error;
+    expect(r.value.passed).toBe(true);
+    expect(r.value.details).toContain('vacuously');
+  });
+
+  it('fails when require_citations=true and artifact has zero citations', () => {
+    seedArtifact('outputs/r.md', 'No citations.');
+    const r = runEval(env.db, env.wsRoot, {
+      id: 'c',
+      name: 'c',
+      type: 'citation',
+      target_file: 'outputs/r.md',
+      require_citations: true,
+    });
+    if (!r.ok) throw r.error;
+    expect(r.value.passed).toBe(false);
+    expect(r.value.details).toContain('zero citations found but spec requires');
+  });
+
+  it('fails when an expected_citation is absent from the artifact', () => {
+    seedWiki('concepts', 'self-attention', 'Self-Attention', 'body');
+    seedWiki('concepts', 'embeddings', 'Embeddings', 'body');
+    seedArtifact(
+      'outputs/partial.md',
+      'Cites [source: Self-Attention] but not the other one.',
+    );
+
+    const r = runEval(env.db, env.wsRoot, {
+      id: 'c',
+      name: 'c',
+      type: 'citation',
+      target_file: 'outputs/partial.md',
+      expected_citations: ['concepts/self-attention.md', 'concepts/embeddings.md'],
+    });
+    if (!r.ok) throw r.error;
+    expect(r.value.passed).toBe(false);
+    expect(r.value.details).toContain('missing expected: concepts/embeddings.md');
+  });
+
+  it('returns err when target_file does not exist', () => {
+    const r = runEval(env.db, env.wsRoot, {
+      id: 'c',
+      name: 'c',
+      type: 'citation',
+      target_file: 'outputs/nonexistent.md',
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.message).toContain('target_file not found');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loader — B03 spec validation
+// ---------------------------------------------------------------------------
+
+describe('loadEvalSpec — B03 extensions', () => {
+  it('validates a citation spec', () => {
+    const path = writeSpec(
+      'evals/cit/c.eval.yaml',
+      ['id: c', 'name: C', 'type: citation', 'target_file: outputs/r.md', ''].join('\n'),
+    );
+    const r = loadEvalSpec(path);
+    expect(r.ok).toBe(true);
+  });
+
+  it('rejects citation spec missing target_file', () => {
+    const path = writeSpec(
+      'evals/cit/bad.eval.yaml',
+      ['id: c', 'name: C', 'type: citation', ''].join('\n'),
+    );
+    const r = loadEvalSpec(path);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.message).toContain('target_file');
+  });
+
+  it('rejects out-of-range min_recall', () => {
+    const path = writeSpec(
+      'evals/r.eval.yaml',
+      [
+        'id: r',
+        'name: R',
+        'type: retrieval',
+        'question: q?',
+        'expected_pages: [a.md]',
+        'min_recall: 1.5',
+        '',
+      ].join('\n'),
+    );
+    const r = loadEvalSpec(path);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.message).toContain('min_recall');
   });
 });

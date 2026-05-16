@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Runtime**: TypeScript, Node.js 22+, pnpm 10.x
 - **CLI**: `ico`
 - **License**: MIT
-- **Current state** (v0.16.3): Epics 1–9 complete. Epic 10 — 8 of 12 beads shipped (B01, B02, B04, B05, B07, B08, B09, B10). Test suite 1143 passing. CLI publishes as `intentional-cognition-os` on npm; tarball verified via `scripts/verify-npm-pack.sh`. Eval framework: smoke + retrieval handlers in kernel, compilation handler in compiler (1–5 rubric scoring per criterion → mean/5 normalized). Remaining: B03 (retrieval/citation), B06 (perf), B11/B12 (release gate + cut). Audit-harness v0.1.0 vendored.
+- **Current state** (v0.16.3): Epics 1–9 complete. Epic 10 — 9 of 12 beads shipped (B01, B02, B03, B04, B05, B07, B08, B09, B10). Test suite 1156 passing. CLI publishes as `intentional-cognition-os` on npm. Eval framework: four handler types — `smoke` + `retrieval` (recall@k + precision@k with per-metric floors) + `citation` (offline hallucination check on any markdown artifact) in kernel, `compilation` (Claude-scored 1–5 rubric) in compiler. Remaining: B06 (perf), B11/B12 (release gate + cut). Audit-harness v0.1.0 vendored.
 
 ## Current State
 

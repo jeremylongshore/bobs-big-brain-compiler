@@ -24,7 +24,7 @@
 // ---------------------------------------------------------------------------
 
 /** Supported handler types. New handlers add to this union. */
-export type EvalType = 'retrieval' | 'smoke' | 'compilation';
+export type EvalType = 'retrieval' | 'smoke' | 'compilation' | 'citation';
 
 /** Common fields shared by every eval spec. */
 export interface BaseEvalSpec {
@@ -42,7 +42,7 @@ export interface BaseEvalSpec {
   threshold?: number;
 }
 
-/** Retrieval handler — measures recall against an expected page list. */
+/** Retrieval handler — measures recall@k + precision@k against an expected page list. */
 export interface RetrievalEvalSpec extends BaseEvalSpec {
   type: 'retrieval';
   /** Natural-language question fed into FTS5. */
@@ -51,6 +51,13 @@ export interface RetrievalEvalSpec extends BaseEvalSpec {
   expected_pages: string[];
   /** How many top results to consider. Defaults to 5. */
   k?: number;
+  /**
+   * Per-metric floors (B03). When set, the spec only passes if both the
+   * aggregate `score >= threshold` AND `recall@k >= min_recall` AND
+   * `precision@k >= min_precision`. Defaults to 0 (no floor).
+   */
+  min_recall?: number;
+  min_precision?: number;
 }
 
 /** Smoke handler — boolean invariants the runner asserts. */
@@ -90,8 +97,36 @@ export interface CompilationEvalSpec extends BaseEvalSpec {
   model?: string;
 }
 
+/**
+ * Citation-fidelity handler (B03) — scans a markdown artifact for inline
+ * `[source: <title>]` and `[[slug]]` citation markers, validates each
+ * against the workspace `wiki/` index, and scores
+ * `verified / total`. Catches hallucinated citations (the canonical
+ * LLM failure mode in grounded knowledge systems).
+ */
+export interface CitationEvalSpec extends BaseEvalSpec {
+  type: 'citation';
+  /** Workspace-relative path to the markdown artifact being audited. */
+  target_file: string;
+  /**
+   * When true, an artifact with zero citations fails (score 0). Default
+   * false — zero citations is vacuously verified.
+   */
+  require_citations?: boolean;
+  /**
+   * Wiki-relative paths that the artifact MUST cite. When set and any
+   * path is absent from the artifact's resolved citations, the eval
+   * fails regardless of the no-hallucination score.
+   */
+  expected_citations?: string[];
+}
+
 /** Union of every supported spec shape. */
-export type EvalSpec = RetrievalEvalSpec | SmokeEvalSpec | CompilationEvalSpec;
+export type EvalSpec =
+  | RetrievalEvalSpec
+  | SmokeEvalSpec
+  | CompilationEvalSpec
+  | CitationEvalSpec;
 
 // ---------------------------------------------------------------------------
 // Result shape

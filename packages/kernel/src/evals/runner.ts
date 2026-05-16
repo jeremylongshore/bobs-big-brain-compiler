@@ -20,6 +20,7 @@ import type { Database } from 'better-sqlite3';
 import { err, ok, type Result } from '@ico/types';
 
 import { writeTrace } from '../traces.js';
+import { runCitationEval } from './handlers/citation.js';
 import { runRetrievalEval } from './handlers/retrieval.js';
 import { runSmokeEval } from './handlers/smoke.js';
 import type { EvalBatchResult, EvalResult, EvalSpec } from './types.js';
@@ -81,6 +82,9 @@ export function runEval(
       break;
     case 'smoke':
       outcome = runSmokeEval(db, workspacePath, spec);
+      break;
+    case 'citation':
+      outcome = runCitationEval(db, workspacePath, spec);
       break;
     case 'compilation':
       // Compilation evals require a ClaudeClient which lives in

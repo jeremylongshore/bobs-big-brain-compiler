@@ -1,17 +1,19 @@
 /**
- * Retrieval eval handler (E10-B01).
+ * Retrieval eval handler (E10-B01, extended for B03).
  *
- * Scores FTS5 search recall against an expected-page list. Given:
- *   - `question` — natural-language query
- *   - `expected_pages` — wiki-relative paths that the question should surface
- *   - `k` — top-k considered (default 5)
+ * Scores FTS5 search against an expected-page list with both
+ * **recall@k** and **precision@k**:
  *
- * Score = (expected pages found in top-k) / (expected pages total).
- * Pass when score ≥ threshold (default 1.0 — every expected page must hit).
+ *   - `recall@k`    = (expected pages found in top-k) / (expected pages total)
+ *   - `precision@k` = (expected pages found in top-k) / k
  *
- * Future work (B03 — citation eval): extend with precision@k and answer
- * grounding. B01 keeps it to plain recall so the framework can land
- * before the heavier metrics arrive.
+ * The aggregate `score` reported back to the runner is the average of
+ * the two (F-style mean without harmonic complexity — recall ÷ 2 +
+ * precision ÷ 2). Pass when the aggregate ≥ threshold (default 1.0).
+ *
+ * The spec can override the per-metric thresholds via `min_recall` and
+ * `min_precision` (both default 0) to enforce a floor on either metric
+ * independently of the aggregate.
  */
 
 import type { Database } from 'better-sqlite3';
@@ -85,14 +87,26 @@ export function runRetrievalEval(
     }
   }
 
-  const score = spec.expected_pages.length === 0 ? 0 : found.length / spec.expected_pages.length;
-  const passed = score >= threshold;
+  const recall = spec.expected_pages.length === 0 ? 0 : found.length / spec.expected_pages.length;
+  // precision@k counts how many of the top-k results were "relevant"
+  // (in expected_pages). If fewer than k results came back, divide by
+  // actual hits count instead — penalising sparse retrieval would
+  // double-punish underpopulated wiki cases.
+  const denominator = Math.min(k, hits.value.length);
+  const precision = denominator === 0 ? 0 : found.length / denominator;
+  const score = (recall + precision) / 2;
 
+  const minRecall = spec.min_recall ?? 0;
+  const minPrecision = spec.min_precision ?? 0;
+  const passed =
+    score >= threshold &&
+    recall >= minRecall &&
+    precision >= minPrecision;
+
+  const metrics = `recall@${k}=${recall.toFixed(2)} precision@${k}=${precision.toFixed(2)} score=${score.toFixed(2)}`;
   const details = passed
-    ? `recall@${k} = ${found.length}/${spec.expected_pages.length} = ${score.toFixed(2)} (≥ ${threshold})`
-    : `recall@${k} = ${found.length}/${spec.expected_pages.length} = ${score.toFixed(2)} (< ${threshold})${
-        missing.length > 0 ? `; missing: ${missing.join(', ')}` : ''
-      }`;
+    ? `${metrics} (≥ ${threshold})`
+    : `${metrics} (< ${threshold})${missing.length > 0 ? `; missing: ${missing.join(', ')}` : ''}${recall < minRecall ? `; recall floor ${minRecall} violated` : ''}${precision < minPrecision ? `; precision floor ${minPrecision} violated` : ''}`;
 
   return ok({
     spec,
