@@ -25,6 +25,7 @@ vi.mock('@ico/kernel', async () => {
     initDatabase: vi.fn(() => ({ ok: true, value: {} })),
     closeDatabase: vi.fn(),
     createTask: vi.fn(),
+    archiveTask: vi.fn(),
     appendAuditLog: vi.fn(() => ({ ok: true, value: undefined })),
   };
 });
@@ -40,7 +41,7 @@ vi.mock('../lib/workspace-resolver.js', () => ({
 import * as kernelModule from '@ico/kernel';
 
 import { resolveWorkspace } from '../lib/workspace-resolver.js';
-import { runResearch } from './research.js';
+import { runArchive, runResearch } from './research.js';
 
 // ===========================================================================
 // UNIT TESTS (mocked kernel)
@@ -436,5 +437,131 @@ describe('runResearch — integration tests', () => {
     } finally {
       realKernel.closeDatabase(db);
     }
+  });
+});
+
+// ===========================================================================
+// runArchive (E10-B09 — coverage closure)
+// ===========================================================================
+
+describe('runArchive', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function mockWs(): void {
+    mkdirSync(join(tmpBase, '.ico'), { recursive: true });
+    writeFileSync(join(tmpBase, '.ico', 'state.db'), '');
+    vi.mocked(resolveWorkspace).mockReturnValue({
+      ok: true,
+      value: { root: tmpBase, dbPath: join(tmpBase, '.ico', 'state.db') },
+    });
+  }
+
+  function mockArchiveOk(taskId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'): void {
+    vi.mocked(kernelModule.archiveTask).mockReturnValue({
+      ok: true,
+      value: {
+        taskId,
+        status: 'archived',
+        archivedAt: '2026-05-16T12:00:00.000Z',
+        workspacePath: `tasks/tsk-${taskId}`,
+      },
+    });
+  }
+
+  it('returns ResearchArchiveResult on success', () => {
+    mockWs();
+    mockArchiveOk('11111111-2222-3333-4444-555555555555');
+    const r = runArchive('11111111-2222-3333-4444-555555555555', {});
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.status).toBe('archived');
+    expect(r.value.taskId).toBe('11111111-2222-3333-4444-555555555555');
+    expect(r.value.workspacePath).toMatch(/^tasks\/tsk-/);
+    expect(r.value.archivedAt).toMatch(/^\d{4}-/);
+  });
+
+  it('emits JSON output when --json is passed', () => {
+    mockWs();
+    mockArchiveOk();
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    runArchive('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', { json: true });
+    const joined = writeSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(joined).toContain('"taskId"');
+    expect(joined).toContain('"status": "archived"');
+    writeSpy.mockRestore();
+  });
+
+  it('emits the human summary when --json is not passed', () => {
+    mockWs();
+    mockArchiveOk();
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    runArchive('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', {});
+    const joined = writeSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(joined).toContain('Research task archived');
+    expect(joined).toContain('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+    expect(joined).toContain('Status:');
+    writeSpy.mockRestore();
+  });
+
+  it('returns workspace-resolver errors verbatim', () => {
+    vi.mocked(resolveWorkspace).mockReturnValue({
+      ok: false,
+      error: new Error('No workspace found'),
+    });
+    const r = runArchive('id', {});
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.message).toContain('No workspace found');
+  });
+
+  it('returns initDatabase errors verbatim', () => {
+    mockWs();
+    vi.mocked(kernelModule.initDatabase).mockReturnValueOnce({
+      ok: false,
+      error: new Error('DB unreachable'),
+    });
+    const r = runArchive('id', {});
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.message).toContain('DB unreachable');
+  });
+
+  it('returns archiveTask errors verbatim', () => {
+    mockWs();
+    vi.mocked(kernelModule.archiveTask).mockReturnValue({
+      ok: false,
+      error: new Error('Task not found'),
+    });
+    const r = runArchive('nonexistent', {});
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.message).toContain('Task not found');
+  });
+
+  it('closes the database on success', () => {
+    mockWs();
+    mockArchiveOk();
+    runArchive('id', {});
+    expect(kernelModule.closeDatabase).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the database on archiveTask error', () => {
+    mockWs();
+    vi.mocked(kernelModule.archiveTask).mockReturnValue({
+      ok: false,
+      error: new Error('boom'),
+    });
+    runArchive('id', {});
+    expect(kernelModule.closeDatabase).toHaveBeenCalledTimes(1);
+  });
+
+  it('forwards --workspace to the resolver', () => {
+    mockWs();
+    mockArchiveOk();
+    runArchive('id', { workspace: '/some/path' });
+    const call = vi.mocked(resolveWorkspace).mock.calls[0]![0];
+    expect(call).toMatchObject({ workspace: '/some/path' });
   });
 });
