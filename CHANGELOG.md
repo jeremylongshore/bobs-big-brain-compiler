@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.16.2] - 2026-05-16
+
+- feat(cli)+compiler: error handling hardening (E10-B05) (#59) (292face)
+
+
 ## [v0.16.1] - 2026-05-16
 
 - feat(cli)+docs: trace coverage audit (E10-B04) (#58) (3c6af76)
