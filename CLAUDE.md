@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Runtime**: TypeScript, Node.js 22+, pnpm 10.x
 - **CLI**: `ico`
 - **License**: MIT
-- **Current state** (v0.15.1): Epics 1–9 complete. Epic 10 in progress — B01 Eval Framework, B04 Trace Coverage Audit, B05 Error Handling Hardening shipped. `ico eval run` discovers `evals/*.eval.yaml`. `ico lint` emits `lint.run`/`lint.result` traces. Mount commands write audit-log entries. Top-level process handlers catch unhandled rejections + SIGINT and route through `friendlyError()` for actionable messages. Disk-failure simulation test confirms atomic-write pattern survives EACCES/ENOSPC. Audit-harness v0.1.0 vendored.
+- **Current state** (v0.15.1): Epics 1–9 complete. Epic 10 in progress — B01 Eval Framework, B04 Trace Coverage Audit, B05 Error Handling Hardening, B07 Docs Finalization shipped. Remaining: B02/B03 (compilation + retrieval/citation eval suites), B06 (perf), B08 (status doc), B09 (test coverage gaps), B10 (npm package prep), B11/B12 (release gate + cut). Audit-harness v0.1.0 vendored.
 
 ## Current State
 
@@ -185,6 +185,70 @@ Detailed specs live in `000-docs/` (doc-filing v4 naming):
 3. **Ephemeral episodic tasks** — Hard questions get structured working memory that gets archived
 4. **Source integrity** — Raw and derived always separate, provenance always tracked
 5. **Deterministic control plane** — The model proposes, the system decides
+
+## Session Operations
+
+Day-to-day operator playbook for a working installation.
+
+### Inspecting the workspace
+
+| Question | Command |
+|---|---|
+| What did I do today? | `tail -20 workspace/audit/log.md` (chronological, human-readable) |
+| Find every `ask` event | `grep '"event_type":"ask.start"' workspace/audit/traces/*.jsonl \| jq .` |
+| All events in one task | Resolve `correlation_id` from a `task.created` event, then `jq 'select(.correlation_id == "<id>")' workspace/audit/traces/*.jsonl` |
+| Workspace health | `ico lint` (schema, staleness, uncompiled, orphan checks) |
+| Counts at a glance | `ico status --workspace .` |
+| Trace coverage smoke | `ico eval run --spec evals/smoke/audit-chain-intact.eval.yaml` |
+
+### Trace-based context refinement (audit M8)
+
+The append-only trace JSONL files are the **substrate for context refinement** per blueprint §5.6. Use them to:
+
+1. **Find prompt patterns that produced low-quality outputs** — `grep` `compilation.complete` traces for low `tokens_used / output_size` ratios; the source pages are listed in the payload and can be re-ingested with tightened prompts.
+2. **Audit a hallucinated citation** — `ask.complete` payloads carry `verifiedCitations` and `unverifiedCitations`; an unverified entry points at a fabricated source the operator can correct upstream.
+3. **Reconstruct an entire research task** — every event in an `ico research` flow shares a `correlation_id`; one `jq select` recovers the full agent timeline.
+4. **Detect schema drift after a compile** — `lint.run` / `lint.result` traces emit per-issue `{path, severity, message}` arrays. A spike in `severity: error` issues after a compile means the new sources are pulling the wiki out of its frontmatter schema.
+
+The hash-chain invariant (`prev_hash = SHA-256(prev_line)`) means tampering with any of this leaves a verifiable break. The `audit-chain-intact` smoke eval walks the chain on every `ico eval run` invocation by default.
+
+### Recall loop
+
+```bash
+ico recall generate --topic "transformer attention"   # ~5–10 cards + a quiz file
+ico recall quiz --topic "transformer attention"        # interactive review
+ico recall weak --report                               # what needs more review
+ico recall export --format anki --out anki-deck.txt    # offline study
+```
+
+`recall.result` events accumulate in `recall_results`; `recall weak` aggregates them and feeds future generations toward weak concepts.
+
+### Common environment variables
+
+| Var | Default | Purpose |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | — | Claude API auth. Loaded from `.ico/config.json` or env. |
+| `ICO_MODEL` | `claude-sonnet-4-6` | Default model for compilation, ask, recall generation |
+| `MAX_TOKENS_PER_OPERATION` | `4096` | Per-call response cap |
+| `ICO_API_TIMEOUT` | `120000` | Claude API timeout in ms |
+| `ICO_MAX_RESEARCH_TOKENS` | `200000` | Hard budget for a single `ico research` task |
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `ico ask` says "No compiled knowledge found" | Workspace hasn't been compiled yet | `ico compile all` |
+| `Disk full — no space left` | Out of disk during atomic write | Free space; atomic writes (`.tmp + rename`) ensure no half-written files leak |
+| `Workspace database is locked` | Another `ico` process is using the same workspace | Wait, or `lsof` the `state.db` to find the holder |
+| `Claude API authentication_error` | Bad / missing `ANTHROPIC_API_KEY` | Set the env var or update `.ico/config.json` |
+| `Claude API rate_limit_error` | Burst exceeded plan limit | Retry after a few minutes; reduce concurrency |
+| `Claude API overloaded_error` | Anthropic capacity issue | Retry; not a workspace problem |
+| Quiz file not found | B08 hasn't run for this topic | `ico recall generate --topic "<same name>"` first |
+| Lint reports orphan pages | Wiki page has no incoming `[[wikilinks]]` | Add references from a topic page or delete the orphan |
+| `audit-chain-intact` eval fails | Trace JSONL was edited by hand | Trace files are append-only — restore from backup; do not edit traces directly |
+| SIGINT mid-`ico compile` | Operator interrupted | Workspace is consistent (atomic writes); just re-run the compile pass |
+
+If a stack trace ever escapes a known failure mode, the top-level handler is doing its job — file an issue with the `[ico]`-prefixed message so the friendly-error mapper can be extended.
 
 ## Testing baseline (2026-05-01 — Intent Solutions Testing SOP)
 
