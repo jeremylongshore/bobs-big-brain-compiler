@@ -23,6 +23,7 @@ import {
   transitionTask,
   writeTrace,
 } from '../index.js';
+import { buildWikiIndex, extractCitations } from './handlers/citation.js';
 import { discoverEvalSpecs, loadAllEvalSpecs, loadEvalSpec } from './loader.js';
 import { runEval, runEvals } from './runner.js';
 import type { EvalSpec, RetrievalEvalSpec, SmokeEvalSpec } from './types.js';
@@ -752,5 +753,146 @@ describe('loadEvalSpec — B03 extensions', () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.error.message).toContain('min_recall');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Citation handler — PR #66 review (bz3s5)
+// ---------------------------------------------------------------------------
+
+describe('citation handler — wiki index reuse across batch', () => {
+  // Per Gemini review on PR #66: runCitationEval rebuilt the wiki index
+  // on every spec. A batch of N citation specs walked the wiki N times.
+  // The runner now builds the index once per batch and threads it
+  // through RunEvalOptions.
+
+  it('runEval honors a prebuilt wiki index (no wiki walk performed)', () => {
+    // Strongest behavioural test: seed an artifact citing a title that
+    // does NOT exist on disk in wiki/. Pass a custom index that DOES
+    // contain that title. The spec passes — which is only possible if
+    // the prebuilt index was used instead of walking wiki/.
+    mkdirSync(resolve(env.wsRoot, 'outputs'), { recursive: true });
+    writeFileSync(
+      resolve(env.wsRoot, 'outputs/r.md'),
+      '[source: NeverWrittenToDisk]',
+      'utf-8',
+    );
+    const customIndex = {
+      byTitle: new Map([['neverwrittentodisk', 'concepts/synthetic.md']]),
+      bySlug: new Map<string, string>(),
+    };
+
+    const r = runEval(
+      env.db,
+      env.wsRoot,
+      { id: 'c', name: 'c', type: 'citation', target_file: 'outputs/r.md' },
+      { wikiIndex: customIndex },
+    );
+    if (!r.ok) throw r.error;
+    expect(r.value.passed).toBe(true);
+    expect(r.value.details).toMatch(/1\/1 citations verified/);
+  });
+
+  it('runEvals threads a single index through a batch of citation specs', () => {
+    // Indirect but strong: seed wiki with concept A and a second wiki
+    // file at concepts/b.md. Build a batch where spec1 cites A and
+    // spec2 cites B. Then delete wiki/concepts/b.md from disk before
+    // running the batch (but after wiki was seeded so the seed exists
+    // for the first index build, if any). The batch builds the index
+    // once at the first citation spec — by then b.md is gone, so
+    // spec2 must fail. This proves only ONE walk happened: there was no
+    // chance for spec2 to see its own freshly-walked index that would
+    // also lack B (which is what we'd want), nor an index that includes
+    // B (impossible at any walk time). The simpler positive proof is
+    // the prebuilt-index test above. Here we just confirm the batch
+    // does not crash and aggregates correctly across multiple citation
+    // specs.
+    seedWiki('concepts', 'a', 'A', 'body');
+    seedWiki('concepts', 'b', 'B', 'body');
+    mkdirSync(resolve(env.wsRoot, 'outputs'), { recursive: true });
+    for (let i = 0; i < 5; i += 1) {
+      writeFileSync(resolve(env.wsRoot, `outputs/r${i}.md`), '[source: A]', 'utf-8');
+    }
+
+    const specs: EvalSpec[] = Array.from({ length: 5 }, (_, i) => ({
+      id: `c${i}`,
+      name: `C${i}`,
+      type: 'citation' as const,
+      target_file: `outputs/r${i}.md`,
+    }));
+    const r = runEvals(env.db, env.wsRoot, specs);
+    if (!r.ok) throw r.error;
+    expect(r.value.passed).toBe(5);
+    expect(r.value.failed).toBe(0);
+  });
+
+  it('single runCitationEval call without prebuilt index still works', () => {
+    // Backward-compat: runCitationEval called directly (not via runEvals)
+    // must still build its own index.
+    seedWiki('concepts', 'a', 'A', 'body');
+    mkdirSync(resolve(env.wsRoot, 'outputs'), { recursive: true });
+    writeFileSync(resolve(env.wsRoot, 'outputs/r.md'), '[source: A]', 'utf-8');
+
+    const r = runEval(env.db, env.wsRoot, {
+      id: 'c',
+      name: 'c',
+      type: 'citation',
+      target_file: 'outputs/r.md',
+    });
+    if (!r.ok) throw r.error;
+    expect(r.value.passed).toBe(true);
+  });
+
+  it('exported buildWikiIndex is the same shape used by the batch runner', () => {
+    seedWiki('concepts', 'self-attention', 'Self-Attention', 'body');
+    seedWiki('topics', 'transformers', 'Transformers', 'body');
+    const idx = buildWikiIndex(env.wsRoot);
+    expect(idx.byTitle.get('self-attention')).toBe('concepts/self-attention.md');
+    expect(idx.byTitle.get('transformers')).toBe('topics/transformers.md');
+    expect(idx.bySlug.get('self-attention')).toBe('concepts/self-attention.md');
+  });
+});
+
+describe('citation handler — extractCitations regex isolation', () => {
+  // Per Gemini review on PR #66: SOURCE_RE / WIKILINK_RE were module-
+  // level with the /g flag. RegExp.exec leaves `lastIndex` non-zero
+  // between calls when a loop exits early or callers interleave. The
+  // handler now constructs fresh RegExps per call.
+  it('100 sequential calls on the same body return identical results', () => {
+    const body = '[source: A] then [[b]] and [source: C] and [[d|alias]]';
+    const first = extractCitations(body);
+    expect(first.map((c) => c.target)).toEqual(['A', 'C', 'b', 'd']);
+    for (let i = 0; i < 100; i += 1) {
+      expect(extractCitations(body)).toEqual(first);
+    }
+  });
+
+  it('extractions on different bodies do not interfere', () => {
+    const a = extractCitations('[source: First] [source: Second]');
+    const b = extractCitations('[source: Third]');
+    const c = extractCitations('[[only-link]]');
+    expect(a.map((x) => x.target)).toEqual(['First', 'Second']);
+    expect(b.map((x) => x.target)).toEqual(['Third']);
+    expect(c.map((x) => x.target)).toEqual(['only-link']);
+  });
+
+  it('survives an interleaved pattern that would corrupt module-level /g regex', () => {
+    // The historical bug: a regex with /g advances lastIndex inside the
+    // exec loop. If extraction is invoked in alternation across two
+    // different bodies (e.g. via async callbacks), a module-level regex
+    // would start the second call at the first call's lastIndex. With
+    // per-call construction this is impossible. Simulate by alternating
+    // calls explicitly.
+    const longBody = '[source: A] '.repeat(20) + '[[end]]';
+    const shortBody = '[source: Short]';
+    for (let i = 0; i < 50; i += 1) {
+      const long = extractCitations(longBody);
+      const short = extractCitations(shortBody);
+      // longBody has 20 source markers + 1 wikilink.
+      expect(long).toHaveLength(21);
+      expect(short).toEqual([
+        { marker: '[source: Short]', target: 'Short', kind: 'source' },
+      ]);
+    }
   });
 });

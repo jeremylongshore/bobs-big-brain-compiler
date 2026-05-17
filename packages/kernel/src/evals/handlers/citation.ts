@@ -52,11 +52,14 @@ const WIKI_SUBDIRS = [
   'open-questions',
 ] as const;
 
-/** Regex for `[source: Title Here]` markers. */
-const SOURCE_RE = /\[source:\s*([^\]]+?)\s*\]/g;
-
-/** Regex for `[[slug]]` wikilinks (optionally with `|alias`). */
-const WIKILINK_RE = /\[\[([^\]|]+?)(?:\|[^\]]+)?]]/g;
+// Regex sources kept as string constants — `extractCitations` constructs
+// fresh `RegExp` instances per call so leftover `lastIndex` state from
+// any prior caller cannot skip matches. The hazard with module-level
+// `/g`-flagged regexes is real: if any future caller breaks out of its
+// `exec` loop before exhaustion (or two callers interleave through an
+// async edge), `lastIndex` persists and the next caller starts mid-string.
+const SOURCE_RE_SRC = String.raw`\[source:\s*([^\]]+?)\s*\]`;
+const WIKILINK_RE_SRC = String.raw`\[\[([^\]|]+?)(?:\|[^\]]+)?]]`;
 
 // ---------------------------------------------------------------------------
 // Title → path lookup
@@ -71,12 +74,12 @@ const WIKILINK_RE = /\[\[([^\]|]+?)(?:\|[^\]]+)?]]/g;
  * style. Title matching is case-insensitive to tolerate minor casing
  * drift between the cited string and the canonical frontmatter title.
  */
-interface WikiIndex {
+export interface WikiIndex {
   byTitle: Map<string, string>;
   bySlug: Map<string, string>;
 }
 
-function buildWikiIndex(workspacePath: string): WikiIndex {
+export function buildWikiIndex(workspacePath: string): WikiIndex {
   const byTitle = new Map<string, string>();
   const bySlug = new Map<string, string>();
   const wikiRoot = resolve(workspacePath, 'wiki');
@@ -132,13 +135,18 @@ interface ExtractedCitation {
 // Extraction
 // ---------------------------------------------------------------------------
 
-function extractCitations(body: string): ExtractedCitation[] {
+export function extractCitations(body: string): ExtractedCitation[] {
+  // Construct fresh regex instances on every call. See the comment on
+  // SOURCE_RE_SRC for the lastIndex-bleed hazard this avoids.
+  const sourceRe = new RegExp(SOURCE_RE_SRC, 'g');
+  const wikilinkRe = new RegExp(WIKILINK_RE_SRC, 'g');
+
   const out: ExtractedCitation[] = [];
   let m: RegExpExecArray | null;
-  while ((m = SOURCE_RE.exec(body)) !== null) {
+  while ((m = sourceRe.exec(body)) !== null) {
     out.push({ marker: m[0], target: m[1]!.trim(), kind: 'source' });
   }
-  while ((m = WIKILINK_RE.exec(body)) !== null) {
+  while ((m = wikilinkRe.exec(body)) !== null) {
     const target = m[1]!.trim();
     // Skip empty wikilinks and standard markdown reference styles that
     // happen to look similar. The regex already filters most.
@@ -158,6 +166,12 @@ function extractCitations(body: string): ExtractedCitation[] {
  * relative). Reads the file, extracts citations, looks each up in the
  * wiki index, and reports verified vs hallucinated.
  *
+ * `prebuiltIndex` is an optional hint from the batch runner so a batch
+ * of N citation specs doesn't rewalk the wiki N times. When omitted, the
+ * handler builds its own index — single-call usage stays self-sufficient.
+ * Callers must invalidate any cached index they hold if the wiki is
+ * mutated between citation evals within the same batch.
+ *
  * Failure modes (never throw):
  * - target_file missing or unreadable
  * - zero citations found AND `require_citations` true (operator opt-in)
@@ -167,6 +181,7 @@ export function runCitationEval(
   _db: Database,
   workspacePath: string,
   spec: CitationEvalSpec,
+  prebuiltIndex?: WikiIndex,
 ): Result<EvalResult, Error> {
   const start = Date.now();
   const threshold = spec.threshold ?? 1;
@@ -211,7 +226,7 @@ export function runCitationEval(
   // walk through the verify/missing logic now; the zero-citation case
   // just gets score=1 (no hallucinations to count) and may still fail
   // on require_citations or missing-expected checks below.
-  const idx = buildWikiIndex(workspacePath);
+  const idx = prebuiltIndex ?? buildWikiIndex(workspacePath);
 
   const verified: ExtractedCitation[] = [];
   const hallucinated: ExtractedCitation[] = [];
