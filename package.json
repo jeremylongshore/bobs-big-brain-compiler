@@ -15,7 +15,8 @@
     "test:coverage": "vitest run --coverage --config vitest.config.ts",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
-    "clean": "pnpm -r clean"
+    "clean": "pnpm -r clean",
+    "bench": "pnpm --filter @ico/benchmarks bench"
   },
   "author": "Jeremy Longshore",
   "license": "MIT",

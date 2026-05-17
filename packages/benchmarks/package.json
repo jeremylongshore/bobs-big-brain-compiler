@@ -1,0 +1,23 @@
+{
+  "name": "@ico/benchmarks",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bench": "tsx src/run.ts",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ico/compiler": "workspace:*",
+    "@ico/kernel": "workspace:*",
+    "@ico/types": "workspace:*"
+  },
+  "devDependencies": {
+    "gray-matter": "^4.0.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.2"
+  }
+}
