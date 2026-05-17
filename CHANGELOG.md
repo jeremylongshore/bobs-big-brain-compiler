@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.18.0] - 2026-05-17
+
+- feat(benchmarks): scaffold perf benchmark suite with ingest scenario (E10-B06 PR 1) (#68) (555ad0d)
+
+
 ## [v0.17.0] - 2026-05-17
 
 - fix(kernel): cache wiki index per batch + scope citation regexes (#67) (b84d915)
