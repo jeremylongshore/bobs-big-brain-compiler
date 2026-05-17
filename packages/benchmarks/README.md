@@ -11,9 +11,9 @@ epic-10:
 |---|---|---|
 | `ico ingest <file>` | < 2 s per source | ✅ shipped |
 | `ico lint` | < 30 s | ✅ shipped |
+| `ico compile <topic>` | < 30 s per topic | ✅ shipped (Claude-gated, opt-in) |
+| `ico ask <question>` | < 10 s per query | ✅ shipped (Claude-gated, opt-in) |
 | `ico render report <topic>` | < 5 s per report | ✅ shipped (Claude-gated, opt-in) |
-| `ico compile <topic>` | < 30 s per topic | ⏳ Claude-gated, next PR |
-| `ico ask <question>` | < 10 s per query | ⏳ Claude-gated, next PR |
 
 "Moderate corpus" = **50 sources, ~500 words each, ≈30 compiled wiki pages**
 (25 concepts + 5 topics for the lint scenario).

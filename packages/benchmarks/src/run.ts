@@ -16,6 +16,8 @@ import { execSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { runAskScenario } from './scenarios/ask.bench.js';
+import { runCompileScenario } from './scenarios/compile.bench.js';
 import { runIngestScenario } from './scenarios/ingest.bench.js';
 import { runLintScenario } from './scenarios/lint.bench.js';
 import { runRenderScenario } from './scenarios/render.bench.js';
@@ -169,6 +171,39 @@ async function main(): Promise<void> {
       topicCount: lint.topicCount,
     },
   });
+
+  // ---- compile (Claude-gated) ------------------------------------------
+  const compile = await runCompileScenario();
+  recordGatedScenario(
+    'compile',
+    {
+      sourceCount: compile.sourceCount,
+      ...(compile.perPhaseMs !== undefined && {
+        summarizeMs: compile.perPhaseMs.summarize,
+        extractMs: compile.perPhaseMs.extract,
+        synthesizeMs: compile.perPhaseMs.synthesize,
+      }),
+    },
+    compile.ran
+      ? { ran: true, result: compile.result! }
+      : { ran: false, skipReason: compile.skipReason ?? 'unknown' },
+    record,
+  );
+
+  // ---- ask (Claude-gated) ----------------------------------------------
+  const ask = await runAskScenario();
+  recordGatedScenario(
+    'ask',
+    {
+      conceptCount: ask.conceptCount,
+      topicCount: ask.topicCount,
+      ...(ask.relevantPageCount !== undefined && { relevantPageCount: ask.relevantPageCount }),
+    },
+    ask.ran
+      ? { ran: true, result: ask.result! }
+      : { ran: false, skipReason: ask.skipReason ?? 'unknown' },
+    record,
+  );
 
   // ---- render (Claude-gated) -------------------------------------------
   const render = await runRenderScenario();
