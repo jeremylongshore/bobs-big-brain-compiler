@@ -1,5 +1,15 @@
 # Changelog
 
+## [v0.17.0] - 2026-05-17
+
+- fix(kernel): cache wiki index per batch + scope citation regexes (#67) (b84d915)
+- feat(kernel): retrieval precision + citation eval handler (E10-B03) (#66) (94c04cc)
+- feat(compiler+kernel+cli): compilation-quality eval suite (E10-B02) (#64) (b9cf9d0)
+- test(types+cli): coverage uplift on ask, research-archive, types barrel (E10-B09) (#63) (1b1ffba)
+- docs(status): real-metrics status doc rewrite (E10-B08) (#62) (eb2c2d1)
+- feat(cli)+docs: npm package preparation (E10-B10) (#61) (146b50e)
+
+
 ## [v0.16.3] - 2026-05-16
 
 - docs(readme+claude-md): finalize v1 operations docs (E10-B07) (#60) (c241ae5)
