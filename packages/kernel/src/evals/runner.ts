@@ -20,7 +20,7 @@ import type { Database } from 'better-sqlite3';
 import { err, ok, type Result } from '@ico/types';
 
 import { writeTrace } from '../traces.js';
-import { runCitationEval } from './handlers/citation.js';
+import { buildWikiIndex, runCitationEval, type WikiIndex } from './handlers/citation.js';
 import { runRetrievalEval } from './handlers/retrieval.js';
 import { runSmokeEval } from './handlers/smoke.js';
 import type { EvalBatchResult, EvalResult, EvalSpec } from './types.js';
@@ -36,6 +36,12 @@ export interface RunEvalOptions {
    * file. Defaults to a fresh UUID per spec.
    */
   correlationId?: string;
+  /**
+   * Pre-built wiki index for citation specs. Lets `runEvals` walk the
+   * wiki once per batch instead of once per citation spec. Ignored by
+   * non-citation handlers.
+   */
+  wikiIndex?: WikiIndex;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,7 +90,7 @@ export function runEval(
       outcome = runSmokeEval(db, workspacePath, spec);
       break;
     case 'citation':
-      outcome = runCitationEval(db, workspacePath, spec);
+      outcome = runCitationEval(db, workspacePath, spec, options.wikiIndex);
       break;
     case 'compilation':
       // Compilation evals require a ClaudeClient which lives in
@@ -135,8 +141,18 @@ export function runEvals(
   const results: EvalResult[] = [];
   const batchStart = Date.now();
 
+  // Citation specs share a single wiki index — built lazily on first
+  // citation spec, reused for the rest of the batch. The wiki is assumed
+  // stable during a batch (typical `ico eval run` invariant); a caller
+  // mutating wiki/ mid-batch must split into separate `runEvals` calls.
+  let sharedWikiIndex: WikiIndex | undefined;
+
   for (const spec of specs) {
-    const r = runEval(db, workspacePath, spec);
+    const opts: RunEvalOptions = {};
+    if (spec.type === 'citation') {
+      opts.wikiIndex = sharedWikiIndex ??= buildWikiIndex(workspacePath);
+    }
+    const r = runEval(db, workspacePath, spec, opts);
     if (r.ok) {
       results.push(r.value);
     } else {

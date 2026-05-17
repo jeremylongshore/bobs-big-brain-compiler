@@ -52,10 +52,19 @@ const WIKI_SUBDIRS = [
   'open-questions',
 ] as const;
 
-/** Regex for `[source: Title Here]` markers. */
+// Regex for `[source: Title Here]` markers.
+//
+// Module-level for compile-once performance. `extractCitations` MUST
+// explicitly reset `lastIndex` to 0 before each `exec` loop. Natural
+// while-loop exhaustion does reset it, but the explicit reset is
+// belt-and-suspenders against a future caller breaking out of the loop
+// early, or against any external code mutating `lastIndex` before this
+// function runs. Removing the reset reintroduces the lastIndex-bleed
+// bug fixed by PR #66 review.
 const SOURCE_RE = /\[source:\s*([^\]]+?)\s*\]/g;
 
-/** Regex for `[[slug]]` wikilinks (optionally with `|alias`). */
+// Regex for `[[slug]]` wikilinks (optionally with `|alias`). Same
+// lastIndex-reset contract as SOURCE_RE above.
 const WIKILINK_RE = /\[\[([^\]|]+?)(?:\|[^\]]+)?]]/g;
 
 // ---------------------------------------------------------------------------
@@ -71,12 +80,12 @@ const WIKILINK_RE = /\[\[([^\]|]+?)(?:\|[^\]]+)?]]/g;
  * style. Title matching is case-insensitive to tolerate minor casing
  * drift between the cited string and the canonical frontmatter title.
  */
-interface WikiIndex {
+export interface WikiIndex {
   byTitle: Map<string, string>;
   bySlug: Map<string, string>;
 }
 
-function buildWikiIndex(workspacePath: string): WikiIndex {
+export function buildWikiIndex(workspacePath: string): WikiIndex {
   const byTitle = new Map<string, string>();
   const bySlug = new Map<string, string>();
   const wikiRoot = resolve(workspacePath, 'wiki');
@@ -132,7 +141,12 @@ interface ExtractedCitation {
 // Extraction
 // ---------------------------------------------------------------------------
 
-function extractCitations(body: string): ExtractedCitation[] {
+export function extractCitations(body: string): ExtractedCitation[] {
+  // Explicit lastIndex reset — see the comment on SOURCE_RE for the
+  // lastIndex-bleed bug this guards against. Do not remove.
+  SOURCE_RE.lastIndex = 0;
+  WIKILINK_RE.lastIndex = 0;
+
   const out: ExtractedCitation[] = [];
   let m: RegExpExecArray | null;
   while ((m = SOURCE_RE.exec(body)) !== null) {
@@ -158,6 +172,12 @@ function extractCitations(body: string): ExtractedCitation[] {
  * relative). Reads the file, extracts citations, looks each up in the
  * wiki index, and reports verified vs hallucinated.
  *
+ * `prebuiltIndex` is an optional hint from the batch runner so a batch
+ * of N citation specs doesn't rewalk the wiki N times. When omitted, the
+ * handler builds its own index — single-call usage stays self-sufficient.
+ * Callers must invalidate any cached index they hold if the wiki is
+ * mutated between citation evals within the same batch.
+ *
  * Failure modes (never throw):
  * - target_file missing or unreadable
  * - zero citations found AND `require_citations` true (operator opt-in)
@@ -167,6 +187,7 @@ export function runCitationEval(
   _db: Database,
   workspacePath: string,
   spec: CitationEvalSpec,
+  prebuiltIndex?: WikiIndex,
 ): Result<EvalResult, Error> {
   const start = Date.now();
   const threshold = spec.threshold ?? 1;
@@ -211,7 +232,7 @@ export function runCitationEval(
   // walk through the verify/missing logic now; the zero-citation case
   // just gets score=1 (no hallucinations to count) and may still fail
   // on require_citations or missing-expected checks below.
-  const idx = buildWikiIndex(workspacePath);
+  const idx = prebuiltIndex ?? buildWikiIndex(workspacePath);
 
   const verified: ExtractedCitation[] = [];
   const hallucinated: ExtractedCitation[] = [];

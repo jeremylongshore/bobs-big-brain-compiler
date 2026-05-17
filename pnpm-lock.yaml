@@ -32,6 +32,28 @@ importers:
 
   packages/cli:
     dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.82.0
+        version: 0.82.0(zod@3.25.76)
+      better-sqlite3:
+        specifier: ^11.9.0
+        version: 11.10.0
+      commander:
+        specifier: ^13.0.0
+        version: 13.1.0
+      gray-matter:
+        specifier: ^4.0.3
+        version: 4.0.3
+      js-yaml:
+        specifier: ^4.1.1
+        version: 4.1.1
+      pdf-parse:
+        specifier: ^2.4.5
+        version: 2.4.5
+      turndown:
+        specifier: ^7.2.4
+        version: 7.2.4
+    devDependencies:
       '@ico/compiler':
         specifier: workspace:*
         version: link:../compiler
@@ -41,13 +63,6 @@ importers:
       '@ico/types':
         specifier: workspace:*
         version: link:../types
-      better-sqlite3:
-        specifier: ^11.9.0
-        version: 11.10.0
-      commander:
-        specifier: ^13.0.0
-        version: 13.1.0
-    devDependencies:
       tsup:
         specifier: ^8.4.0
         version: 8.5.1(postcss@8.5.10)(typescript@5.9.3)
