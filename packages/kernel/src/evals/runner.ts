@@ -150,10 +150,7 @@ export function runEvals(
   for (const spec of specs) {
     const opts: RunEvalOptions = {};
     if (spec.type === 'citation') {
-      if (sharedWikiIndex === undefined) {
-        sharedWikiIndex = buildWikiIndex(workspacePath);
-      }
-      opts.wikiIndex = sharedWikiIndex;
+      opts.wikiIndex = sharedWikiIndex ??= buildWikiIndex(workspacePath);
     }
     const r = runEval(db, workspacePath, spec, opts);
     if (r.ok) {

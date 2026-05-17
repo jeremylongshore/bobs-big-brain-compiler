@@ -52,14 +52,20 @@ const WIKI_SUBDIRS = [
   'open-questions',
 ] as const;
 
-// Regex sources kept as string constants — `extractCitations` constructs
-// fresh `RegExp` instances per call so leftover `lastIndex` state from
-// any prior caller cannot skip matches. The hazard with module-level
-// `/g`-flagged regexes is real: if any future caller breaks out of its
-// `exec` loop before exhaustion (or two callers interleave through an
-// async edge), `lastIndex` persists and the next caller starts mid-string.
-const SOURCE_RE_SRC = String.raw`\[source:\s*([^\]]+?)\s*\]`;
-const WIKILINK_RE_SRC = String.raw`\[\[([^\]|]+?)(?:\|[^\]]+)?]]`;
+// Regex for `[source: Title Here]` markers.
+//
+// Module-level for compile-once performance. `extractCitations` MUST
+// explicitly reset `lastIndex` to 0 before each `exec` loop. Natural
+// while-loop exhaustion does reset it, but the explicit reset is
+// belt-and-suspenders against a future caller breaking out of the loop
+// early, or against any external code mutating `lastIndex` before this
+// function runs. Removing the reset reintroduces the lastIndex-bleed
+// bug fixed by PR #66 review.
+const SOURCE_RE = /\[source:\s*([^\]]+?)\s*\]/g;
+
+// Regex for `[[slug]]` wikilinks (optionally with `|alias`). Same
+// lastIndex-reset contract as SOURCE_RE above.
+const WIKILINK_RE = /\[\[([^\]|]+?)(?:\|[^\]]+)?]]/g;
 
 // ---------------------------------------------------------------------------
 // Title → path lookup
@@ -136,17 +142,17 @@ interface ExtractedCitation {
 // ---------------------------------------------------------------------------
 
 export function extractCitations(body: string): ExtractedCitation[] {
-  // Construct fresh regex instances on every call. See the comment on
-  // SOURCE_RE_SRC for the lastIndex-bleed hazard this avoids.
-  const sourceRe = new RegExp(SOURCE_RE_SRC, 'g');
-  const wikilinkRe = new RegExp(WIKILINK_RE_SRC, 'g');
+  // Explicit lastIndex reset — see the comment on SOURCE_RE for the
+  // lastIndex-bleed bug this guards against. Do not remove.
+  SOURCE_RE.lastIndex = 0;
+  WIKILINK_RE.lastIndex = 0;
 
   const out: ExtractedCitation[] = [];
   let m: RegExpExecArray | null;
-  while ((m = sourceRe.exec(body)) !== null) {
+  while ((m = SOURCE_RE.exec(body)) !== null) {
     out.push({ marker: m[0], target: m[1]!.trim(), kind: 'source' });
   }
-  while ((m = wikilinkRe.exec(body)) !== null) {
+  while ((m = WIKILINK_RE.exec(body)) !== null) {
     const target = m[1]!.trim();
     // Skip empty wikilinks and standard markdown reference styles that
     // happen to look similar. The regex already filters most.
