@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.20.0] - 2026-05-17
+
+- feat(benchmarks): render scenario + Claude-gating pattern (E10-B06 PR 3) (#70) (caae18b)
+
+
 ## [v0.19.0] - 2026-05-17
 
 - feat(compiler+benchmarks): lint scenario + extract lint to @ico/compiler (E10-B06 PR 2) (#69) (701e9d6)
