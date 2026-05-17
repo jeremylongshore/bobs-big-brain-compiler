@@ -1,0 +1,4 @@
+results/*.json
+!results/.gitkeep
+dist
+.tsbuildinfo
