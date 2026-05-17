@@ -61,6 +61,54 @@ interface RunRecord {
   scenarios: ScenarioRecord[];
 }
 
+/** Outcome shape every gated scenario returns. */
+type GatedOutcome =
+  | { ran: false; skipReason: string }
+  | { ran: true; result: import('./utils/timer.js').BenchResult };
+
+/**
+ * Format + record a Claude-gated scenario. Logs the appropriate
+ * one-liner (SKIPPED or formatted bench result) and pushes a
+ * ScenarioRecord onto the run record. Centralised here so the
+ * upcoming compile + ask scenarios don't duplicate this dance.
+ */
+function recordGatedScenario(
+  name: string,
+  context: Record<string, number | string | boolean>,
+  outcome: GatedOutcome,
+  record: RunRecord,
+): void {
+  if (!outcome.ran) {
+    console.log(`${name}: SKIPPED (${outcome.skipReason})`);
+    console.log('');
+    record.scenarios.push({
+      name,
+      context,
+      skipped: true,
+      skipReason: outcome.skipReason,
+    });
+    return;
+  }
+  const r = outcome.result;
+  console.log(formatBenchResult(r));
+  console.log(
+    `  context: ${Object.entries(context)
+      .map(([k, v]) => `${k}=${String(v)}`)
+      .join(', ')}`,
+  );
+  console.log('');
+  record.scenarios.push({
+    name,
+    medianMs: r.medianMs,
+    minMs: r.minMs,
+    maxMs: r.maxMs,
+    rssDeltaMb: r.rssDeltaMb,
+    iterations: r.samplesMs.length,
+    samplesMs: r.samplesMs,
+    context,
+  });
+}
+
 async function main(): Promise<void> {
   const startedAt = new Date().toISOString();
   const gitSha = gitShortSha();
@@ -124,31 +172,14 @@ async function main(): Promise<void> {
 
   // ---- render (Claude-gated) -------------------------------------------
   const render = await runRenderScenario();
-  if (!render.ran) {
-    console.log(`render: SKIPPED (${render.skipReason ?? 'unknown'})`);
-    console.log('');
-    record.scenarios.push({
-      name: 'render',
-      context: { conceptCount: render.conceptCount },
-      skipped: true,
-      skipReason: render.skipReason ?? 'unknown',
-    });
-  } else {
-    const r = render.result!;
-    console.log(formatBenchResult(r));
-    console.log(`  context: ${render.conceptCount} source pages`);
-    console.log('');
-    record.scenarios.push({
-      name: 'render',
-      medianMs: r.medianMs,
-      minMs: r.minMs,
-      maxMs: r.maxMs,
-      rssDeltaMb: r.rssDeltaMb,
-      iterations: r.samplesMs.length,
-      samplesMs: r.samplesMs,
-      context: { conceptCount: render.conceptCount },
-    });
-  }
+  recordGatedScenario(
+    'render',
+    { conceptCount: render.conceptCount },
+    render.ran
+      ? { ran: true, result: render.result! }
+      : { ran: false, skipReason: render.skipReason ?? 'unknown' },
+    record,
+  );
 
   // ---- persist ----------------------------------------------------------
   const resultsDir = resolve(import.meta.dirname, '..', 'results');

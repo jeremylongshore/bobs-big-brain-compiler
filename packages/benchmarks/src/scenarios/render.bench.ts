@@ -24,7 +24,7 @@
 
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { createClaudeClient, renderReport, type ReportSource } from '@ico/compiler';
@@ -98,9 +98,13 @@ export async function runRenderScenario(
       const relPath = absPath.startsWith(workspacePath)
         ? absPath.slice(workspacePath.length).replace(/^[\\/]/, '')
         : absPath;
-      // The title in our generator's frontmatter is e.g. "Attention Mechanism 0"
-      // — derive it from the filename when we don't want to parse YAML.
-      const title = basename(absPath, '.md');
+      // Extract the human-readable title from the frontmatter so the
+      // Claude-generated citations in the report use natural titles
+      // ("Attention Mechanism 0") rather than slugs
+      // ("attention-mechanism-0"). The wiki generator emits unquoted
+      // `title: <text>` — a single anchored regex is enough.
+      const titleMatch = /^title:\s*(.+)$/m.exec(content);
+      const title = titleMatch?.[1]?.trim() ?? '(untitled)';
       return { title, content, path: relPath };
     });
 
