@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.19.0] - 2026-05-17
+
+- feat(compiler+benchmarks): lint scenario + extract lint to @ico/compiler (E10-B06 PR 2) (#69) (701e9d6)
+
+
 ## [v0.18.0] - 2026-05-17
 
 - feat(benchmarks): scaffold perf benchmark suite with ingest scenario (E10-B06 PR 1) (#68) (555ad0d)
