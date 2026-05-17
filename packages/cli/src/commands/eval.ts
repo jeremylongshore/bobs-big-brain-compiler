@@ -111,6 +111,7 @@ export async function runEvalCommand(
     const results: EvalResult[] = [];
 
     let claudeClient: ReturnType<typeof createClaudeClient> | null = null;
+    let defaultModel: string | undefined;
     const needsClaude = specs.some((s) => s.type === 'compilation');
     if (needsClaude) {
       let config: { apiKey: string; model: string };
@@ -125,6 +126,12 @@ export async function runEvalCommand(
         };
       }
       claudeClient = createClaudeClient(config.apiKey);
+      // Honor the workspace's configured model as the fallback. The
+      // handler's precedence is: spec.model > options.model > env > hard
+      // default. By passing config.model in options, the operator's
+      // workspace setting wins over env and default but a per-spec
+      // override still takes precedence.
+      defaultModel = config.model;
     }
 
     for (const spec of specs) {
@@ -135,6 +142,11 @@ export async function runEvalCommand(
         // any compilation spec was present.
         const r = await runCompilationEval(db, wsPath, spec, claudeClient!, {
           correlationId,
+          // spec.model wins inside the handler when set; options.model
+          // is the workspace-config fallback.
+          ...(spec.model === undefined && defaultModel !== undefined
+            ? { model: defaultModel }
+            : {}),
         });
         result = r.ok
           ? r.value

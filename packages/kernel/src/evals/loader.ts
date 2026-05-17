@@ -127,6 +127,7 @@ function validateSpec(raw: unknown, sourcePath: string): Result<EvalSpec, Error>
         new Error(`${sourcePath}: compilation spec needs non-empty 'criteria' array`),
       );
     }
+    const seenIds = new Set<string>();
     for (let i = 0; i < criteria.length; i += 1) {
       const c: unknown = criteria[i];
       if (
@@ -139,6 +140,15 @@ function validateSpec(raw: unknown, sourcePath: string): Result<EvalSpec, Error>
           new Error(`${sourcePath}: criteria[${i}] must be { id, description } (both strings)`),
         );
       }
+      const cid = (c as Record<string, unknown>)['id'] as string;
+      if (seenIds.has(cid)) {
+        return err(
+          new Error(
+            `${sourcePath}: criteria[${i}].id '${cid}' duplicates an earlier criterion id`,
+          ),
+        );
+      }
+      seenIds.add(cid);
     }
   }
 
