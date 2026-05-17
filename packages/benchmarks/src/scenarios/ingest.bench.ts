@@ -59,10 +59,15 @@ export async function runIngestScenario(
   const bodyWords = options.bodyWords ?? 500;
   const seed = options.seed ?? 0xb06;
 
-  const workspaceBase = mkdtempSync(join(tmpdir(), 'ico-bench-ingest-ws-'));
-  const corpusDir = mkdtempSync(join(tmpdir(), 'ico-bench-ingest-corpus-'));
+  // Create both temp dirs inside the try so a second-mkdtemp failure
+  // doesn't leak the first (PR #69 review).
+  let workspaceBase: string | undefined;
+  let corpusDir: string | undefined;
 
   try {
+    workspaceBase = mkdtempSync(join(tmpdir(), 'ico-bench-ingest-ws-'));
+    corpusDir = mkdtempSync(join(tmpdir(), 'ico-bench-ingest-corpus-'));
+
     const wsResult = initWorkspace('bench-ws', workspaceBase);
     if (!wsResult.ok) throw wsResult.error;
     const { root: workspacePath, dbPath } = wsResult.value;
@@ -96,8 +101,8 @@ export async function runIngestScenario(
 
     return { perFile, batchTotalMs, sourceCount };
   } finally {
-    rmSync(corpusDir, { recursive: true, force: true });
-    rmSync(workspaceBase, { recursive: true, force: true });
+    if (corpusDir !== undefined) rmSync(corpusDir, { recursive: true, force: true });
+    if (workspaceBase !== undefined) rmSync(workspaceBase, { recursive: true, force: true });
   }
 }
 

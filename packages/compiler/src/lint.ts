@@ -190,6 +190,11 @@ export function detectOrphans(wikiPath: string, allPages: string[]): string[] {
  * @throws When the database cannot be opened.
  */
 export function runLint(workspaceRoot: string, dbPath: string): LintResult {
+  // Capture the wall-clock start BEFORE schema validation so the
+  // duration_ms reported in lint.result reflects the full lint cost,
+  // not just the DB-backed slice. Schema validation can dominate on
+  // large wikis (PR #69 review).
+  const lintRunStart = Date.now();
   const wikiPath = join(workspaceRoot, 'wiki');
 
   // --- 1. Schema validation -------------------------------------------------
@@ -222,7 +227,6 @@ export function runLint(workspaceRoot: string, dbPath: string): LintResult {
   const db = dbResult.value;
 
   const lintCorrelationId = randomUUID();
-  const lintRunStart = Date.now();
 
   let stalePages: StalePageInfo[];
   let uncompiledSources: Array<{ id: string; path: string; type: string }>;

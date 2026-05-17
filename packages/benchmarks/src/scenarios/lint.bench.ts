@@ -63,10 +63,17 @@ export async function runLintScenario(
   const wikiSeed = options.wikiSeed ?? 0xb062;
   const iterations = options.iterations ?? 5;
 
-  const wsBase = mkdtempSync(join(tmpdir(), 'ico-bench-lint-ws-'));
-  const corpusDir = mkdtempSync(join(tmpdir(), 'ico-bench-lint-corpus-'));
+  // Create both temp dirs inside the try so a failure in the second
+  // mkdtemp call still cleans up the first via the finally. Without
+  // this, an OS-level mkdtemp failure (e.g. ENOSPC, EACCES) would
+  // leak wsBase. PR #69 review.
+  let wsBase: string | undefined;
+  let corpusDir: string | undefined;
 
   try {
+    wsBase = mkdtempSync(join(tmpdir(), 'ico-bench-lint-ws-'));
+    corpusDir = mkdtempSync(join(tmpdir(), 'ico-bench-lint-corpus-'));
+
     const wsResult = initWorkspace('bench-ws', wsBase);
     if (!wsResult.ok) throw wsResult.error;
     const { root: workspacePath, dbPath } = wsResult.value;
@@ -105,8 +112,8 @@ export async function runLintScenario(
 
     return { result, sourceCount, conceptCount, topicCount };
   } finally {
-    rmSync(corpusDir, { recursive: true, force: true });
-    rmSync(wsBase, { recursive: true, force: true });
+    if (corpusDir !== undefined) rmSync(corpusDir, { recursive: true, force: true });
+    if (wsBase !== undefined) rmSync(wsBase, { recursive: true, force: true });
   }
 }
 

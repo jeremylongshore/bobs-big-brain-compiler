@@ -17,7 +17,7 @@
  */
 
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 
 // ---------------------------------------------------------------------------
 // Local deterministic UUIDv4 generator
@@ -235,9 +235,11 @@ export function generateWiki(options: GenerateWikiOptions): GenerateWikiResult {
       body,
       '',
       // Reference at least one concept by slug so the orphan check
-      // catches links — keeps the lint scenario representative.
+      // catches links — keeps the lint scenario representative. Use
+      // path.basename for cross-platform slug extraction; the absolute
+      // path uses the host separator (`\` on Windows, `/` on POSIX).
       ...(conceptPaths.length > 0
-        ? [`See also: [[${conceptPaths[i % conceptPaths.length]!.split('/').pop()!.replace(/\.md$/, '')}]]`]
+        ? [`See also: [[${basename(conceptPaths[i % conceptPaths.length]!, '.md')}]]`]
         : []),
       '',
     ].join('\n');
