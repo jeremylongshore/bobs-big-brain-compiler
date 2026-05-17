@@ -11,12 +11,28 @@ epic-10:
 |---|---|---|
 | `ico ingest <file>` | < 2 s per source | ✅ shipped |
 | `ico lint` | < 30 s | ✅ shipped |
+| `ico render report <topic>` | < 5 s per report | ✅ shipped (Claude-gated, opt-in) |
 | `ico compile <topic>` | < 30 s per topic | ⏳ Claude-gated, next PR |
 | `ico ask <question>` | < 10 s per query | ⏳ Claude-gated, next PR |
-| `ico render report <topic>` | < 5 s per report | ⏳ Claude-gated, next PR |
 
 "Moderate corpus" = **50 sources, ~500 words each, ≈30 compiled wiki pages**
 (25 concepts + 5 topics for the lint scenario).
+
+### Claude-gated scenarios
+
+Scenarios that call the Anthropic API (`render`, eventually `compile` /
+`ask`) cost real tokens. They're skipped by default. Opt in with **both**
+env vars:
+
+```bash
+ANTHROPIC_API_KEY=sk-... ICO_BENCH_INCLUDE_CLAUDE=1 pnpm bench
+```
+
+The key alone is not consent — many developers have it set for regular
+CLI use. `ICO_BENCH_INCLUDE_CLAUDE=1` is the explicit "yes, burn tokens
+on this benchmark run" signal. Skipped scenarios still appear in the
+JSON output with `skipped: true` so trend-analysis tools can
+distinguish "didn't run today" from "regressed to zero".
 
 A separate large-corpus run (500 sources) verifies no operation degrades
 beyond 3× moderate-corpus baseline. It lands once the per-command

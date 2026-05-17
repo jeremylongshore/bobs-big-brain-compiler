@@ -18,6 +18,7 @@ import { resolve } from 'node:path';
 
 import { runIngestScenario } from './scenarios/ingest.bench.js';
 import { runLintScenario } from './scenarios/lint.bench.js';
+import { runRenderScenario } from './scenarios/render.bench.js';
 import { formatBenchResult } from './utils/timer.js';
 
 /** Best-effort git short SHA. Returns 'unknown' when git is unavailable. */
@@ -40,12 +41,16 @@ interface CommonTiming {
 }
 
 /** A single scenario's record in the JSON output. */
-interface ScenarioRecord extends CommonTiming {
+interface ScenarioRecord extends Partial<CommonTiming> {
   name: string;
-  /** Free-form per-scenario context (counts, configs, gating reason). */
+  /** Free-form per-scenario context (counts, configs). */
   context: Record<string, number | string | boolean>;
   /** Batch wall time when the scenario timed many items (e.g. ingest). */
   batchTotalMs?: number;
+  /** True when a Claude-gated scenario was skipped (no key / no opt-in). */
+  skipped?: boolean;
+  /** Human-readable explanation when `skipped` is true. */
+  skipReason?: string;
 }
 
 interface RunRecord {
@@ -54,6 +59,54 @@ interface RunRecord {
   node: string;
   platform: NodeJS.Platform;
   scenarios: ScenarioRecord[];
+}
+
+/** Outcome shape every gated scenario returns. */
+type GatedOutcome =
+  | { ran: false; skipReason: string }
+  | { ran: true; result: import('./utils/timer.js').BenchResult };
+
+/**
+ * Format + record a Claude-gated scenario. Logs the appropriate
+ * one-liner (SKIPPED or formatted bench result) and pushes a
+ * ScenarioRecord onto the run record. Centralised here so the
+ * upcoming compile + ask scenarios don't duplicate this dance.
+ */
+function recordGatedScenario(
+  name: string,
+  context: Record<string, number | string | boolean>,
+  outcome: GatedOutcome,
+  record: RunRecord,
+): void {
+  if (!outcome.ran) {
+    console.log(`${name}: SKIPPED (${outcome.skipReason})`);
+    console.log('');
+    record.scenarios.push({
+      name,
+      context,
+      skipped: true,
+      skipReason: outcome.skipReason,
+    });
+    return;
+  }
+  const r = outcome.result;
+  console.log(formatBenchResult(r));
+  console.log(
+    `  context: ${Object.entries(context)
+      .map(([k, v]) => `${k}=${String(v)}`)
+      .join(', ')}`,
+  );
+  console.log('');
+  record.scenarios.push({
+    name,
+    medianMs: r.medianMs,
+    minMs: r.minMs,
+    maxMs: r.maxMs,
+    rssDeltaMb: r.rssDeltaMb,
+    iterations: r.samplesMs.length,
+    samplesMs: r.samplesMs,
+    context,
+  });
 }
 
 async function main(): Promise<void> {
@@ -116,6 +169,17 @@ async function main(): Promise<void> {
       topicCount: lint.topicCount,
     },
   });
+
+  // ---- render (Claude-gated) -------------------------------------------
+  const render = await runRenderScenario();
+  recordGatedScenario(
+    'render',
+    { conceptCount: render.conceptCount },
+    render.ran
+      ? { ran: true, result: render.result! }
+      : { ran: false, skipReason: render.skipReason ?? 'unknown' },
+    record,
+  );
 
   // ---- persist ----------------------------------------------------------
   const resultsDir = resolve(import.meta.dirname, '..', 'results');
