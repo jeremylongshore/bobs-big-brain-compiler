@@ -1,0 +1,23 @@
+# Retrieval-quality eval (E10-B03).
+#
+# Demonstrates both recall@k and precision@k metrics on a single
+# fixture question. The aggregate `score` returned is (recall + precision) / 2;
+# `min_recall` / `min_precision` enforce per-metric floors independent
+# of the aggregate threshold.
+#
+# Run with: ico eval run --spec evals/retrieval-citation/retrieval-attention.eval.yaml
+id: retrieval-attention-precision-001
+name: Retrieval — self-attention with precision floor
+description: |
+  The canonical attention question should surface the self-attention
+  concept page within the top 5 results. precision@5 enforces that the
+  page also dominates the top-k — preventing the failure mode where the
+  right page is in top-5 but buried under irrelevant matches.
+type: retrieval
+question: "How does self-attention work in transformers?"
+expected_pages:
+  - concepts/self-attention.md
+k: 5
+threshold: 0.5      # aggregate (recall + precision) / 2 >= 0.5
+min_recall: 1.0     # the expected page MUST be in top-5
+min_precision: 0.2  # at least 1 of 5 results should be expected
