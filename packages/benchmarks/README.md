@@ -7,20 +7,20 @@ Performance benchmarks for `intentional-cognition-os` (E10-B06).
 The five operator-visible commands, against the v1 budgets declared in
 epic-10:
 
-| Command | Target (moderate corpus) |
-|---|---|
-| `ico ingest <file>` | < 2 s per source |
-| `ico compile <topic>` | < 30 s per topic |
-| `ico ask <question>` | < 10 s per query |
-| `ico render report <topic>` | < 5 s per report |
-| `ico lint` | < 30 s |
+| Command | Target (moderate corpus) | Status |
+|---|---|---|
+| `ico ingest <file>` | < 2 s per source | ✅ shipped |
+| `ico lint` | < 30 s | ✅ shipped |
+| `ico compile <topic>` | < 30 s per topic | ⏳ Claude-gated, next PR |
+| `ico ask <question>` | < 10 s per query | ⏳ Claude-gated, next PR |
+| `ico render report <topic>` | < 5 s per report | ⏳ Claude-gated, next PR |
 
-"Moderate corpus" = **50 sources, ~500 words each, ≈30 compiled wiki pages**.
+"Moderate corpus" = **50 sources, ~500 words each, ≈30 compiled wiki pages**
+(25 concepts + 5 topics for the lint scenario).
+
 A separate large-corpus run (500 sources) verifies no operation degrades
-beyond 3× moderate-corpus baseline.
-
-This first scaffold ships **one scenario (ingest)**. Subsequent E10-B06
-PRs add the rest plus the large-corpus run plus optimisation passes.
+beyond 3× moderate-corpus baseline. It lands once the per-command
+scenarios are all in place.
 
 ## Running
 
