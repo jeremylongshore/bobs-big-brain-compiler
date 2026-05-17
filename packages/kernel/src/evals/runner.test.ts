@@ -611,7 +611,7 @@ describe('runEval — citation', () => {
     });
     if (!r.ok) throw r.error;
     expect(r.value.passed).toBe(false);
-    expect(r.value.details).toContain('zero citations found but spec requires');
+    expect(r.value.details).toContain('require_citations=true');
   });
 
   it('fails when an expected_citation is absent from the artifact', () => {
@@ -644,6 +644,69 @@ describe('runEval — citation', () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.error.message).toContain('target_file not found');
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Security + correctness fixes (PR #65 review)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  it('rejects target_file that escapes the workspace via ..', () => {
+    seedArtifact('outputs/r.md', 'body');
+    const r = runEval(env.db, env.wsRoot, {
+      id: 'c',
+      name: 'c',
+      type: 'citation',
+      target_file: '../../etc/passwd',
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.message).toMatch(/must stay inside the workspace/);
+  });
+
+  it('rejects absolute target_file outside the workspace', () => {
+    seedArtifact('outputs/r.md', 'body');
+    const r = runEval(env.db, env.wsRoot, {
+      id: 'c',
+      name: 'c',
+      type: 'citation',
+      target_file: '/etc/hosts',
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.message).toMatch(/must stay inside the workspace/);
+  });
+
+  it('fails when zero-citation artifact has expected_citations (no early return)', () => {
+    // PR #65 review: the zero-citation early return previously skipped
+    // the expected_citations check. An artifact with no citations and
+    // expected_citations set should now fail under-grounding.
+    seedWiki('concepts', 'self-attention', 'Self-Attention', 'body');
+    seedArtifact('outputs/empty.md', 'No citations here at all.');
+
+    const r = runEval(env.db, env.wsRoot, {
+      id: 'c',
+      name: 'c',
+      type: 'citation',
+      target_file: 'outputs/empty.md',
+      expected_citations: ['concepts/self-attention.md'],
+    });
+    if (!r.ok) throw r.error;
+    expect(r.value.passed).toBe(false);
+    expect(r.value.details).toContain('missing expected: concepts/self-attention.md');
+  });
+
+  it('zero-citation artifact with no expected_citations scores 1.0 (no NaN)', () => {
+    seedArtifact('outputs/empty.md', 'No citations.');
+    const r = runEval(env.db, env.wsRoot, {
+      id: 'c',
+      name: 'c',
+      type: 'citation',
+      target_file: 'outputs/empty.md',
+    });
+    if (!r.ok) throw r.error;
+    expect(r.value.passed).toBe(true);
+    expect(r.value.score).toBe(1);
+    expect(Number.isNaN(r.value.score)).toBe(false);
   });
 });
 

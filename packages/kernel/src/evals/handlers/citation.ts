@@ -172,6 +172,19 @@ export function runCitationEval(
   const threshold = spec.threshold ?? 1;
 
   const absTarget = resolve(workspacePath, spec.target_file);
+  // Path-traversal guard. Eval specs are untrusted YAML; without this,
+  // `target_file: ../../etc/passwd` would read sensitive files outside
+  // the workspace. Same shape as the guard B05 added on B11's recall-
+  // export `--out` and the B02 fix on compilation `target_page`.
+  const wsAbs = resolve(workspacePath);
+  const wsPrefix = wsAbs.endsWith('/') ? wsAbs : `${wsAbs}/`;
+  if (absTarget !== wsAbs && !absTarget.startsWith(wsPrefix)) {
+    return err(
+      new Error(
+        `Citation eval '${spec.id}': target_file must stay inside the workspace (got ${spec.target_file})`,
+      ),
+    );
+  }
   if (!existsSync(absTarget)) {
     return err(
       new Error(`Citation eval '${spec.id}': target_file not found at ${spec.target_file}`),
@@ -189,23 +202,15 @@ export function runCitationEval(
   }
 
   const citations = extractCitations(content);
+  const expectedCitations = spec.expected_citations ?? [];
+  const requireCitations = spec.require_citations ?? false;
 
-  if (citations.length === 0) {
-    const requireCitations = spec.require_citations ?? false;
-    const score = requireCitations ? 0 : 1;
-    const passed = !requireCitations;
-    return ok({
-      spec,
-      passed,
-      score,
-      threshold,
-      details: requireCitations
-        ? `${spec.target_file}: zero citations found but spec requires at least one`
-        : `${spec.target_file}: zero citations found (vacuously verified)`,
-      durationMs: Date.now() - start,
-    });
-  }
-
+  // The zero-citation case used to early-return without consulting
+  // `expected_citations`. That hid under-grounding: an artifact with no
+  // citations and `expected_citations: [...]` should fail. We always
+  // walk through the verify/missing logic now; the zero-citation case
+  // just gets score=1 (no hallucinations to count) and may still fail
+  // on require_citations or missing-expected checks below.
   const idx = buildWikiIndex(workspacePath);
 
   const verified: ExtractedCitation[] = [];
@@ -225,15 +230,19 @@ export function runCitationEval(
     }
   }
 
-  const score = verified.length / citations.length;
+  // Score = verified / total. Zero-citation case is 1.0 (no hallucinations
+  // to count) — guarding against NaN. require_citations and
+  // expected_citations checks below can still fail the eval.
+  const score = citations.length === 0 ? 1 : verified.length / citations.length;
 
-  // Optional inverse check: every expected citation must be present.
-  let missingExpected: string[] = [];
-  if (spec.expected_citations !== undefined && spec.expected_citations.length > 0) {
-    missingExpected = spec.expected_citations.filter((exp) => !resolvedPaths.has(exp));
-  }
+  // Inverse check: every expected citation must be present in the
+  // artifact's resolved citation set.
+  const missingExpected = expectedCitations.filter((exp) => !resolvedPaths.has(exp));
 
-  const passed = score >= threshold && missingExpected.length === 0;
+  // require_citations forces a fail when the artifact had zero citations.
+  const zeroFail = requireCitations && citations.length === 0;
+
+  const passed = !zeroFail && score >= threshold && missingExpected.length === 0;
 
   const halParts =
     hallucinated.length > 0
@@ -241,7 +250,13 @@ export function runCitationEval(
       : '';
   const missParts =
     missingExpected.length > 0 ? `; missing expected: ${missingExpected.join(', ')}` : '';
-  const details = `${verified.length}/${citations.length} citations verified (score=${score.toFixed(2)})${halParts}${missParts}`;
+  const zeroParts =
+    citations.length === 0
+      ? requireCitations
+        ? ' (zero citations but require_citations=true)'
+        : ' (zero citations, vacuously verified)'
+      : '';
+  const details = `${verified.length}/${citations.length} citations verified (score=${score.toFixed(2)})${zeroParts}${halParts}${missParts}`;
 
   return ok({
     spec,
