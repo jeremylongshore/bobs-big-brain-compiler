@@ -18,6 +18,14 @@ export {
   type StalePageInfo,
 } from './staleness.js';
 export {
+  detectOrphans,
+  extractWikilinks,
+  type LintResult,
+  runLint,
+  scanWikiPages,
+  type SchemaError,
+} from './lint.js';
+export {
   createClaudeClient,
   estimateTokens,
   sanitizeForPrompt,

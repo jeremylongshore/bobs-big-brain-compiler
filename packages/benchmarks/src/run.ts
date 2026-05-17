@@ -1,17 +1,15 @@
 /**
  * Benchmark runner entry point (E10-B06).
  *
- * Executes every scenario, prints a single summary table, and writes a
- * JSON record under `results/` keyed by ISO-8601 date + git short SHA.
- * The JSON is the durable artefact — checked in as needed for trend
- * analysis, never edited by hand.
+ * Executes every scenario, prints a summary, and writes a JSON record
+ * under `results/` keyed by ISO-8601 date + git short SHA. The JSON is
+ * the durable artefact — checked in as needed for trend analysis,
+ * never edited by hand.
  *
- * Run from repo root: `pnpm bench` or
- *                     `pnpm --filter @ico/benchmarks bench`
+ * Run from repo root: `pnpm bench`
  *
- * The runner is intentionally minimal in this first cut — one scenario,
- * one printed line, one JSON dump. Subsequent E10-B06 PRs add compile,
- * ask, render, lint scenarios + the large-corpus (500-source) run.
+ * Subsequent E10-B06 PRs will add compile/ask/render scenarios (Claude-
+ * gated) and the large-corpus (500-source) run + 3x-degradation gate.
  */
 
 import { execSync } from 'node:child_process';
@@ -19,6 +17,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { runIngestScenario } from './scenarios/ingest.bench.js';
+import { runLintScenario } from './scenarios/lint.bench.js';
 import { formatBenchResult } from './utils/timer.js';
 
 /** Best-effort git short SHA. Returns 'unknown' when git is unavailable. */
@@ -30,21 +29,31 @@ function gitShortSha(): string {
   }
 }
 
+/** Common timing payload extracted from a BenchResult. */
+interface CommonTiming {
+  medianMs: number;
+  minMs: number;
+  maxMs: number;
+  rssDeltaMb: number;
+  iterations: number;
+  samplesMs: readonly number[];
+}
+
+/** A single scenario's record in the JSON output. */
+interface ScenarioRecord extends CommonTiming {
+  name: string;
+  /** Free-form per-scenario context (counts, configs, gating reason). */
+  context: Record<string, number | string | boolean>;
+  /** Batch wall time when the scenario timed many items (e.g. ingest). */
+  batchTotalMs?: number;
+}
+
 interface RunRecord {
   startedAt: string;
   gitSha: string;
   node: string;
   platform: NodeJS.Platform;
-  scenarios: Array<{
-    name: string;
-    perFileMedianMs: number;
-    perFileMinMs: number;
-    perFileMaxMs: number;
-    batchTotalMs: number;
-    sourceCount: number;
-    rssDeltaMb: number;
-    samplesMs: readonly number[];
-  }>;
+  scenarios: ScenarioRecord[];
 }
 
 async function main(): Promise<void> {
@@ -67,25 +76,48 @@ async function main(): Promise<void> {
     scenarios: [],
   };
 
+  // ---- ingest -----------------------------------------------------------
   const ingest = await runIngestScenario();
   console.log(formatBenchResult(ingest.perFile));
-  console.log(`  batchTotal=${ingest.batchTotalMs.toFixed(0)}ms over ${ingest.sourceCount} sources`);
+  console.log(
+    `  batchTotal=${ingest.batchTotalMs.toFixed(0)}ms over ${ingest.sourceCount} sources`,
+  );
   console.log('');
-
   record.scenarios.push({
     name: 'ingest',
-    perFileMedianMs: ingest.perFile.medianMs,
-    perFileMinMs: ingest.perFile.minMs,
-    perFileMaxMs: ingest.perFile.maxMs,
-    batchTotalMs: ingest.batchTotalMs,
-    sourceCount: ingest.sourceCount,
+    medianMs: ingest.perFile.medianMs,
+    minMs: ingest.perFile.minMs,
+    maxMs: ingest.perFile.maxMs,
     rssDeltaMb: ingest.perFile.rssDeltaMb,
+    iterations: ingest.perFile.samplesMs.length,
     samplesMs: ingest.perFile.samplesMs,
+    batchTotalMs: ingest.batchTotalMs,
+    context: { sourceCount: ingest.sourceCount },
   });
 
-  // Persist. Filename includes date + git SHA so two runs on the same
-  // commit don't collide, and a run on a dirty tree is still
-  // distinguishable by timestamp.
+  // ---- lint -------------------------------------------------------------
+  const lint = await runLintScenario();
+  console.log(formatBenchResult(lint.result));
+  console.log(
+    `  context: ${lint.sourceCount} sources, ${lint.conceptCount} concepts, ${lint.topicCount} topics`,
+  );
+  console.log('');
+  record.scenarios.push({
+    name: 'lint',
+    medianMs: lint.result.medianMs,
+    minMs: lint.result.minMs,
+    maxMs: lint.result.maxMs,
+    rssDeltaMb: lint.result.rssDeltaMb,
+    iterations: lint.result.samplesMs.length,
+    samplesMs: lint.result.samplesMs,
+    context: {
+      sourceCount: lint.sourceCount,
+      conceptCount: lint.conceptCount,
+      topicCount: lint.topicCount,
+    },
+  });
+
+  // ---- persist ----------------------------------------------------------
   const resultsDir = resolve(import.meta.dirname, '..', 'results');
   mkdirSync(resultsDir, { recursive: true });
   const dateStr = startedAt.replace(/[:.]/g, '-');
