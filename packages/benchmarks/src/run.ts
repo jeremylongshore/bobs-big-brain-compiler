@@ -18,6 +18,7 @@ import { resolve } from 'node:path';
 
 import { runIngestScenario } from './scenarios/ingest.bench.js';
 import { runLintScenario } from './scenarios/lint.bench.js';
+import { runRenderScenario } from './scenarios/render.bench.js';
 import { formatBenchResult } from './utils/timer.js';
 
 /** Best-effort git short SHA. Returns 'unknown' when git is unavailable. */
@@ -40,12 +41,16 @@ interface CommonTiming {
 }
 
 /** A single scenario's record in the JSON output. */
-interface ScenarioRecord extends CommonTiming {
+interface ScenarioRecord extends Partial<CommonTiming> {
   name: string;
-  /** Free-form per-scenario context (counts, configs, gating reason). */
+  /** Free-form per-scenario context (counts, configs). */
   context: Record<string, number | string | boolean>;
   /** Batch wall time when the scenario timed many items (e.g. ingest). */
   batchTotalMs?: number;
+  /** True when a Claude-gated scenario was skipped (no key / no opt-in). */
+  skipped?: boolean;
+  /** Human-readable explanation when `skipped` is true. */
+  skipReason?: string;
 }
 
 interface RunRecord {
@@ -116,6 +121,34 @@ async function main(): Promise<void> {
       topicCount: lint.topicCount,
     },
   });
+
+  // ---- render (Claude-gated) -------------------------------------------
+  const render = await runRenderScenario();
+  if (!render.ran) {
+    console.log(`render: SKIPPED (${render.skipReason ?? 'unknown'})`);
+    console.log('');
+    record.scenarios.push({
+      name: 'render',
+      context: { conceptCount: render.conceptCount },
+      skipped: true,
+      skipReason: render.skipReason ?? 'unknown',
+    });
+  } else {
+    const r = render.result!;
+    console.log(formatBenchResult(r));
+    console.log(`  context: ${render.conceptCount} source pages`);
+    console.log('');
+    record.scenarios.push({
+      name: 'render',
+      medianMs: r.medianMs,
+      minMs: r.minMs,
+      maxMs: r.maxMs,
+      rssDeltaMb: r.rssDeltaMb,
+      iterations: r.samplesMs.length,
+      samplesMs: r.samplesMs,
+      context: { conceptCount: render.conceptCount },
+    });
+  }
 
   // ---- persist ----------------------------------------------------------
   const resultsDir = resolve(import.meta.dirname, '..', 'results');
