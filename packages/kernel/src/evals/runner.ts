@@ -82,6 +82,18 @@ export function runEval(
     case 'smoke':
       outcome = runSmokeEval(db, workspacePath, spec);
       break;
+    case 'compilation':
+      // Compilation evals require a ClaudeClient which lives in
+      // @ico/compiler. The kernel cannot import the compiler (compiler
+      // depends on kernel). Compilation specs are routed through the
+      // compiler-side runner; calling them on the kernel runner is a
+      // configuration error.
+      outcome = err(
+        new Error(
+          `Compilation eval '${spec.id}' must be dispatched through @ico/compiler's runCompilationEval — not the kernel runner.`,
+        ),
+      );
+      break;
   }
   if (!outcome.ok) return err(outcome.error);
   const result = outcome.value;

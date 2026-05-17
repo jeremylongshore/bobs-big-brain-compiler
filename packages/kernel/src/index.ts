@@ -122,6 +122,7 @@ export {
   runEval,
   runEvals,
   type BaseEvalSpec,
+  type CompilationEvalSpec,
   type EvalBatchResult,
   type EvalResult,
   type EvalSpec,

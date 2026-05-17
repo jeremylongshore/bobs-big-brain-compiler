@@ -1,0 +1,40 @@
+# Extract-pass quality eval (E10-B02).
+#
+# Scores a compiled concept page against five rubric criteria. The
+# extract pass produces wiki/concepts/<slug>.md from one or more source
+# summaries; this eval asks whether the concept is well-formed and
+# linked back to evidence.
+#
+# Run with: ico eval run --spec evals/compilation-quality/extract-concepts.eval.yaml
+id: compile-extract-concept-001
+name: Extract quality — single concept page
+description: |
+  Verifies the extract pass produced a concept page that names the right
+  thing, defines it crisply, cites supporting sources, and links to
+  related concepts.
+type: compilation
+pass: extract
+target_page: concepts/self-attention.md
+threshold: 0.8
+criteria:
+  - id: definition-clarity
+    description: |
+      The Definition section is one short paragraph that a domain
+      newcomer could understand without consulting other pages.
+  - id: source-grounding
+    description: |
+      Every claim in Discussion / Definition is backed by an inline
+      `[source: <title>]` citation or a `[[wikilink]]` to a wiki/sources
+      page that supports it.
+  - id: wikilinks
+    description: |
+      Related concepts mentioned in the body are formatted as
+      `[[concept-slug]]` wikilinks, not bare text. Reachability matters.
+  - id: schema-conformance
+    description: |
+      Frontmatter includes title, type=concept, tags, source_paths.
+      Body has Definition, Discussion, Sources sections in that order.
+  - id: scope
+    description: |
+      The page discusses one concept. Multiple-concept pages should have
+      been split. Score 1 if the page is a topic page mislabeled as concept.

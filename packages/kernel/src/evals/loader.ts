@@ -18,12 +18,25 @@ import { err, ok, type Result } from '@ico/types';
 
 import type { EvalSpec, EvalType } from './types.js';
 
-const VALID_TYPES: ReadonlySet<EvalType> = new Set(['retrieval', 'smoke']);
+const VALID_TYPES: ReadonlySet<EvalType> = new Set([
+  'retrieval',
+  'smoke',
+  'compilation',
+]);
 
 const VALID_SMOKE_CHECKS = new Set([
   'fts5-index-nonempty',
   'no-failed-tasks',
   'audit-chain-intact',
+]);
+
+const VALID_COMPILATION_PASSES = new Set([
+  'summarize',
+  'extract',
+  'synthesize',
+  'link',
+  'contradict',
+  'gap',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -92,6 +105,50 @@ function validateSpec(raw: unknown, sourcePath: string): Result<EvalSpec, Error>
           `${sourcePath}: smoke 'check' must be one of ${Array.from(VALID_SMOKE_CHECKS).join(', ')}`,
         ),
       );
+    }
+  } else if (type === 'compilation') {
+    const pass = obj['pass'];
+    const target = obj['target_page'];
+    const criteria = obj['criteria'];
+    if (typeof pass !== 'string' || !VALID_COMPILATION_PASSES.has(pass)) {
+      return err(
+        new Error(
+          `${sourcePath}: compilation 'pass' must be one of ${Array.from(VALID_COMPILATION_PASSES).join(', ')}`,
+        ),
+      );
+    }
+    if (typeof target !== 'string' || target.trim() === '') {
+      return err(
+        new Error(`${sourcePath}: compilation spec needs non-empty 'target_page' (wiki-relative)`),
+      );
+    }
+    if (!Array.isArray(criteria) || criteria.length === 0) {
+      return err(
+        new Error(`${sourcePath}: compilation spec needs non-empty 'criteria' array`),
+      );
+    }
+    const seenIds = new Set<string>();
+    for (let i = 0; i < criteria.length; i += 1) {
+      const c: unknown = criteria[i];
+      if (
+        typeof c !== 'object' ||
+        c === null ||
+        typeof (c as Record<string, unknown>)['id'] !== 'string' ||
+        typeof (c as Record<string, unknown>)['description'] !== 'string'
+      ) {
+        return err(
+          new Error(`${sourcePath}: criteria[${i}] must be { id, description } (both strings)`),
+        );
+      }
+      const cid = (c as Record<string, unknown>)['id'] as string;
+      if (seenIds.has(cid)) {
+        return err(
+          new Error(
+            `${sourcePath}: criteria[${i}].id '${cid}' duplicates an earlier criterion id`,
+          ),
+        );
+      }
+      seenIds.add(cid);
     }
   }
 

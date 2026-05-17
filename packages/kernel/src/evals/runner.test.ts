@@ -152,6 +152,29 @@ describe('loadEvalSpec', () => {
     if (r.ok) return;
     expect(r.error.message).toContain('YAML parse failed');
   });
+
+  it('rejects compilation spec with duplicate criterion ids (PR #64 review)', () => {
+    const path = writeSpec(
+      'evals/dup.eval.yaml',
+      [
+        'id: c',
+        'name: C',
+        'type: compilation',
+        'pass: summarize',
+        'target_page: sources/x.md',
+        'criteria:',
+        '  - id: alpha',
+        '    description: first',
+        '  - id: alpha',
+        '    description: second (duplicate id)',
+        '',
+      ].join('\n'),
+    );
+    const r = loadEvalSpec(path);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.message).toMatch(/duplicates an earlier criterion id/);
+  });
 });
 
 describe('discoverEvalSpecs', () => {

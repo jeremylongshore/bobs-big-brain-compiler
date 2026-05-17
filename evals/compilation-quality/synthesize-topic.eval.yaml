@@ -1,0 +1,41 @@
+# Synthesize-pass quality eval (E10-B02).
+#
+# Scores a compiled topic page — the cross-source synthesis output —
+# against five rubric criteria. Topic pages should integrate multiple
+# sources, identify cross-cutting themes, and surface where sources
+# agree or disagree.
+#
+# Run with: ico eval run --spec evals/compilation-quality/synthesize-topic.eval.yaml
+id: compile-synthesize-topic-001
+name: Synthesize quality — multi-source topic
+description: |
+  Verifies the synthesize pass produced a topic page that covers every
+  in-scope source, identifies themes, and is honest about disagreement.
+type: compilation
+pass: synthesize
+target_page: topics/transformer-attention.md
+threshold: 0.8
+criteria:
+  - id: coverage
+    description: |
+      Every source listed in `source_paths` frontmatter appears in the
+      body via citation or wikilink. No silently dropped sources.
+  - id: theme-identification
+    description: |
+      The page identifies at least two cross-cutting themes (e.g.
+      "Architecture Variants", "Training Approaches", "Limitations").
+      Themes are named explicitly as section headers.
+  - id: disagreement-surfaced
+    description: |
+      Where sources disagree (different methods, conflicting results,
+      unresolved debates), the disagreement is named — not papered over.
+      Score 1 if disagreements were hidden, 5 if they are foregrounded.
+  - id: no-redundancy
+    description: |
+      Each section adds new information. The Overview and Conclusions
+      don't repeat the same sentences. No source is summarized twice.
+  - id: schema-conformance
+    description: |
+      Frontmatter has title, type=topic, source_paths array, tags.
+      Body has Overview + at least two theme sections + Limitations or
+      Open Problems, per the synthesize prompt template (017-AT-PRMP).

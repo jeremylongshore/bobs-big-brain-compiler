@@ -24,7 +24,7 @@
 // ---------------------------------------------------------------------------
 
 /** Supported handler types. New handlers add to this union. */
-export type EvalType = 'retrieval' | 'smoke';
+export type EvalType = 'retrieval' | 'smoke' | 'compilation';
 
 /** Common fields shared by every eval spec. */
 export interface BaseEvalSpec {
@@ -60,8 +60,38 @@ export interface SmokeEvalSpec extends BaseEvalSpec {
   check: 'fts5-index-nonempty' | 'no-failed-tasks' | 'audit-chain-intact';
 }
 
+/**
+ * Compilation-quality handler — scores a compiled wiki page against a
+ * rubric using Claude. Handler lives in `@ico/compiler` because it
+ * requires the Claude client; this spec type is declared here so the
+ * kernel loader can parse + validate the YAML at the same trust
+ * boundary as every other eval. The runner dispatches `compilation`
+ * specs through compiler-side glue (see `runCompilerEval`).
+ */
+export interface CompilationEvalSpec extends BaseEvalSpec {
+  type: 'compilation';
+  /**
+   * Which compiler pass output this spec scores. Used only as a label
+   * in reports + trace payloads.
+   */
+  pass: 'summarize' | 'extract' | 'synthesize' | 'link' | 'contradict' | 'gap';
+  /** Wiki-relative path to the compiled page being scored. */
+  target_page: string;
+  /**
+   * 1–N rubric criteria the model scores 1–5. The final 0–1 score is
+   * the average of all criterion scores, normalized to [0, 1].
+   */
+  criteria: Array<{
+    id: string;
+    /** Operator-facing prompt describing what to look for. */
+    description: string;
+  }>;
+  /** Optional model override (defaults to ICO_MODEL or claude-sonnet-4-6). */
+  model?: string;
+}
+
 /** Union of every supported spec shape. */
-export type EvalSpec = RetrievalEvalSpec | SmokeEvalSpec;
+export type EvalSpec = RetrievalEvalSpec | SmokeEvalSpec | CompilationEvalSpec;
 
 // ---------------------------------------------------------------------------
 // Result shape
