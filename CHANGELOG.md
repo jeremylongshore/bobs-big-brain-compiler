@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.21.0] - 2026-05-18
+
+- feat(benchmarks): compile + ask scenarios (E10-B06 PR 4) (#71) (625691e)
+
+
 ## [v0.20.0] - 2026-05-17
 
 - feat(benchmarks): render scenario + Claude-gating pattern (E10-B06 PR 3) (#70) (caae18b)
