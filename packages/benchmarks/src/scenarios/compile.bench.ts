@@ -53,8 +53,16 @@ export interface CompileScenarioOutput {
   skipReason?: string;
   /** Whole-pipeline timing (sum of all three phases). */
   result?: BenchResult;
-  /** Per-phase timings — useful when total is over budget. */
-  perPhaseMs?: { summarize: number; extract: number; synthesize: number };
+  /**
+   * Per-phase timing summary. Each phase reports the median across all
+   * iterations plus the raw samples for transparency. Single-iteration
+   * runs trivially have median === samples[0].
+   */
+  perPhaseMs?: {
+    summarize: { medianMs: number; samplesMs: readonly number[] };
+    extract: { medianMs: number; samplesMs: readonly number[] };
+    synthesize: { medianMs: number; samplesMs: readonly number[] };
+  };
   sourceCount: number;
 }
 
@@ -95,15 +103,20 @@ export async function runCompileScenario(
     const client = createClaudeClient(gate.apiKey!);
 
     // Bench the whole pipeline as one timed run. Per-phase timings are
-    // captured inside the bench callback.
-    let phaseTimes = { summarize: 0, extract: 0, synthesize: 0 };
+    // captured inside the bench callback. Each iteration appends to
+    // the per-phase samples arrays so multi-iteration runs surface a
+    // medianed phase breakdown (PR #71 review) — not just the last
+    // iteration's values.
+    const summarizeSamples: number[] = [];
+    const extractSamples: number[] = [];
+    const synthesizeSamples: number[] = [];
     const summaryPaths: string[] = [];
 
     const result = await bench(
       `compile (${sourceCount} sources)`,
       async () => {
-        // Reset per-iteration accumulators.
-        phaseTimes = { summarize: 0, extract: 0, synthesize: 0 };
+        // Reset summary paths for the iteration; samples arrays
+        // intentionally accumulate across iterations.
         summaryPaths.length = 0;
 
         // Open DB for the duration of this iteration's compile passes.
@@ -136,7 +149,7 @@ export async function runCompileScenario(
             if (!sr.ok) throw sr.error;
             summaryPaths.push(sr.value.outputPath);
           }
-          phaseTimes.summarize = Date.now() - summarizeStart;
+          summarizeSamples.push(Date.now() - summarizeStart);
 
           // ---- Phase 2: extract concepts ----------------------------------
           const extractStart = Date.now();
@@ -148,7 +161,7 @@ export async function runCompileScenario(
             options.model !== undefined ? { model: options.model } : {},
           );
           if (!er.ok) throw er.error;
-          phaseTimes.extract = Date.now() - extractStart;
+          extractSamples.push(Date.now() - extractStart);
 
           // ---- Phase 3: synthesize topics --------------------------------
           const synthStart = Date.now();
@@ -159,7 +172,7 @@ export async function runCompileScenario(
             options.model !== undefined ? { model: options.model } : {},
           );
           if (!yr.ok) throw yr.error;
-          phaseTimes.synthesize = Date.now() - synthStart;
+          synthesizeSamples.push(Date.now() - synthStart);
         } finally {
           closeDatabase(db);
         }
@@ -170,13 +183,23 @@ export async function runCompileScenario(
     return {
       ran: true,
       result,
-      perPhaseMs: { ...phaseTimes },
+      perPhaseMs: {
+        summarize: { medianMs: median(summarizeSamples), samplesMs: summarizeSamples },
+        extract: { medianMs: median(extractSamples), samplesMs: extractSamples },
+        synthesize: { medianMs: median(synthesizeSamples), samplesMs: synthesizeSamples },
+      },
       sourceCount,
     };
   } finally {
     if (corpusDir !== undefined) rmSync(corpusDir, { recursive: true, force: true });
     if (wsBase !== undefined) rmSync(wsBase, { recursive: true, force: true });
   }
+}
+
+function median(samples: ReadonlyArray<number>): number {
+  if (samples.length === 0) return 0;
+  const sorted = [...samples].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)]!;
 }
 
 async function main(): Promise<void> {
@@ -189,8 +212,10 @@ async function main(): Promise<void> {
   const p = out.perPhaseMs!;
   console.log(
     `compile: total=${r.medianMs.toFixed(0)}ms ` +
-      `summarize=${p.summarize}ms extract=${p.extract}ms synthesize=${p.synthesize}ms ` +
-      `(${out.sourceCount} sources)`,
+      `summarize=${p.summarize.medianMs}ms ` +
+      `extract=${p.extract.medianMs}ms ` +
+      `synthesize=${p.synthesize.medianMs}ms ` +
+      `(${out.sourceCount} sources, n=${r.samplesMs.length})`,
   );
 }
 

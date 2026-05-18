@@ -179,9 +179,9 @@ async function main(): Promise<void> {
     {
       sourceCount: compile.sourceCount,
       ...(compile.perPhaseMs !== undefined && {
-        summarizeMs: compile.perPhaseMs.summarize,
-        extractMs: compile.perPhaseMs.extract,
-        synthesizeMs: compile.perPhaseMs.synthesize,
+        summarizeMedianMs: compile.perPhaseMs.summarize.medianMs,
+        extractMedianMs: compile.perPhaseMs.extract.medianMs,
+        synthesizeMedianMs: compile.perPhaseMs.synthesize.medianMs,
       }),
     },
     compile.ran

@@ -84,7 +84,6 @@ export async function runAskScenario(
   }
 
   let wsBase: string | undefined;
-  let relevantPageCount = 0;
   try {
     wsBase = mkdtempSync(join(tmpdir(), 'ico-bench-ask-ws-'));
     const wsResult = initWorkspace('bench-ws', wsBase);
@@ -116,6 +115,13 @@ export async function runAskScenario(
 
     const client = createClaudeClient(gate.apiKey!);
 
+    // Capture relevantPageCount from the FIRST iteration only. The
+    // value is deterministic on a fixed wiki+question, so the first
+    // run is representative; reading the last-iteration value would
+    // mask a fixture drift bug under multi-iteration runs (PR #71
+    // review).
+    let firstIterationPageCount: number | undefined;
+
     const result = await bench(
       `ask (${conceptCount} concepts, ${topicCount} topics)`,
       async () => {
@@ -126,9 +132,9 @@ export async function runAskScenario(
         try {
           const analyzed = analyzeQuestion(benchDb.value, workspacePath, question);
           if (!analyzed.ok) throw analyzed.error;
-          // Cache the count from the last iteration; representative for
-          // this question + corpus.
-          relevantPageCount = analyzed.value.relevantPages.length;
+          if (firstIterationPageCount === undefined) {
+            firstIterationPageCount = analyzed.value.relevantPages.length;
+          }
 
           // The CLI's ask command takes the top 5 retrieval hits and
           // reads each file from disk — replicate that exact behaviour
@@ -163,7 +169,13 @@ export async function runAskScenario(
       { iterations },
     );
 
-    return { ran: true, result, conceptCount, topicCount, relevantPageCount };
+    return {
+      ran: true,
+      result,
+      conceptCount,
+      topicCount,
+      relevantPageCount: firstIterationPageCount ?? 0,
+    };
   } finally {
     if (wsBase !== undefined) rmSync(wsBase, { recursive: true, force: true });
   }
