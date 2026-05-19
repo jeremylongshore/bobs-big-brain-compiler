@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.0.4] - 2026-05-19
+
+- docs(aar): v1.0.3 release after-action report (660e022)
+
+
 ## [v1.0.3] - 2026-05-19
 
 Manual maintenance release via the full `/release` ceremony. Closes the
