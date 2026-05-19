@@ -1,5 +1,36 @@
 # Changelog
 
+## [v1.0.3] - 2026-05-19
+
+Manual maintenance release via the full `/release` ceremony. Closes the
+recurring version-drift finding from `/validate-consistency` and folds
+in the post-v1.0 housekeeping that the auto-release workflow can't
+handle (workspace package alignment, README install line update, formal
+consistency audit doc).
+
+### Added
+- `000-docs/026-OD-CONS-validate-consistency-2026-05-19.md` — first
+  formal cross-artifact consistency audit (1 Critical fixed here, 2
+  Warning, 1 Info).
+
+### Fixed
+- **Version drift.** All 6 workspace `package.json` files +
+  `version.txt` + `packages/kernel/src/version.ts` now aligned at the
+  same released version. The auto-release workflow had been bumping
+  root + `version.txt` only, leaving workspace packages at the prior
+  version after each patch cut. Bumping everything to 1.0.3 in
+  lock-step.
+- README install instructions: replace the pre-publish
+  `npm pack && npm install -g …-*.tgz` workaround with
+  `npm install -g intentional-cognition-os` now that the package is
+  live on npm.
+
+### Changed
+- Regenerated public GitHub gist
+  (`gist.github.com/jeremylongshore/ea3205b…`) from the stale v0.5.0
+  state to current v1.0.x state via `/gist-auditor` — operator audit
+  refreshed, CHANGELOG section appended, npm badge added.
+
 ## [v1.0.2] - 2026-05-19
 
 - build(cli): copy README + LICENSE into the npm tarball at build time (6635489)

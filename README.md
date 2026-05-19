@@ -43,7 +43,14 @@ pnpm install
 pnpm build
 ```
 
-The CLI binary `ico` is available via `node packages/cli/dist/index.js` after build, or globally after `npm pack && npm install -g intentional-cognition-os-*.tgz`.
+Install the published binary globally:
+
+```bash
+npm install -g intentional-cognition-os
+ico --version
+```
+
+Or run from a local build: `node packages/cli/dist/index.js` after `pnpm build`.
 
 ### First run
 
