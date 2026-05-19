@@ -1,5 +1,49 @@
 # Changelog
 
+## [v1.0.0] - 2026-05-19
+
+**First stable release.** All 10 epics complete. The system is operator-ready:
+compiles a local-first knowledge base from raw sources, supports interactive
+Q&A grounded in compiled wiki, runs multi-agent research tasks, and generates
+durable artifacts — all with append-only audit traces and deterministic
+control-plane invariants.
+
+### Added
+- Benchmark suite covering all 5 operator commands (ingest, lint, render,
+  compile, ask) with deterministic synthetic corpus + per-scenario timing
+  (E10-B06).
+- 500-source large-corpus run + 3× per-unit degradation gate, opt-in via
+  `ICO_BENCH_LARGE_CORPUS=1`.
+- Claude-gating pattern (`ANTHROPIC_API_KEY` + `ICO_BENCH_INCLUDE_CLAUDE=1`)
+  for benchmark scenarios that spend tokens.
+- v1.0 release-readiness gate document in `000-docs/024-OD-GATE-…`.
+
+### Changed
+- `runLint` and helpers moved from `packages/cli/src/commands/lint.ts` into
+  `packages/compiler/src/lint.ts` for cross-package reuse. CLI keeps the
+  commander wiring + human-readable report.
+- `extractCitations` (citation eval) and `extractWikilinks` (lint) regex
+  handling: per-call construction or explicit `lastIndex = 0` reset to
+  eliminate module-level `/g` lastIndex bleed.
+
+### Fixed
+- `ico --version` now reads the CLI's own `package.json` instead of the
+  hardcoded kernel constant. Resolves release-gate Condition 1.
+- Wiki index built once per batch in `runEvals` (citation specs); previous
+  behaviour rebuilt the index per spec, an O(N²) walk on large batches.
+- All five package.json files (root, cli, kernel, compiler, types,
+  benchmarks) and `version.txt` and `kernel/src/version.ts` aligned at
+  the same version. Prior auto-release workflow had been bumping root +
+  version.txt only.
+
+### Verified at v1.0
+- 1,210 tests pass across 5 packages (types 14, kernel 312, compiler 461,
+  cli 384, benchmarks 39).
+- Performance targets met with substantial headroom: ingest ~10 ms/file
+  (target <2 s), lint ~10 ms over 30 wiki pages (target <30 s).
+- 3× degradation gate at 10× corpus scale: ingest ratio 1.25×, lint
+  ratio 0.33× (system gets faster per-unit via cache amortisation).
+
 ## [v0.22.2] - 2026-05-19
 
 - fix(cli): read version from CLI package.json (release-gate C1) (#74) (8f05f5f)
