@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.22.2] - 2026-05-19
+
+- fix(cli): read version from CLI package.json (release-gate C1) (#74) (8f05f5f)
+
+
 ## [v0.22.1] - 2026-05-19
 
 - docs(gate): v1.0 release readiness gate — GO with two conditions (E10-B11) (#73) (14aff8c)
