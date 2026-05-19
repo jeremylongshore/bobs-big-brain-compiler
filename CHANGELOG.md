@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.22.0] - 2026-05-19
+
+- feat(benchmarks): 500-source large-corpus run + 3× degradation gate (E10-B06 PR 5) (#72) (f7bd287)
+
+
 ## [v0.21.0] - 2026-05-18
 
 - feat(benchmarks): compile + ask scenarios (E10-B06 PR 4) (#71) (625691e)
