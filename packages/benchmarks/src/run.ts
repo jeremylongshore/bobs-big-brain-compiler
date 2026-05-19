@@ -21,6 +21,11 @@ import { runCompileScenario } from './scenarios/compile.bench.js';
 import { runIngestScenario } from './scenarios/ingest.bench.js';
 import { runLintScenario } from './scenarios/lint.bench.js';
 import { runRenderScenario } from './scenarios/render.bench.js';
+import {
+  computeDegradation,
+  type DegradationCheck,
+  formatDegradation,
+} from './utils/degradation.js';
 import { formatBenchResult } from './utils/timer.js';
 
 /** Best-effort git short SHA. Returns 'unknown' when git is unavailable. */
@@ -61,6 +66,12 @@ interface RunRecord {
   node: string;
   platform: NodeJS.Platform;
   scenarios: ScenarioRecord[];
+  /**
+   * Per-scenario degradation checks (3× cap on per-unit cost when
+   * comparing moderate vs large corpus). Only populated when
+   * `ICO_BENCH_LARGE_CORPUS=1` was set for the run.
+   */
+  degradationChecks?: DegradationCheck[];
 }
 
 /** Outcome shape every gated scenario returns. */
@@ -147,7 +158,7 @@ async function main(): Promise<void> {
     iterations: ingest.perFile.samplesMs.length,
     samplesMs: ingest.perFile.samplesMs,
     batchTotalMs: ingest.batchTotalMs,
-    context: { sourceCount: ingest.sourceCount },
+    context: { sourceCount: ingest.sourceCount, scale: 'moderate' },
   });
 
   // ---- lint -------------------------------------------------------------
@@ -169,6 +180,7 @@ async function main(): Promise<void> {
       sourceCount: lint.sourceCount,
       conceptCount: lint.conceptCount,
       topicCount: lint.topicCount,
+      scale: 'moderate',
     },
   });
 
@@ -215,6 +227,107 @@ async function main(): Promise<void> {
       : { ran: false, skipReason: render.skipReason ?? 'unknown' },
     record,
   );
+
+  // ---- large-corpus (opt-in via ICO_BENCH_LARGE_CORPUS=1) --------------
+  // Skipped by default — the 500-source ingest pass takes minutes, not
+  // seconds, and only matters when we're validating the 3× degradation
+  // gate. Claude-gated scenarios (compile/ask/render) are intentionally
+  // NOT included in the large run because the spend implications are
+  // material; opt those in separately when ready.
+  if (process.env['ICO_BENCH_LARGE_CORPUS'] === '1') {
+    console.log('=== Large-corpus run (500 sources) ===');
+    console.log('');
+
+    const ingestLarge = await runIngestScenario({ sourceCount: 500 });
+    console.log(formatBenchResult(ingestLarge.perFile));
+    console.log(
+      `  batchTotal=${ingestLarge.batchTotalMs.toFixed(0)}ms over ${ingestLarge.sourceCount} sources`,
+    );
+    console.log('');
+    record.scenarios.push({
+      name: 'ingest',
+      medianMs: ingestLarge.perFile.medianMs,
+      minMs: ingestLarge.perFile.minMs,
+      maxMs: ingestLarge.perFile.maxMs,
+      rssDeltaMb: ingestLarge.perFile.rssDeltaMb,
+      iterations: ingestLarge.perFile.samplesMs.length,
+      samplesMs: ingestLarge.perFile.samplesMs,
+      batchTotalMs: ingestLarge.batchTotalMs,
+      context: { sourceCount: ingestLarge.sourceCount, scale: 'large' },
+    });
+
+    const lintLarge = await runLintScenario({
+      sourceCount: 500,
+      conceptCount: 250,
+      topicCount: 50,
+    });
+    console.log(formatBenchResult(lintLarge.result));
+    console.log(
+      `  context: ${lintLarge.sourceCount} sources, ${lintLarge.conceptCount} concepts, ${lintLarge.topicCount} topics`,
+    );
+    console.log('');
+    record.scenarios.push({
+      name: 'lint',
+      medianMs: lintLarge.result.medianMs,
+      minMs: lintLarge.result.minMs,
+      maxMs: lintLarge.result.maxMs,
+      rssDeltaMb: lintLarge.result.rssDeltaMb,
+      iterations: lintLarge.result.samplesMs.length,
+      samplesMs: lintLarge.result.samplesMs,
+      context: {
+        sourceCount: lintLarge.sourceCount,
+        conceptCount: lintLarge.conceptCount,
+        topicCount: lintLarge.topicCount,
+        scale: 'large',
+      },
+    });
+
+    // ---- degradation gate ------------------------------------------------
+    // Per-unit cost at large scale must stay within 3× of moderate.
+    //
+    // The per-unit derivation differs per scenario:
+    //  - ingest: scenario's `perFile.medianMs` IS per-unit (each bench
+    //    iteration was one source file).
+    //  - lint: scenario's `result.medianMs` is whole-workspace; per-unit
+    //    = median / wiki page count (concepts + topics).
+    //
+    // Computing per-unit at the CALL SITE — not inside the gate — keeps
+    // the gate honest: it never has to guess what `medianMs` meant.
+    console.log('=== 3× degradation gate ===');
+    const lintModeratePages = lint.conceptCount + lint.topicCount;
+    const lintLargePages = lintLarge.conceptCount + lintLarge.topicCount;
+    const checks: DegradationCheck[] = [
+      computeDegradation({
+        scenario: 'ingest',
+        moderate: { unitCount: ingest.sourceCount, perUnitMs: ingest.perFile.medianMs },
+        large: { unitCount: ingestLarge.sourceCount, perUnitMs: ingestLarge.perFile.medianMs },
+      }),
+      computeDegradation({
+        scenario: 'lint',
+        moderate: {
+          unitCount: lintModeratePages,
+          perUnitMs: lintModeratePages > 0 ? lint.result.medianMs / lintModeratePages : 0,
+        },
+        large: {
+          unitCount: lintLargePages,
+          perUnitMs: lintLargePages > 0 ? lintLarge.result.medianMs / lintLargePages : 0,
+        },
+      }),
+    ];
+    for (const c of checks) {
+      console.log(formatDegradation(c));
+    }
+    console.log('');
+    record.degradationChecks = checks;
+
+    const failed = checks.filter((c) => !c.passed);
+    if (failed.length > 0) {
+      console.log(
+        `⚠ ${failed.length} of ${checks.length} degradation check(s) exceeded the 3× cap — investigate as separate bead(s).`,
+      );
+      console.log('');
+    }
+  }
 
   // ---- persist ----------------------------------------------------------
   const resultsDir = resolve(import.meta.dirname, '..', 'results');
