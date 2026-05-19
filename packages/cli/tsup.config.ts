@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync } from 'node:fs';
+import { copyFileSync, cpSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { defineConfig } from 'tsup';
@@ -20,10 +20,22 @@ export default defineConfig({
   // makes the published tarball self-sufficient — no external workspace
   // dependency needed at runtime.
   onSuccess: () => {
-    const src = resolve(__dirname, '..', 'kernel', 'migrations');
-    const dst = resolve(__dirname, 'dist', 'migrations');
-    mkdirSync(dst, { recursive: true });
-    cpSync(src, dst, { recursive: true });
+    // 1. Migrations from kernel package, mirrored into dist/migrations
+    //    so the bundled-layout runtime fallback finds them.
+    const migSrc = resolve(__dirname, '..', 'kernel', 'migrations');
+    const migDst = resolve(__dirname, 'dist', 'migrations');
+    mkdirSync(migDst, { recursive: true });
+    cpSync(migSrc, migDst, { recursive: true });
+
+    // 2. README + LICENSE from the repo root, copied next to package.json
+    //    so the npm tarball ships them. package.json's `files: ["dist",
+    //    "README.md", "LICENSE"]` references them at the package root.
+    //    These files live at the monorepo root (the CLI dir does not
+    //    own them), so copy at build time. The copies are gitignored.
+    const repoRoot = resolve(__dirname, '..', '..');
+    for (const file of ['README.md', 'LICENSE']) {
+      copyFileSync(resolve(repoRoot, file), resolve(__dirname, file));
+    }
     return Promise.resolve();
   },
   // Externalize:
