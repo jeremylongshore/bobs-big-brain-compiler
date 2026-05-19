@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.22.1] - 2026-05-19
+
+- docs(gate): v1.0 release readiness gate — GO with two conditions (E10-B11) (#73) (14aff8c)
+
+
 ## [v0.22.0] - 2026-05-19
 
 - feat(benchmarks): 500-source large-corpus run + 3× degradation gate (E10-B06 PR 5) (#72) (f7bd287)
