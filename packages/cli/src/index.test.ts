@@ -4,9 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { version } from '@ico/kernel';
-
-import { buildProgram } from './index.js';
+import { buildProgram, cliVersion } from './index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -55,7 +53,7 @@ describe('cli program structure', () => {
     }
   });
 
-  it('outputs the version string from kernel', () => {
+  it('outputs the version string from the CLI package.json', () => {
     const p = buildProgram();
     p.exitOverride();
     let output = '';
@@ -69,7 +67,7 @@ describe('cli program structure', () => {
     } catch {
       // exitOverride causes Commander to throw instead of calling process.exit
     }
-    expect(output.trim()).toBe(version);
+    expect(output.trim()).toBe(cliVersion);
   });
 
   it('help text contains the program description', () => {
@@ -80,10 +78,11 @@ describe('cli program structure', () => {
   });
 });
 
-describe('cli kernel version', () => {
-  it('kernel version is a semver string', () => {
-    expect(typeof version).toBe('string');
-    expect(version).toMatch(/^\d+\.\d+\.\d+$/);
+describe('cli version', () => {
+  it('cliVersion is a semver string read from the CLI package.json', () => {
+    expect(typeof cliVersion).toBe('string');
+    // Strict semver, optional pre-release tag (e.g. "1.0.0-beta.1").
+    expect(cliVersion).toMatch(/^\d+\.\d+\.\d+(-[\w.-]+)?$/);
   });
 });
 
@@ -116,7 +115,7 @@ describe('stub command exit codes', () => {
   it('ico --version exits 0 and outputs version', () => {
     const result = runCli(['--version']);
     expect(result.status).toBe(0);
-    expect(result.stdout.trim()).toBe(version);
+    expect(result.stdout.trim()).toBe(cliVersion);
   });
 
   it('ico compile shows help with subcommands', () => {
