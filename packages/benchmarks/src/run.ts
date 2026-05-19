@@ -80,6 +80,31 @@ type GatedOutcome =
   | { ran: true; result: import('./utils/timer.js').BenchResult };
 
 /**
+ * Build a ScenarioRecord from a BenchResult + context. Used for the
+ * non-gated scenarios (ingest, lint) which always produce a real
+ * timing rather than a skip outcome. Gated scenarios go through
+ * `recordGatedScenario` instead.
+ */
+function buildScenarioRecord(
+  name: string,
+  bench: import('./utils/timer.js').BenchResult,
+  context: Record<string, number | string | boolean>,
+  extras: { batchTotalMs?: number } = {},
+): ScenarioRecord {
+  return {
+    name,
+    medianMs: bench.medianMs,
+    minMs: bench.minMs,
+    maxMs: bench.maxMs,
+    rssDeltaMb: bench.rssDeltaMb,
+    iterations: bench.samplesMs.length,
+    samplesMs: bench.samplesMs,
+    context,
+    ...(extras.batchTotalMs !== undefined && { batchTotalMs: extras.batchTotalMs }),
+  };
+}
+
+/**
  * Format + record a Claude-gated scenario. Logs the appropriate
  * one-liner (SKIPPED or formatted bench result) and pushes a
  * ScenarioRecord onto the run record. Centralised here so the
@@ -102,24 +127,14 @@ function recordGatedScenario(
     });
     return;
   }
-  const r = outcome.result;
-  console.log(formatBenchResult(r));
+  console.log(formatBenchResult(outcome.result));
   console.log(
     `  context: ${Object.entries(context)
       .map(([k, v]) => `${k}=${String(v)}`)
       .join(', ')}`,
   );
   console.log('');
-  record.scenarios.push({
-    name,
-    medianMs: r.medianMs,
-    minMs: r.minMs,
-    maxMs: r.maxMs,
-    rssDeltaMb: r.rssDeltaMb,
-    iterations: r.samplesMs.length,
-    samplesMs: r.samplesMs,
-    context,
-  });
+  record.scenarios.push(buildScenarioRecord(name, outcome.result, context));
 }
 
 async function main(): Promise<void> {
@@ -149,17 +164,14 @@ async function main(): Promise<void> {
     `  batchTotal=${ingest.batchTotalMs.toFixed(0)}ms over ${ingest.sourceCount} sources`,
   );
   console.log('');
-  record.scenarios.push({
-    name: 'ingest',
-    medianMs: ingest.perFile.medianMs,
-    minMs: ingest.perFile.minMs,
-    maxMs: ingest.perFile.maxMs,
-    rssDeltaMb: ingest.perFile.rssDeltaMb,
-    iterations: ingest.perFile.samplesMs.length,
-    samplesMs: ingest.perFile.samplesMs,
-    batchTotalMs: ingest.batchTotalMs,
-    context: { sourceCount: ingest.sourceCount, scale: 'moderate' },
-  });
+  record.scenarios.push(
+    buildScenarioRecord(
+      'ingest',
+      ingest.perFile,
+      { sourceCount: ingest.sourceCount, scale: 'moderate' },
+      { batchTotalMs: ingest.batchTotalMs },
+    ),
+  );
 
   // ---- lint -------------------------------------------------------------
   const lint = await runLintScenario();
@@ -168,21 +180,14 @@ async function main(): Promise<void> {
     `  context: ${lint.sourceCount} sources, ${lint.conceptCount} concepts, ${lint.topicCount} topics`,
   );
   console.log('');
-  record.scenarios.push({
-    name: 'lint',
-    medianMs: lint.result.medianMs,
-    minMs: lint.result.minMs,
-    maxMs: lint.result.maxMs,
-    rssDeltaMb: lint.result.rssDeltaMb,
-    iterations: lint.result.samplesMs.length,
-    samplesMs: lint.result.samplesMs,
-    context: {
+  record.scenarios.push(
+    buildScenarioRecord('lint', lint.result, {
       sourceCount: lint.sourceCount,
       conceptCount: lint.conceptCount,
       topicCount: lint.topicCount,
       scale: 'moderate',
-    },
-  });
+    }),
+  );
 
   // ---- compile (Claude-gated) ------------------------------------------
   const compile = await runCompileScenario();
@@ -244,17 +249,14 @@ async function main(): Promise<void> {
       `  batchTotal=${ingestLarge.batchTotalMs.toFixed(0)}ms over ${ingestLarge.sourceCount} sources`,
     );
     console.log('');
-    record.scenarios.push({
-      name: 'ingest',
-      medianMs: ingestLarge.perFile.medianMs,
-      minMs: ingestLarge.perFile.minMs,
-      maxMs: ingestLarge.perFile.maxMs,
-      rssDeltaMb: ingestLarge.perFile.rssDeltaMb,
-      iterations: ingestLarge.perFile.samplesMs.length,
-      samplesMs: ingestLarge.perFile.samplesMs,
-      batchTotalMs: ingestLarge.batchTotalMs,
-      context: { sourceCount: ingestLarge.sourceCount, scale: 'large' },
-    });
+    record.scenarios.push(
+      buildScenarioRecord(
+        'ingest',
+        ingestLarge.perFile,
+        { sourceCount: ingestLarge.sourceCount, scale: 'large' },
+        { batchTotalMs: ingestLarge.batchTotalMs },
+      ),
+    );
 
     const lintLarge = await runLintScenario({
       sourceCount: 500,
@@ -266,21 +268,14 @@ async function main(): Promise<void> {
       `  context: ${lintLarge.sourceCount} sources, ${lintLarge.conceptCount} concepts, ${lintLarge.topicCount} topics`,
     );
     console.log('');
-    record.scenarios.push({
-      name: 'lint',
-      medianMs: lintLarge.result.medianMs,
-      minMs: lintLarge.result.minMs,
-      maxMs: lintLarge.result.maxMs,
-      rssDeltaMb: lintLarge.result.rssDeltaMb,
-      iterations: lintLarge.result.samplesMs.length,
-      samplesMs: lintLarge.result.samplesMs,
-      context: {
+    record.scenarios.push(
+      buildScenarioRecord('lint', lintLarge.result, {
         sourceCount: lintLarge.sourceCount,
         conceptCount: lintLarge.conceptCount,
         topicCount: lintLarge.topicCount,
         scale: 'large',
-      },
-    });
+      }),
+    );
 
     // ---- degradation gate ------------------------------------------------
     // Per-unit cost at large scale must stay within 3× of moderate.
