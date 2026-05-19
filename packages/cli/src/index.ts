@@ -1,6 +1,8 @@
-import { Command } from 'commander';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import { version } from '@ico/kernel';
+import { Command } from 'commander';
 
 import { register as registerAsk } from './commands/ask.js';
 import { register as registerCompile } from './commands/compile.js';
@@ -18,6 +20,31 @@ import { register as registerStatus } from './commands/status.js';
 import { register as registerUnpromote } from './commands/unpromote.js';
 import { friendlyError } from './lib/friendly-errors.js';
 
+/**
+ * Read the CLI's own version from its package.json — the published
+ * artefact. The previous implementation imported a hardcoded constant
+ * from `@ico/kernel`, which made `ico --version` report the kernel's
+ * internal version instead of the released npm package version
+ * (E10-B11 release-gate Condition 1).
+ *
+ * The resolution path is `<dist>/index.js → ../package.json`. The npm
+ * tarball ships `dist/` and `package.json` as siblings, so the same
+ * relative path resolves correctly in both dev (running from
+ * `packages/cli/dist/index.js`) and post-install (running from
+ * `<prefix>/dist/index.js`).
+ */
+function readCliVersion(): string {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const pkgPath = resolve(here, '..', 'package.json');
+  const raw = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version?: unknown };
+  if (typeof raw.version !== 'string') {
+    throw new Error(`CLI package.json at ${pkgPath} is missing a string "version" field`);
+  }
+  return raw.version;
+}
+
+export const cliVersion = readCliVersion();
+
 export function buildProgram(): Command {
   const p = new Command();
   p.name('ico')
@@ -31,7 +58,7 @@ export function buildProgram(): Command {
       '    ico render    Generate reports, slides, briefings\n' +
       '    ico promote   File artifacts back into the knowledge base',
     )
-    .version(version)
+    .version(cliVersion)
     .option('--workspace <path>', 'Workspace directory')
     .option('--verbose', 'Show debug output')
     .option('--quiet', 'Suppress non-essential output')
