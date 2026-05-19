@@ -1,6 +1,6 @@
 {
   "name": "intentional-cognition-os",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Local-first, remote-capable knowledge operating system. Compile knowledge for the machine. Distill understanding for the human.",
   "type": "module",

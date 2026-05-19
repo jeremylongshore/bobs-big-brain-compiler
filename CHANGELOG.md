@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.0.1] - 2026-05-19
+
+- docs(aar): v1.0.0 release after-action report (d17e10e)
+
+
 ## [v1.0.0] - 2026-05-19
 
 **First stable release.** All 10 epics complete. The system is operator-ready:
