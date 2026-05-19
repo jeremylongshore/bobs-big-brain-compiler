@@ -2,11 +2,12 @@
 dist
 .tsbuildinfo
 
-# README + LICENSE copies from repo root for npm tarball.
+# README + LICENSE + CHANGELOG copies from repo root for npm tarball.
 # tsup.config.ts onSuccess copies these so `files:` in package.json
 # can reference them. Sources of truth live at the monorepo root.
 README.md
 LICENSE
+CHANGELOG.md
 
 # Pack artefacts
 *.tgz

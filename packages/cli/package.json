@@ -1,6 +1,6 @@
 {
   "name": "intentional-cognition-os",
-  "version": "1.0.3",
+  "version": "1.0.5",
   "description": "Local-first knowledge operating system. Compile knowledge for the machine; distill understanding for the human.",
   "type": "module",
   "bin": {
@@ -15,7 +15,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "keywords": [
     "knowledge-management",

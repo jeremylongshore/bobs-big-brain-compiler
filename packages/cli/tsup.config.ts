@@ -27,13 +27,14 @@ export default defineConfig({
     mkdirSync(migDst, { recursive: true });
     cpSync(migSrc, migDst, { recursive: true });
 
-    // 2. README + LICENSE from the repo root, copied next to package.json
-    //    so the npm tarball ships them. package.json's `files: ["dist",
-    //    "README.md", "LICENSE"]` references them at the package root.
-    //    These files live at the monorepo root (the CLI dir does not
-    //    own them), so copy at build time. The copies are gitignored.
+    // 2. README + LICENSE + CHANGELOG from the repo root, copied next
+    //    to package.json so the npm tarball ships them. package.json's
+    //    `files: ["dist", "README.md", "LICENSE", "CHANGELOG.md"]`
+    //    references them at the package root. These files live at the
+    //    monorepo root (the CLI dir does not own them), so copy at
+    //    build time. The copies are gitignored.
     const repoRoot = resolve(__dirname, '..', '..');
-    for (const file of ['README.md', 'LICENSE']) {
+    for (const file of ['README.md', 'LICENSE', 'CHANGELOG.md']) {
       copyFileSync(resolve(repoRoot, file), resolve(__dirname, file));
     }
     return Promise.resolve();

@@ -1,9 +1,52 @@
 # Changelog
 
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
+
+Versions ≥ 1.0.0 follow strict Keep a Changelog sections (Added / Changed /
+Deprecated / Removed / Fixed / Security). Pre-1.0 entries below v1.0.0 retain the
+auto-generated one-line conventional-commit format from the project's
+release-please workflow; they are preserved verbatim as historical record and
+not reformatted retroactively.
+
+## [Unreleased]
+
+## [v1.0.5] - 2026-05-19
+
+Documentation-shape release: brings CHANGELOG.md into strict Keep a
+Changelog conformance, ships it inside the npm tarball, and back-fills
+the auto-release patches that landed as single-line entries.
+
+### Added
+- `CHANGELOG.md` now ships in the npm tarball. `packages/cli/package.json`
+  `files:` list declares it; `tsup` `onSuccess` copies it from the repo
+  root into the CLI package directory alongside README + LICENSE (same
+  gitignored-copy pattern).
+- Keep a Changelog preamble + `[Unreleased]` section per the spec.
+
+### Changed
+- Reformatted v1.0.1, v1.0.2, v1.0.3, v1.0.4 entries into Keep a Changelog
+  sectioned form (back-fill of what the auto-release / earlier manual
+  cuts emitted).
+- Public GitHub gist updated to embed the full CHANGELOG verbatim
+  (instead of the prior summary list of "prior milestones").
+
+### Fixed
+- npm-side discoverability of changelog: users `npm install`-ing the
+  package now get `CHANGELOG.md` next to `README.md` and `LICENSE`
+  inside the installed directory.
+
 ## [v1.0.4] - 2026-05-19
 
-- docs(aar): v1.0.3 release after-action report (660e022)
+### Added
+- `000-docs/027-RL-REPT-v1.0.3-release-aar-2026-05-19.md` — release
+  after-action report for the v1.0.3 ceremony cut. Documents the three
+  v1.0.0 ceremony skips (Phase 1.6 `/validate-consistency`, Phase 7.5
+  `/gist-auditor`, full `/repo-dress`) and how v1.0.3 closed them.
 
+  Commit: `660e022`
 
 ## [v1.0.3] - 2026-05-19
 
@@ -23,8 +66,7 @@ consistency audit doc).
   `version.txt` + `packages/kernel/src/version.ts` now aligned at the
   same released version. The auto-release workflow had been bumping
   root + `version.txt` only, leaving workspace packages at the prior
-  version after each patch cut. Bumping everything to 1.0.3 in
-  lock-step.
+  version after each patch cut.
 - README install instructions: replace the pre-publish
   `npm pack && npm install -g …-*.tgz` workaround with
   `npm install -g intentional-cognition-os` now that the package is
@@ -38,13 +80,24 @@ consistency audit doc).
 
 ## [v1.0.2] - 2026-05-19
 
-- build(cli): copy README + LICENSE into the npm tarball at build time (6635489)
+### Changed
+- `packages/cli/tsup.config.ts` `onSuccess` now copies `README.md` and
+  `LICENSE` from the repo root into `packages/cli/` so they ship in the
+  npm tarball. The CLI directory does not own those files (canonical
+  copies live at the repo root); copies are gitignored. Fixes the v1.0.0
+  publish that was missing both (caught + fixed inline pre-publish,
+  formalised in this commit).
 
+  Commit: `6635489`
 
 ## [v1.0.1] - 2026-05-19
 
-- docs(aar): v1.0.0 release after-action report (d17e10e)
+### Added
+- `000-docs/025-RL-REPT-v1.0.0-release-aar-2026-05-19.md` — release
+  after-action report for v1.0.0, documenting the ceremony, the two
+  conditions raised by the gate, and lessons for future cuts.
 
+  Commit: `d17e10e`
 
 ## [v1.0.0] - 2026-05-19
 
