@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.0.2] - 2026-05-19
+
+- build(cli): copy README + LICENSE into the npm tarball at build time (6635489)
+
+
 ## [v1.0.1] - 2026-05-19
 
 - docs(aar): v1.0.0 release after-action report (d17e10e)
