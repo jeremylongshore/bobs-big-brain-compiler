@@ -81,7 +81,8 @@ describe('cli program structure', () => {
 describe('cli version', () => {
   it('cliVersion is a semver string read from the CLI package.json', () => {
     expect(typeof cliVersion).toBe('string');
-    expect(cliVersion).toMatch(/^\d+\.\d+\.\d+/);
+    // Strict semver, optional pre-release tag (e.g. "1.0.0-beta.1").
+    expect(cliVersion).toMatch(/^\d+\.\d+\.\d+(-[\w.-]+)?$/);
   });
 });
 
