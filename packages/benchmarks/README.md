@@ -34,9 +34,36 @@ on this benchmark run" signal. Skipped scenarios still appear in the
 JSON output with `skipped: true` so trend-analysis tools can
 distinguish "didn't run today" from "regressed to zero".
 
-A separate large-corpus run (500 sources) verifies no operation degrades
-beyond 3× moderate-corpus baseline. It lands once the per-command
-scenarios are all in place.
+### Large-corpus run + 3× degradation gate
+
+Per epic-10's verification clause: *"Large corpus (500+ sources)
+completes without failure or degradation beyond 3× moderate-corpus
+baseline."*
+
+Opt in with `ICO_BENCH_LARGE_CORPUS=1`:
+
+```bash
+ICO_BENCH_LARGE_CORPUS=1 pnpm bench
+```
+
+When set, the runner runs `ingest` and `lint` at **500 sources** (10×
+the moderate scale) after the normal pass, then computes per-unit
+cost ratios. A ratio above 3 prints a `FAIL` line and surfaces the
+finding in JSON (`degradationChecks` field) so trend tooling can
+catch a regression.
+
+Why ingest + lint only: the Claude-gated scenarios (compile / ask /
+render) have material spend at 10× scale. Add them to the large run
+separately when ready (would require another opt-in flag because the
+default opt-in pattern only authorises moderate-scale Claude calls).
+
+Linear-scaling output looks like:
+
+```
+=== 3× degradation gate ===
+PASS ingest     moderate(50)=9.20ms/unit  large(500)=10.50ms/unit  ratio=1.14 (cap 3.0)
+PASS lint       moderate(30)=0.40ms/unit  large(300)=0.85ms/unit   ratio=2.12 (cap 3.0)
+```
 
 ## Running
 
