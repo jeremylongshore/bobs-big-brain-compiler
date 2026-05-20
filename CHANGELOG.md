@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.1.2] - 2026-05-20
+
+- chore(blame): ignore prettier-formatting sweep commit in git blame (ba9e012)
+
+
 ## [v1.1.1] - 2026-05-20
 
 - fix(release): build before tests, sync all workspace versions, publish to npm (OC5) (#76) (e1b7bed)
