@@ -1,173 +1,174 @@
 # intentional-cognition-os
 
-> Compile knowledge for the machine. Distill understanding for the human.
+> **A local-first knowledge OS.** Point `ico` at a folder of PDFs, markdown notes, and web clips. It compiles them into a queryable wiki you can read, runs grounded Q&A with inline citations, spins up multi-agent research tasks for hard questions, generates spaced-repetition flashcards from what landed, and writes every step to an append-only audit trail. Single CLI. Your data never leaves disk except for the Claude API calls you opt into.
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![npm](https://img.shields.io/npm/v/intentional-cognition-os.svg)](https://www.npmjs.com/package/intentional-cognition-os)
 [![CI](https://github.com/jeremylongshore/intentional-cognition-os/actions/workflows/ci.yml/badge.svg)](https://github.com/jeremylongshore/intentional-cognition-os/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/jeremylongshore/intentional-cognition-os)](https://github.com/jeremylongshore/intentional-cognition-os/releases)
 
-## Overview
+---
 
-**Intentional Cognition OS** (`ico`) is a local-first knowledge operating system. You point it at a folder of sources — PDFs, markdown notes, web clips — and it:
+## What it actually does
 
-- Compiles raw corpus into a semantic wiki (concepts, topics, entities, contradictions)
-- Answers grounded questions with inline source citations
-- Spins up scoped episodic workspaces for hard research questions
-- Renders durable artifacts (reports, slides) that you can promote back into the wiki
-- Generates flashcards and quizzes to help you retain what you've ingested
+You drop documents into a folder. `ico` reads them, compiles the content into a structured wiki on disk (one markdown file per source, per concept, per topic, per contradiction it found), and then lets you:
 
-It is a cognition runtime, not a chat wrapper. The model proposes; the deterministic kernel owns durable state, traces, and control.
+- **Ask** a question — get an answer with `[source: filename]` citations next to every claim.
+- **Research** a question that's too big for a single retrieval — `ico` spawns a scoped task workspace with four agents (collector, summarizer, skeptic, integrator) that argue across stages and produce a cited final write-up.
+- **Render** a report or slide deck from any topic, and **promote** that artifact back into the wiki so the next answer can cite it.
+- **Recall** what you ingested — generate flashcards with spaced repetition; export to Anki if you prefer.
+- **Audit** anything. Every API call, file write, and task transition is recorded in append-only JSONL with a SHA-256 hash chain. If a citation looks wrong, you can trace it back to the exact source and prompt.
 
-## Core loop
+It is a cognition runtime, not a chat wrapper. The model proposes; a deterministic kernel owns durable state, traces, and control. **Your data lives in plain markdown + SQLite on your machine.** The Claude API is called only for the compilation/synthesis/reasoning steps — and only when you trigger them.
 
-```
-ingest → compile → reason → render → refine
-```
+---
 
-Every step writes to an append-only audit trail (SQLite index + JSONL trace files), so the system is inspectable, reproducible, and queryable.
-
-## Quick start
-
-### Prerequisites
-
-- Node.js **22+**
-- pnpm **10+**
-- An [Anthropic API key](https://console.anthropic.com/) (the system uses Claude for compilation and reasoning)
-
-### Install
-
-```bash
-git clone https://github.com/jeremylongshore/intentional-cognition-os.git
-cd intentional-cognition-os
-pnpm install
-pnpm build
-```
-
-Install the published binary globally:
+## Install
 
 ```bash
 npm install -g intentional-cognition-os
-ico --version
+ico --version          # → 1.0.5
+export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-Or run from a local build: `node packages/cli/dist/index.js` after `pnpm build`.
+Requires **Node 22+** and an [Anthropic API key](https://console.anthropic.com/). pnpm not required for usage — only for building from source.
 
-### First run
+From source:
 
 ```bash
-# Create a workspace
-ico init my-knowledge
-
-# Mount a corpus directory
-ico mount add papers ~/research/papers --workspace my-knowledge
-
-# Ingest sources
-export ANTHROPIC_API_KEY=sk-ant-...
-ico ingest ~/research/papers --workspace my-knowledge
-
-# Compile semantic knowledge
-ico compile all --workspace my-knowledge
-
-# Ask a grounded question
-ico ask "How does self-attention scale with sequence length?" --workspace my-knowledge
-
-# Inspect what landed
-ico status --workspace my-knowledge
+git clone https://github.com/jeremylongshore/intentional-cognition-os.git
+cd intentional-cognition-os && pnpm install && pnpm build
+node packages/cli/dist/index.js --version
 ```
 
-## CLI surface
+---
 
-| Command                                          | What it does                                                                                    |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| `ico init <name>`                                | Create a new workspace with `wiki/`, `tasks/`, `outputs/`, `recall/`, `audit/`, `.ico/state.db` |
-| `ico mount add\|list\|remove`                    | Register / inspect / remove corpus mount points                                                 |
-| `ico ingest <path>`                              | Ingest a file or directory into `raw/`. Supports PDF, Markdown, web clips                       |
-| `ico compile sources\|topics\|all`               | Run the six compiler passes (summarize → extract → synthesize → link → contradict → gap)        |
-| `ico ask "<question>"`                           | Retrieval-augmented Q&A grounded in the compiled wiki, with inline citations                    |
-| `ico research "<brief>"`                         | Spin up a scoped episodic task: Collector → Summarizer → Skeptic → Integrator → render          |
-| `ico research archive <id>`                      | Archive a completed research task                                                               |
-| `ico render report\|slides`                      | Render artifacts from a topic, task, or set of pages                                            |
-| `ico promote <path> --as <type>`                 | Promote an L4 artifact into the L2 wiki                                                         |
-| `ico unpromote <path>`                           | Inverse of promote                                                                              |
-| `ico lint`                                       | Audit compiled knowledge for schema validity, staleness, uncompiled sources, orphans            |
-| `ico recall generate --topic <name>`             | Generate flashcards + quiz from compiled wiki for a topic                                       |
-| `ico recall quiz --topic <name>`                 | Run an interactive quiz; supports `--answers-file <json>` for CI                                |
-| `ico recall weak [--report]`                     | Show lowest-retention concepts                                                                  |
-| `ico recall export --format anki [--out <path>]` | Export cards as Anki-importable TSV                                                             |
-| `ico eval run [--spec <path>]`                   | Run YAML eval specs from `evals/`; supports retrieval + smoke handlers                          |
-| `ico status`                                     | Workspace summary (counts, mounts, tasks, traces)                                               |
-| `ico inspect <subcommand>`                       | Inspect specific subsystems (tasks, sources, …)                                                 |
+## 5-minute quickstart
 
-Global flags work on every command: `--workspace <path>`, `--json`, `--verbose`, `--quiet`.
+```bash
+# 1. Create a workspace
+ico init my-research
 
-## Architecture
+# 2. Tell it where your sources live
+ico mount add papers ~/Documents/papers --workspace my-research
 
-Six-layer cognition stack:
+# 3. Ingest (parses PDFs/MD/web clips into ./raw/)
+ico ingest ~/Documents/papers --workspace my-research
 
-| Layer                       | Path                    | What lives here                                                                                                        |
-| --------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| **L1 — Raw Corpus**         | `workspace/raw/`        | Source-of-truth inputs. Append-only.                                                                                   |
-| **L2 — Semantic Knowledge** | `workspace/wiki/`       | Compiled markdown: source summaries, concepts, entities, topics, contradictions, open questions. Recompilable from L1. |
-| **L3 — Episodic Tasks**     | `workspace/tasks/<id>/` | Scoped per-question research workspaces. Brief, evidence, notes, critique, output.                                     |
-| **L4 — Artifacts**          | `workspace/outputs/`    | Rendered reports, slides, briefings. Promotable to L2.                                                                 |
-| **L5 — Recall**             | `workspace/recall/`     | Flashcards, quizzes, retention scores. Adaptive.                                                                       |
-| **L6 — Audit & Policy**     | `workspace/audit/`      | Append-only trace JSONL + audit log. Deterministic control plane.                                                      |
+# 4. Compile — the Claude calls happen here
+ico compile all --workspace my-research
 
-The **deterministic vs probabilistic boundary** is the most important constraint:
+# 5. Ask
+ico ask "How does self-attention scale with sequence length?" \
+    --workspace my-research
+```
 
-- **Deterministic** (Kernel + SQLite + JSONL): file storage, mount registry, task state, provenance, policy, permissions, audit, promotion rules, eval execution.
-- **Probabilistic** (Compiler + Claude API): summarization, synthesis, concept extraction, contradiction detection, question decomposition, artifact drafting, recall generation.
+You now have:
 
-The model never directly writes to audit, policy, or promotion tables. It proposes; the kernel decides.
+- `my-research/wiki/` — readable markdown summary + concept + topic pages, all with frontmatter and inline `[[wikilinks]]`
+- `my-research/audit/log.md` — chronological human-readable record of what just happened
+- `my-research/audit/traces/*.jsonl` — machine-readable trace events for every step
 
-## Development
+`ico status` shows counts. `ico lint` audits the wiki for schema drift / staleness / orphans. `tail workspace/audit/log.md` answers "what did I do today."
 
-|                         |                                               |
-| ----------------------- | --------------------------------------------- |
-| **Build all packages**  | `pnpm build`                                  |
-| **Run full test suite** | `pnpm test`                                   |
-| **Lint**                | `pnpm lint`                                   |
-| **Typecheck**           | `pnpm typecheck`                              |
-| **Coverage**            | `pnpm test:coverage`                          |
-| **Single test file**    | `pnpm --filter @ico/<package> test -- <file>` |
+---
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for full development setup, coding conventions, and PR process.
+## When to use it (and when not to)
+
+| You want to…                                                               | Use `ico`? | Why                                                      |
+| -------------------------------------------------------------------------- | ---------- | -------------------------------------------------------- |
+| Build a personal research base from PDFs + notes                           | ✅ Yes     | Core use case                                            |
+| Answer questions with traceable citations to your own sources              | ✅ Yes     | Citations are first-class, not bolted on                 |
+| Run a multi-step research investigation (literature review, due diligence) | ✅ Yes     | `ico research` spawns scoped agents with a skeptic stage |
+| Study what you've collected with spaced repetition                         | ✅ Yes     | `ico recall` builds + scores cards                       |
+| Replace your team's wiki / shared docs                                     | ❌ No      | Single-user, single-machine for v1                       |
+| Drop into Slack / chat with team-shared memory                             | ❌ No      | No multiplayer, no remote sync yet                       |
+| Build a customer-facing chatbot                                            | ❌ No      | Use LangChain / a managed RAG service                    |
+
+---
+
+## vs. the obvious alternatives
+
+|                                              | **ico**                                    | NotebookLM (Google) | Obsidian + AI plugins                             | Claude Projects / ChatGPT | LangChain / LlamaIndex    | Anki                          |
+| -------------------------------------------- | ------------------------------------------ | ------------------- | ------------------------------------------------- | ------------------------- | ------------------------- | ----------------------------- |
+| **Local-first**                              | ✅ markdown + SQLite on disk               | ❌ cloud            | ✅                                                | ❌ cloud                  | ✅ (library)              | ✅                            |
+| **Source-cited answers**                     | ✅ inline `[source:...]` per claim         | ✅                  | depends on plugin                                 | ✅ but no per-claim audit | you build it              | n/a                           |
+| **Inspectable compiled wiki**                | ✅ readable .md files                      | ❌ chat only        | ✅ (but you write the notes)                      | ❌                        | n/a — you build the store | n/a                           |
+| **Multi-agent research mode**                | ✅ collector→summarizer→skeptic→integrator | ❌                  | ❌                                                | ❌                        | you build it              | ❌                            |
+| **Spaced-repetition recall**                 | ✅ built-in, Anki export                   | ❌                  | plugin only                                       | ❌                        | ❌                        | ✅ (that's the whole product) |
+| **Append-only audit trail**                  | ✅ SHA-256 hash-chained JSONL              | ❌                  | ❌                                                | ❌                        | ❌                        | ❌                            |
+| **Open source / hackable**                   | ✅ MIT                                     | ❌                  | partial (core closed)                             | ❌                        | ✅                        | ✅                            |
+| **Single CLI, no plugin zoo**                | ✅ 14 commands                             | n/a                 | ❌ (Obsidian Sync / Smart Connections / Copilot…) | n/a                       | ❌ you assemble           | n/a                           |
+| **You write the data; the AI just reads it** | ✅ kernel owns state                       | ✅                  | ✅                                                | ✅                        | depends                   | ✅                            |
+
+**The honest summary**: NotebookLM is the closest competitor in _function_, but it's a cloud product with no audit trail and no recall layer. Obsidian + plugins gets you a local wiki but you write every note yourself — `ico` writes the wiki for you by compiling sources. LangChain gives you the parts; `ico` is the assembled tool.
+
+---
+
+## The six layers (architecture in one screen)
+
+```
+   L1 raw/          ← what you put in (PDFs, MD, web clips)            APPEND-ONLY
+       ↓                                                                deterministic
+   L2 wiki/         ← compiled markdown (sources, concepts, topics,    RECOMPILABLE
+                      contradictions, open questions)                   probabilistic
+       ↓
+   L3 tasks/<id>/   ← scoped episodic research workspaces              PER-TASK
+                      (brief, evidence, notes, critique, output)        probabilistic
+       ↓
+   L4 outputs/      ← rendered reports, slides, briefings              PROMOTABLE
+                                                                        probabilistic
+       ↓
+   L5 recall/       ← flashcards, quizzes, retention scores            ADAPTIVE
+                                                                        deterministic
+   L6 audit/        ← trace JSONL + audit log + hash chain             APPEND-ONLY
+                                                                        deterministic
+```
+
+The hard constraint, drilled through every component: **the model never directly writes to L6 or to promotion tables.** It proposes a summary, a card, a synthesis — the kernel decides whether it lands.
+
+---
+
+## Commands you'll actually use
+
+|                                   |                                                        |
+| --------------------------------- | ------------------------------------------------------ |
+| `ico init <name>`                 | Create a workspace                                     |
+| `ico mount add <name> <path>`     | Register a source directory                            |
+| `ico ingest <path>`               | Parse PDFs/MD/web-clips into the raw layer             |
+| `ico compile all`                 | Run the six compiler passes (Claude calls happen here) |
+| `ico ask "<question>"`            | Grounded Q&A with citations                            |
+| `ico research "<brief>"`          | Multi-agent research task (5 stages, ~5 min)           |
+| `ico render report --topic <t>`   | Generate a markdown report                             |
+| `ico recall generate --topic <t>` | Build flashcards from compiled wiki                    |
+| `ico recall quiz --topic <t>`     | Interactive quiz; tracks retention                     |
+| `ico recall export --format anki` | Anki-importable TSV                                    |
+| `ico lint`                        | Audit the wiki (schema, staleness, orphans)            |
+| `ico status` / `ico inspect`      | Workspace summary / per-subsystem detail               |
+
+Global flags on every command: `--workspace <path>`, `--json`, `--verbose`, `--quiet`. Full reference: `ico --help` or any command with `--help`.
+
+---
+
+## Status
+
+**v1.0.5 — stable.** 1,210 tests passing across 5 packages. Used daily by the author. Public release on npm.
+
+- **Stable**: all 14 commands, the compilation passes, ask + research + recall + render + promote, the audit chain.
+- **In progress**: post-v1 coverage uplift on compiler + cli packages; mutation-testing baseline.
+- **Roadmap**: remote/sync (Phase 3), multi-user (Phase 4), plugin system (Phase 5). All deliberately deferred to keep v1 local-first and inspectable.
+
+---
 
 ## Documentation
 
-Standards and design documents live in [`000-docs/`](000-docs/):
+The detailed specs (architecture, frontmatter schemas, trace event types, promotion rules, etc.) live in [`000-docs/`](000-docs/). Start with [007-PP-PLAN-master-blueprint.md](000-docs/007-PP-PLAN-master-blueprint.md) if you want the authoritative design document, or [003-AT-ARCH-architecture.md](000-docs/003-AT-ARCH-architecture.md) for the system-design view.
 
-| Doc                                                                        | Purpose                                    |
-| -------------------------------------------------------------------------- | ------------------------------------------ |
-| [Business Case](000-docs/001-PP-BCASE-business-case.md)                    | Problem, market, ROI                       |
-| [PRD](000-docs/002-PP-PRD-product-requirements.md)                         | Requirements & user stories                |
-| [Architecture](000-docs/003-AT-ARCH-architecture.md)                       | System design & data flow                  |
-| [User Journey](000-docs/004-PP-UJRN-user-journey.md)                       | Walkthrough & personas                     |
-| [Technical Spec](000-docs/005-AT-SPEC-technical-spec.md)                   | Stack, APIs, deployment                    |
-| [Master Blueprint](000-docs/007-PP-PLAN-master-blueprint.md)               | Authoritative design document              |
-| [Glossary](000-docs/008-AT-GLOS-glossary.md)                               | Canonical terminology                      |
-| [Frontmatter Schemas](000-docs/009-AT-FMSC-frontmatter-schemas.md)         | YAML schemas for all compiled page types   |
-| [Database Schema](000-docs/010-AT-DBSC-database-schema.md)                 | SQLite DDL + migration strategy            |
-| [Trace Schema](000-docs/011-AT-TRSC-trace-schema.md)                       | JSONL event envelope + event types         |
-| [Workspace Policy](000-docs/012-AT-WPOL-workspace-policy.md)               | Directory layout + naming                  |
-| [Coding Standards](000-docs/013-AT-CODE-coding-standards.md)               | TypeScript conventions                     |
-| [Testing Strategy](000-docs/015-AT-TEST-testing-strategy.md)               | Test layers + coverage targets             |
-| [Promotion Rules](000-docs/018-AT-PROM-promotion-spec.md)                  | L4 → L2 promotion logic                    |
-| [Trace Coverage Audit](000-docs/023-OD-AUDIT-trace-coverage-2026-05-15.md) | Per-command trace-emission audit (E10-B04) |
+Development setup, conventions, PR process: [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Roadmap
+Vulnerability reporting: [SECURITY.md](SECURITY.md).
 
-| Phase                                        | Status         |
-| -------------------------------------------- | -------------- |
-| Phase 1 — Local-first MVP (Epics 1–9)        | ✅ Complete    |
-| Phase 2 — Hardening & v1.0 release (Epic 10) | 🚧 In progress |
-| Phase 3 — Remote/cloud features              | Future         |
-| Phase 4 — Multi-user collaboration           | Future         |
-| Phase 5 — Plugin system                      | Future         |
-
-## Security
-
-See [SECURITY.md](SECURITY.md) for vulnerability reporting.
+---
 
 ## License
 
