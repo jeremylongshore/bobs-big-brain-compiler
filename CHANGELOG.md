@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.1.1] - 2026-05-20
+
+- fix(release): build before tests, sync all workspace versions, publish to npm (OC5) (#76) (e1b7bed)
+
+
 ## [v1.1.0] - 2026-05-20
 
 - docs(readme): rewrite for new readers — concrete intro + alternatives table (670405a)
