@@ -160,11 +160,14 @@ dev box, v0.22.0:
 
 | Command | Target | Measured | Headroom |
 |---|---|---|---|
-| `ico ingest <file>` | < 2 s / source | ~10 ms / file | 200× |
-| `ico lint` | < 30 s | ~10 ms (30 wiki pages) | 3000× |
+| `ico ingest <file>` | < 2 s / source | median 6–10 ms / file | 200×+ |
+| `ico lint` | < 30 s | median 11–27 ms (30 wiki pages) | 1100×+ |
 | `ico compile <topic>` | < 30 s / topic | Claude-gated — infra ready | — |
 | `ico ask <question>` | < 10 s / query | Claude-gated — infra ready | — |
 | `ico render report` | < 5 s / report | Claude-gated — infra ready | — |
+
+Headroom uses the upper-bound of the measured median (the conservative figure)
+against the target. Authoritative numbers live in the E10-B06 bead close-reason.
 
 3× degradation gate (500 source → 50 source per-unit ratio):
 
