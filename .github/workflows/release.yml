@@ -60,6 +60,8 @@ jobs:
 
       - name: Verify readiness
         run: |
+          set -e
+
           echo "--- Checking for uncommitted changes ---"
           if ! git diff --quiet || ! git diff --staged --quiet; then
             echo "::error::Uncommitted changes detected"
@@ -67,12 +69,22 @@ jobs:
           fi
           echo "Working tree is clean."
 
-          echo "--- Running tests (if available) ---"
-          if [ -f "package.json" ] && grep -q '"test"' package.json; then
-            pnpm test || true
-          else
-            echo "No test runner detected, skipping."
-          fi
+          echo "--- Building workspace packages (required before tests) ---"
+          # Workspace tests import @ico/types, @ico/kernel, etc. via the
+          # package exports map, which resolves to dist/. Without a build,
+          # every test errors with "Failed to resolve entry for package
+          # @ico/types" and the previous `pnpm test || true` line silently
+          # swallowed those failures — letting unbuildable code get
+          # released. Build is now a hard prerequisite.
+          pnpm build
+
+          echo "--- Running tests ---"
+          # No `|| true`. A test failure must block the release.
+          pnpm test
+
+          echo "--- Lint + typecheck ---"
+          pnpm lint
+          pnpm typecheck
 
       - name: Determine previous tag
         id: prev
@@ -157,22 +169,46 @@ jobs:
           echo "next=$NEXT" >> "$GITHUB_OUTPUT"
           echo "Next version: $NEXT"
 
-      - name: Update version files
+      - name: Update version files (root + all workspace packages)
         if: steps.check.outputs.needed == 'true'
         run: |
+          set -e
           NEXT="${{ steps.version.outputs.next }}"
           VERSION_NUM="${NEXT#v}"
 
-          if [ -f "package.json" ]; then
+          bump_pkg_json() {
+            local path="$1"
+            [ -f "$path" ] || return 0
+            local tmp
             tmp=$(mktemp)
-            jq --arg v "$VERSION_NUM" '.version = $v' package.json > "$tmp" && mv "$tmp" package.json
-            git add package.json
-            echo "Updated package.json to $VERSION_NUM"
+            jq --arg v "$VERSION_NUM" '.version = $v' "$path" > "$tmp" && mv "$tmp" "$path"
+            git add "$path"
+            echo "Updated $path → $VERSION_NUM"
+          }
+
+          # Root manifest (private — not published, but version is referenced).
+          bump_pkg_json package.json
+
+          # Every workspace package — cli is published, others are workspace-private
+          # but their package.json versions must track so cross-package
+          # `workspace:^` references stay consistent and prepublishOnly never
+          # ships a mismatched tree. The OC5 bug was that ONLY root bumped,
+          # leaving cli/kernel/compiler/types/benchmarks at the prior version.
+          for pkg in packages/types packages/kernel packages/compiler packages/cli packages/benchmarks; do
+            bump_pkg_json "$pkg/package.json"
+          done
+
+          # Kernel exports a `version` constant consumed at runtime — keep in sync.
+          if [ -f packages/kernel/src/version.ts ]; then
+            printf "export const version = '%s';\n" "$VERSION_NUM" > packages/kernel/src/version.ts
+            git add packages/kernel/src/version.ts
+            echo "Updated packages/kernel/src/version.ts → $VERSION_NUM"
           fi
 
+          # version.txt — top-level convenience file.
           echo "$VERSION_NUM" > version.txt
           git add version.txt
-          echo "Updated version.txt to $VERSION_NUM"
+          echo "Updated version.txt → $VERSION_NUM"
 
       - name: Generate changelog entry
         if: steps.check.outputs.needed == 'true'
@@ -250,6 +286,54 @@ jobs:
             --title "intentional-cognition-os $NEXT" \
             --generate-notes \
             --latest
+
+      - name: Publish to npm
+        if: steps.check.outputs.needed == 'true' && github.event.inputs.dry_run != 'true'
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -e
+          NEXT="${{ steps.version.outputs.next }}"
+          VERSION_NUM="${NEXT#v}"
+
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::warning::NPM_TOKEN secret not configured — skipping npm publish."
+            echo "::warning::To enable: gh secret set NPM_TOKEN --repo \$REPO < /path/to/token"
+            echo "::warning::Tag $NEXT was created on GitHub but the npm registry will lag."
+            exit 0
+          fi
+
+          # Idempotency guard: if this version is already on npm (e.g. from a
+          # prior manual publish), do not retry — npm would 403 with
+          # `cannot republish over previously published version`. Treat as
+          # success.
+          PUBLISHED=$(npm view intentional-cognition-os@"$VERSION_NUM" version 2>/dev/null || true)
+          if [ "$PUBLISHED" = "$VERSION_NUM" ]; then
+            echo "::notice::intentional-cognition-os@$VERSION_NUM already on npm — skipping."
+            exit 0
+          fi
+
+          # The Verify-readiness step above already ran build + test + lint +
+          # typecheck. `--no-git-checks` because we just committed + tagged
+          # in earlier steps; pnpm's tree-clean check would block otherwise.
+          # `--access public` because the package is scoped-public-by-default
+          # via packages/cli/package.json#publishConfig but pnpm wants it
+          # explicit on the publish command.
+          echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > ~/.npmrc
+          pnpm --filter intentional-cognition-os publish \
+            --no-git-checks \
+            --access public \
+            --tag latest
+
+          # Verify the publish actually landed before considering the job done.
+          sleep 5
+          LANDED=$(npm view intentional-cognition-os@"$VERSION_NUM" version 2>/dev/null || true)
+          if [ "$LANDED" != "$VERSION_NUM" ]; then
+            echo "::error::pnpm publish exited 0 but npm registry does not show $VERSION_NUM yet."
+            echo "::error::This may be propagation lag — check https://www.npmjs.com/package/intentional-cognition-os manually."
+            exit 1
+          fi
+          echo "::notice::intentional-cognition-os@$VERSION_NUM published to npm."
 
       - name: Dry run summary
         if: github.event.inputs.dry_run == 'true'
