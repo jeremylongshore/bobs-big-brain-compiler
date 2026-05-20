@@ -1,0 +1,12 @@
+# Revisions listed here are skipped by `git blame` when run with
+# `--ignore-revs-file .git-blame-ignore-revs`. Configure once with:
+#
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# Use this for commits that touch many files without changing behavior
+# (mass formatting, license-header bumps, etc.) — so blame attributes
+# each line to the engineer who last meaningfully edited it.
+
+# Prettier formatting sweep applied across 208 pre-existing files when
+# the Intent Solutions Testing SOP installer wired the format gate.
+26de1d76765a9ca5cef70de138330adac3a9c267
