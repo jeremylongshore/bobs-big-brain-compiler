@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.0.7] - 2026-05-20
+
+- docs(gate): reconcile lint perf metrics with E10-B06 bead (PR #73 follow-up) (#75) (c181452)
+
+
 ## [v1.0.6] - 2026-05-20
 
 - chore(beads): file oc5 — auto-release workspace-lockstep fix (9635f52)
