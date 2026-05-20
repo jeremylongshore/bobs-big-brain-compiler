@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.0.6] - 2026-05-20
+
+- chore(beads): file oc5 — auto-release workspace-lockstep fix (9635f52)
+
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
