@@ -1,0 +1,32 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "Initial Stryker config — targets kernel + compiler (highest-value modules) first. Add cli/types/benchmarks once baseline scores are recorded.",
+  "packageManager": "pnpm",
+  "testRunner": "vitest",
+  "coverageAnalysis": "perTest",
+  "mutate": [
+    "packages/kernel/src/**/*.ts",
+    "packages/compiler/src/**/*.ts",
+    "!packages/*/src/**/*.test.ts",
+    "!packages/*/src/**/__tests__/**",
+    "!packages/*/src/**/*.d.ts"
+  ],
+  "vitest": {
+    "configFile": "vitest.config.ts"
+  },
+  "thresholds": {
+    "high": 80,
+    "low": 60,
+    "break": 0
+  },
+  "_break_note": "Initial floor = 0 (no break). Set engineer-owned floor in tests/TESTING.md once first baseline lands, then bump `break` here to (baseline - 5).",
+  "concurrency": 4,
+  "timeoutMS": 30000,
+  "reporters": ["progress", "clear-text", "html", "json"],
+  "htmlReporter": {
+    "fileName": "reports/mutation/index.html"
+  },
+  "jsonReporter": {
+    "fileName": "reports/mutation/mutation.json"
+  }
+}

@@ -22,8 +22,8 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "22"
-          cache: "pnpm"
+          node-version: '22'
+          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -46,8 +46,8 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "22"
-          cache: "pnpm"
+          node-version: '22'
+          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -99,8 +99,8 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "22"
-          cache: "pnpm"
+          node-version: '22'
+          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -110,3 +110,115 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+  format:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Prettier check
+        run: pnpm format:check
+
+  gitleaks:
+    name: Secret Scan (gitleaks)
+    runs-on: ubuntu-latest
+    # pull-requests: write lets gitleaks-action post a PR comment annotating
+    # any findings. Without it the comment silently fails but the job still
+    # exits non-zero on a hit — annotation is the main reason to use
+    # gitleaks-action over the bare gitleaks binary, so we grant it.
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  harness-verify:
+    name: Audit Harness Verify
+    runs-on: ubuntu-latest
+    # Verifies the SHA-256 hash manifest pinning policy artifacts
+    # (tests/TESTING.md, features/*.feature, .dependency-cruiser.cjs).
+    # Exit 3 (no manifest) is tolerated until the manifest is initialized
+    # by the engineer via `scripts/audit-harness init`.
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify hash manifest
+        run: |
+          scripts/audit-harness verify || rc=$?
+          if [ "${rc:-0}" = "3" ]; then
+            echo "::warning::No hash manifest present. Run: scripts/audit-harness init"
+            exit 0
+          fi
+          exit "${rc:-0}"
+
+  arch-check:
+    name: Architecture Rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm build
+      - name: Dependency-cruiser
+        run: pnpm arch:check
+
+  cli-smoke:
+    name: CLI Smoke (artifact)
+    runs-on: ubuntu-latest
+    # Post-build smoke against the actual built binary — catches issues that
+    # vitest can't see (missing files in dist/, shebang, exports map).
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm build
+      - name: CLI smoke
+        run: |
+          set -e
+          node packages/cli/dist/index.js --version
+          node packages/cli/dist/index.js --help > /dev/null
+          tmp=$(mktemp -d)
+          node "$GITHUB_WORKSPACE/packages/cli/dist/index.js" init smoke-test --path "$tmp"
+          test -d "$tmp/smoke-test/.ico" || {
+            echo "::error::ico init did not create $tmp/smoke-test/.ico"
+            ls -la "$tmp/smoke-test" || true
+            exit 1
+          }

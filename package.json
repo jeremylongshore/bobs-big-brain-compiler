@@ -16,7 +16,25 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "clean": "pnpm -r clean",
-    "bench": "pnpm --filter @ico/benchmarks bench"
+    "bench": "pnpm --filter @ico/benchmarks bench",
+    "prepare": "husky",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "mutation": "stryker run",
+    "arch:check": "depcruise --config .dependency-cruiser.cjs packages",
+    "arch:graph": "depcruise --config .dependency-cruiser.cjs --output-type dot packages | dot -T svg > .arch/graph.svg",
+    "audit:harness": "scripts/audit-harness verify",
+    "audit:escape": "scripts/audit-harness escape-scan --staged",
+    "cli:smoke": "node packages/cli/dist/index.js --version && node packages/cli/dist/index.js --help > /dev/null"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs,cjs}": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
   },
   "author": "Jeremy Longshore",
   "license": "MIT",
@@ -36,11 +54,20 @@
     }
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.0.1",
+    "@commitlint/config-conventional": "^21.0.1",
     "@eslint/js": "^10.0.1",
+    "@intentsolutions/audit-harness": "^0.1.0",
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/vitest-runner": "^9.6.1",
     "@vitest/coverage-v8": "^4.1.2",
+    "dependency-cruiser": "^17.4.0",
     "eslint": "^10.2.0",
     "eslint-plugin-simple-import-sort": "^13.0.0",
     "globals": "^17.5.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.5",
+    "prettier": "^3.8.3",
     "typescript-eslint": "^8.58.2",
     "vitest": "^4.1.2"
   }

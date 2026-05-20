@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+# Pre-push gate — Intent Solutions Testing SOP L1
+# Verifies the audit-harness hash manifest before any push reaches the remote.
+# If policy artifacts (TESTING.md, features/*, arch configs) changed without
+# `scripts/audit-harness init`, this exits non-zero and blocks the push.
+
+set -e
+
+scripts/audit-harness verify

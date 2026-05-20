@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+# Pre-commit gate — Intent Solutions Testing SOP L1
+# Runs lint-staged (eslint+prettier on staged files) + escape-scan on staged diff.
+# Engineer-owned: edit lint-staged config in package.json, escape-scan rules in
+# scripts/audit-harness. Never bypass with --no-verify.
+
+set -e
+
+pnpm exec lint-staged
+scripts/audit-harness escape-scan --staged

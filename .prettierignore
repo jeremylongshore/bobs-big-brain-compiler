@@ -1,0 +1,11 @@
+dist/
+node_modules/
+coverage/
+.arch/
+.audit-harness/
+.stryker-tmp/
+**/dist/**
+**/coverage/**
+pnpm-lock.yaml
+CHANGELOG.md
+workspace/

@@ -17,13 +17,12 @@
 
 import { err, ok, type Result } from '@ico/types';
 
-import {
-  appendAuditLog,
-  type Database,
-  getTask,
-  type TaskRecord,
-  transitionTask,
-} from './index.js';
+// Direct module imports (not via './index.js' barrel) to avoid a
+// kernel/src/index.ts → kernel/src/archive.ts → kernel/src/index.ts
+// circular dependency that the dependency-cruiser arch gate forbids.
+import { appendAuditLog } from './audit-log.js';
+import { type Database } from './state.js';
+import { getTask, type TaskRecord, transitionTask } from './tasks.js';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -78,7 +77,7 @@ export function archiveTask(
     return err(
       new Error(
         `Cannot archive task ${taskId}: status is '${task.status}', expected 'completed'. ` +
-        `Only completed tasks may be archived.`,
+          `Only completed tasks may be archived.`,
       ),
     );
   }

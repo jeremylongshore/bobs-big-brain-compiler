@@ -1,86 +1,144 @@
----
-title: Test Quality Audit — Kernel & Compiler
-date: 2026-04-09
-scope: packages/kernel, packages/compiler
-trigger: CWP procfs implementation + adversarial review
----
+# TEST_AUDIT.md — intentional-cognition-os
 
-# Test Quality Audit
+**Audit date**: 2026-05-19
+**Auditor**: `/audit-tests` skill (v5 canonical, audit-harness v0.1.0)
+**Branch**: `main`
+**Supersedes**: prior `TEST_AUDIT.md` dated 2026-04-09 (40 days stale; covered 572 tests across 2 packages — pre-benchmarks era)
 
-## Summary
+## Headline
 
-| Metric | Value |
-|--------|-------|
-| Total test files | 44 (19 kernel + 25 compiler) |
-| Total tests | 572 (240 kernel + 332 compiler) |
-| All passing | Yes |
-| Source file coverage | 95% (41/43 — only version.ts uncovered) |
-| Framework | Vitest 4.1.2 |
-| Duration | ~4.4s total |
+| Metric                | Value                                                                   |
+| --------------------- | ----------------------------------------------------------------------- |
+| Grade                 | **B- (76 / 100)**                                                       |
+| Tests                 | 1,210 / 1,210 passing across 5 packages                                 |
+| MUST coverage         | 48 / 48 (100%)                                                          |
+| SHOULD coverage       | 13 / 14 (93%) — 1 uncovered: REQ-053 interactive recall quiz stdin loop |
+| Escape-scan           | clean (0 REFUSE / 0 CHALLENGE / 0 FLAG)                                 |
+| Bias scan             | clean                                                                   |
+| CRAP score            | pass                                                                    |
+| Harness freshness     | OK (latest 0.1.0 vendored)                                              |
+| Harness hash manifest | absent (fresh repo — not a halt; recommend `audit-harness init`)        |
 
-## Source-to-Test Coverage
+## Classification
 
-### Kernel (18/19 = 95%)
+| Field               | Value                                                                                                                              |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Repo type           | **CLI + library monorepo** (pnpm workspace, 5 packages)                                                                            |
+| Primary deliverable | `intentional-cognition-os` (npm), CLI binary `ico`                                                                                 |
+| Workspace packages  | `@ico/types` (lib), `@ico/kernel` (lib), `@ico/compiler` (lib), `intentional-cognition-os` (cli), `@ico/benchmarks` (perf harness) |
+| Test framework      | vitest (root + per-package configs)                                                                                                |
+| Package manager     | pnpm 10.x                                                                                                                          |
+| Compliance overlay  | none (no HIPAA / SOX / PCI / SOC2 / GDPR / FedRAMP)                                                                                |
+| Source files        | 98                                                                                                                                 |
+| Test files          | 90                                                                                                                                 |
+| src→test ratio      | 0.92                                                                                                                               |
 
-| Source | Test | Status |
-|--------|------|--------|
-| artifacts.ts | artifacts.test.ts | OK |
-| audit-log.ts | audit-log.test.ts | OK |
-| config.ts | config.test.ts | OK |
-| index.ts | index.test.ts | OK |
-| logger.ts | logger.test.ts | OK |
-| mounts.ts | mounts.test.ts | OK |
-| post-promote.ts | post-promote.test.ts | OK |
-| **procfs.ts** | **procfs.test.ts** | **OK (NEW)** |
-| promotion.ts | promotion.test.ts | OK |
-| provenance.ts | provenance.test.ts | OK |
-| search.ts | search.test.ts | OK |
-| sources.ts | sources.test.ts | OK |
-| state.ts | state.test.ts | OK |
-| tasks.ts | tasks.test.ts | OK |
-| traces.ts | traces.test.ts | OK |
-| unpromote.ts | unpromote.test.ts | OK |
-| wiki-index.ts | wiki-index.test.ts | OK |
-| workspace.ts | workspace.test.ts | OK |
-| version.ts | — | GAP (trivial constant) |
+Per-package test counts: types 14 · kernel 312 · compiler 461 · benchmarks 39 · cli 384.
 
-### Compiler (23/24 = 96%)
+## Per-layer status
 
-All passes, adapters, ask pipeline, and render modules covered. Only version.ts uncovered.
+| Layer                               | Status               | Evidence                                                                                                                                                                                                                                                                                                                                     |
+| ----------------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **L1 — Git hooks & CI enforcement** | partial              | CI runs lint/typecheck/test/audit (`.github/workflows/ci.yml`). No git hooks installed — only `.git/hooks/*.sample`. `scripts/audit-harness` exists but is not wired to any hook. No commitlint despite documented conventional-commits convention.                                                                                          |
+| **L2 — Static analysis & linting**  | partial              | ESLint + typescript-eslint configured and CI-enforced; OSV scanner replaces `pnpm audit`. Missing: prettier config, gitleaks/dedicated secret scan (only ad-hoc `find .env` shell), `audit-harness verify` not in CI.                                                                                                                        |
+| **L3 — Unit & function**            | partial              | 1,210 passing vitest tests. Coverage thresholds defined for only 2 of 5 packages (types 80, kernel 80/70). Compiler ~62% and cli ~45% unenforced. No mutation testing (no Stryker config). No architecture-rule enforcement (`.arch/` is a one-shot HTML report from April, not a CI gate). No property-based tests.                         |
+| **L4 — Integration & regression**   | partial              | `vitest.config.ts` includes `tests/integration/**/*.test.ts` glob but directory is empty. Rich `tests/fixtures/{empty,populated}/` corpus exists. Cross-package integration tests live inside the cli package (5 files). No Testcontainers (in-process SQLite is fine). No contract tests against Claude API.                                |
+| **L5 — System quality**             | partial              | **Strong custom L5**: `evals/` YAML-driven eval framework (smoke + retrieval + citation + compilation handlers) + `packages/benchmarks/` with 3× degradation gate. Missing: no CodeQL/Semgrep SAST despite external-API consumption + JSON-parsing of model output (P1 conditional trigger). N/A: a11y (CLI), web fuzzing (no HTTP surface). |
+| **L6 — E2E / BDD**                  | absent               | No post-build smoke against the published `dist/index.js` binary in CI. No `.feature` files (eval YAML is the closest analog, runs inside vitest not against the artifact).                                                                                                                                                                  |
+| **L7 — Acceptance & traceability**  | partial (this audit) | `tests/RTM.md`, `tests/PERSONAS.md`, `tests/JOURNEYS.md` created this run. `tests/TESTING.md` created this run. No hash manifest — `audit-harness init` not yet run.                                                                                                                                                                         |
 
-## Quality Scorecard
+## P0 / P1 / P2 gap list
 
-| File | Grade | Tests | Avg Assert/Test | Negative % |
-|------|-------|-------|-----------------|------------|
-| procfs.test.ts (NEW) | A- | 13 | 3.6 | 17% |
-| tasks.test.ts | A | 11 | 4.7 | 27% |
-| traces.test.ts | A- | 14 | 3.6 | 7% |
-| summarize.test.ts | B+ | 9 | 3.9 | 11% |
-| extract.test.ts | B | 10 | 3.0 | 20% |
+### P0 (required + absent/partial)
 
-**Aggregate: 57 tests, 214 assertions, avg 3.8/test. Overall grade: B+**
+| ID   | Layer | Gap                                                                                                                                                     |
+| ---- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P0-1 | L1    | Pre-commit hooks not installed. `audit-harness escape-scan --staged` never executes locally.                                                            |
+| P0-2 | L3    | Coverage `fail_under` enforced for only 2 of 5 packages. Compiler (~62%) and cli (~45%) sit below any documented floor; benchmarks has no floor at all. |
+| P0-3 | L3    | No mutation testing. With 1,210 tests, the suite needs a mutation-survival floor or drift is invisible.                                                 |
+| P0-4 | L3    | No architecture-rule enforcement. Layered topology (types → kernel → compiler → cli) is load-bearing per CLAUDE.md but unchecked in CI.                 |
 
-## Bias Patterns Detected
+### P1 (required-partial / recommended-absent / conditional-triggered)
 
-| Pattern | Occurrences | Severity | Files |
-|---------|-------------|----------|-------|
-| Range-only assertions | 6 | Medium | traces, extract, tasks, procfs |
-| Smoke-only (weak error checks) | 3 | Low | procfs, extract, summarize |
-| Redundant invocations | 2 | Low | summarize, extract |
-| Mutation-insensitive | 1 | Low | summarize |
+| ID   | Layer | Gap                                                                                                             |
+| ---- | ----- | --------------------------------------------------------------------------------------------------------------- |
+| P1-1 | L1    | No commitlint despite documented conventional-commits convention.                                               |
+| P1-2 | L2    | No gitleaks / dedicated secret scanner. Ad-hoc `find .env` placeholder in CI.                                   |
+| P1-3 | L2    | No formatter config (prettier or equivalent).                                                                   |
+| P1-4 | L2    | `audit-harness verify` not invoked in CI. Hash-pinning gate dormant.                                            |
+| P1-5 | L4    | `tests/integration/` glob configured but empty.                                                                 |
+| P1-6 | L5    | No CodeQL or Semgrep SAST workflow. Triggered by Claude SDK + JSON-parsing of model output (per `021-AT-SECV`). |
+| P1-7 | L6    | No post-build CLI smoke against `dist/index.js`.                                                                |
+| P1-8 | L7    | REQ-053 (`ico recall quiz` interactive stdin loop) uncovered — only non-interactive paths tested.               |
 
-No tautological, self-referential, identity misuse, or symmetric input bias detected.
+### P2 (recommended-absent, library/cli classification demotes)
 
-## Top Recommendations
+| ID   | Layer | Gap                                                                                                                        |
+| ---- | ----- | -------------------------------------------------------------------------------------------------------------------------- |
+| P2-1 | L3    | No property-based tests (`fast-check`). Recall scoring, FTS5 ranking, promotion-rule evaluator are natural fits.           |
+| P2-2 | L7    | No declarative `// REQ: REQ-NNN` headers on test files — RTM mappings are inferred from file proximity rather than locked. |
 
-1. **Increase negative test coverage in traces.test.ts** (currently 7%) — Add tests for invalid event types, malformed payloads, combined filters.
+## RTM summary
 
-2. **Replace range-only assertions with exact values** — When mocks control the input, `toBeGreaterThanOrEqual(1)` should be `toBe(1)`. Weak assertions mask regressions.
+| Tier             | Total | Covered | Uncovered   | Excluded |
+| ---------------- | ----- | ------- | ----------- | -------- |
+| MUST             | 48    | 48      | **0**       | —        |
+| SHOULD           | 14    | 13      | 1 (REQ-053) | —        |
+| COULD            | 6     | 0       | 6           | —        |
+| WON'T            | 7     | —       | —           | 7        |
+| **Active total** | 68    | 61      | 7           | —        |
 
-3. **Add materializeMemoryMap test to procfs.test.ts** — Only status.md materialization is tested; memory-map.md rendering is tested but not disk materialization.
+Active coverage: **90%**. Zero uncovered MUSTs — no P0 blocks from the traceability side.
 
-4. **Reduce redundant setup in compiler pass tests** — summarize and extract tests invoke the same function 8+ times with identical args. Use shared beforeAll or vary inputs.
+## Personas
 
-## Conclusion
+All four personas at 100% flow coverage:
 
-The codebase is in good shape. 95% file coverage, 572 passing tests, no failures. The new procfs module (13 tests, grade A-) integrates cleanly. The main quality gap is low negative test coverage in traces and compiler passes — these should be addressed before Epic 9 multi-agent work where error handling becomes critical.
+| Persona          | Criticality | Flows   |
+| ---------------- | ----------- | ------- |
+| operator         | critical    | 14 / 14 |
+| knowledge-worker | standard    | 6 / 6   |
+| auditor          | critical    | 5 / 5   |
+| ai-agent         | critical    | 13 / 13 |
+
+## Journeys
+
+37 of 38 journey steps tested. The single gap is `recall-loop` step 4 (interactive stdin prompt loop scoring answers), linked to REQ-053.
+
+## Escape-scan
+
+Clean against staged diff: `REFUSE=0 CHALLENGE=0 FLAG=0`.
+
+## Freshness
+
+`@intentsolutions/audit-harness`: installed `0.1.0` (vendored) · latest `0.1.0` · ✓ in sync.
+
+## Recommended handoff
+
+Four P0 gaps and eight P1 gaps surfaced. Per `/audit-tests` Step 8, this triggers a confirmation prompt for `/implement-tests` (on `main` branch, autonomous handoff is disabled).
+
+Suggested install order for `/implement-tests`:
+
+1. **L1-hooks** — Husky + commitlint + pre-commit calling `scripts/audit-harness escape-scan --staged`; pre-push calling `scripts/audit-harness verify`.
+2. **L2-secrets + L2-prettier + L2-harness-verify-in-ci** — gitleaks CI step; prettier config + check job; `audit-harness verify` job.
+3. **L3-coverage-floors** — vitest thresholds for compiler / cli / benchmarks (initial floors at current measured value + 2% to halt regression while sequencing the climb).
+4. **L3-mutation** — Stryker, target kernel + compiler first.
+5. **L3-arch** — dependency-cruiser config encoding types → kernel → compiler → cli layering.
+6. **L5-SAST** — `.github/workflows/codeql.yml` (JavaScript/TypeScript pack).
+7. **L4-integration** — at least one cross-package integration test under `tests/integration/`.
+8. **L6-cli-smoke** — post-build job invoking `node packages/cli/dist/index.js --version` and `init` against a tmpdir workspace.
+9. **L7-testing-md-hash-pin** — `audit-harness init` to hash-pin `tests/TESTING.md` policy.
+
+## Observations
+
+- The repo's testing posture is **substantively healthy** — 1,210 tests, 100% MUST coverage, no escape-scan flags, no bias patterns. The gaps are _enforcement_ (the walls) rather than test _quantity_. Reflect this when reading the B- grade: it's the gap between "the tests work" (yes) and "the tests are pinned, can't be silently weakened, and have a mutation-survival floor" (not yet).
+- The eval framework at `evals/` + benchmark suite at `packages/benchmarks/` is unusual and load-bearing. It substitutes for traditional L5-perf and partially for L6-smoke. `/implement-tests` should not duplicate this layer — it should add the _missing_ artifact-level CLI smoke against the built binary, not re-invent benchmark scenarios.
+- 90 vitest files are RTM orphans by the declarative-REQ-ID convention (no `// REQ: REQ-NNN` headers). Mappings in `tests/RTM.md` are inferred from file proximity, which is high-confidence given this repo's strict workspace-per-concern layout. Adding REQ headers is a P2 follow-up.
+
+## Files written by this audit
+
+- `TEST_AUDIT.md` (this file — supersedes 2026-04-09 version)
+- `tests/TESTING.md` (created)
+- `tests/RTM.md` (created)
+- `tests/PERSONAS.md` (created)
+- `tests/JOURNEYS.md` (created)

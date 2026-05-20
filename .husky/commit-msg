@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+# Commit-msg gate — Intent Solutions Testing SOP L1
+# Enforces conventional commits per commitlint.config.js.
+
+set -e
+
+pnpm exec commitlint --edit "$1"
