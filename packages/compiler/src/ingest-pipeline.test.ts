@@ -21,7 +21,7 @@ import {
   readTraces,
 } from '@ico/kernel';
 
-import { type IngestPipelineOptions,runIngestPipeline } from './ingest-pipeline.js';
+import { type IngestPipelineOptions, runIngestPipeline } from './ingest-pipeline.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -69,7 +69,10 @@ function writeSource(dir: string, name: string, content: string): string {
 }
 
 /** Builds default pipeline options from a test environment. */
-function makeOptions(env: TestEnv, overrides?: Partial<IngestPipelineOptions>): IngestPipelineOptions {
+function makeOptions(
+  env: TestEnv,
+  overrides?: Partial<IngestPipelineOptions>,
+): IngestPipelineOptions {
   return {
     workspacePath: env.wsRoot,
     dbPath: env.dbPath,
@@ -92,7 +95,11 @@ describe('runIngestPipeline', () => {
 
   afterEach(() => {
     rmSync(base, { recursive: true, force: true });
-    try { rmSync(env.sourceDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    try {
+      rmSync(env.sourceDir, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
   });
 
   // -------------------------------------------------------------------------
@@ -125,7 +132,7 @@ describe('runIngestPipeline', () => {
       const sources = listSources(db.value);
       expect(sources.ok).toBe(true);
       if (!sources.ok) return;
-      expect(sources.value.some(s => s.id === sourceId)).toBe(true);
+      expect(sources.value.some((s) => s.id === sourceId)).toBe(true);
 
       // Trace must be present.
       const traces = readTraces(db.value, { eventType: 'source.ingest' });
@@ -162,7 +169,11 @@ describe('runIngestPipeline', () => {
   // -------------------------------------------------------------------------
 
   it('sets reingested: true and creates a new source record when content changes', async () => {
-    const filePath = writeSource(env.sourceDir, 'evolving.md', '# Version 1\n\nOriginal content.\n');
+    const filePath = writeSource(
+      env.sourceDir,
+      'evolving.md',
+      '# Version 1\n\nOriginal content.\n',
+    );
 
     // First ingest — new file.
     const first = await runIngestPipeline(filePath, makeOptions(env));
@@ -193,7 +204,7 @@ describe('runIngestPipeline', () => {
       expect(sources.ok).toBe(true);
       if (!sources.ok) return;
 
-      const recordsAtPath = sources.value.filter(s => s.path === first.value.path);
+      const recordsAtPath = sources.value.filter((s) => s.path === first.value.path);
       expect(recordsAtPath.length).toBe(2);
 
       // A source.reingest trace event should exist.
@@ -211,10 +222,7 @@ describe('runIngestPipeline', () => {
   // -------------------------------------------------------------------------
 
   it('returns err when the file does not exist', async () => {
-    const result = await runIngestPipeline(
-      join(env.sourceDir, 'ghost.md'),
-      makeOptions(env),
-    );
+    const result = await runIngestPipeline(join(env.sourceDir, 'ghost.md'), makeOptions(env));
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -267,10 +275,7 @@ describe('runIngestPipeline', () => {
     // Write a minimal PDF-like file and override the type so the markdown
     // adapter does not fail on binary content.
     const filePath = writeSource(env.sourceDir, 'paper.pdf', '%PDF-1.4 minimal stub');
-    const result = await runIngestPipeline(
-      filePath,
-      makeOptions(env, { typeOverride: 'pdf' }),
-    );
+    const result = await runIngestPipeline(filePath, makeOptions(env, { typeOverride: 'pdf' }));
 
     // The PDF adapter may fail on stub content — we care only about routing.
     // If the adapter succeeded, verify the path prefix.
@@ -290,10 +295,7 @@ describe('runIngestPipeline', () => {
       'clip.html',
       '<html><body><h1>Title</h1><p>Body</p></body></html>',
     );
-    const result = await runIngestPipeline(
-      filePath,
-      makeOptions(env, { typeOverride: 'html' }),
-    );
+    const result = await runIngestPipeline(filePath, makeOptions(env, { typeOverride: 'html' }));
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -356,7 +358,7 @@ describe('runIngestPipeline', () => {
       expect(sources.ok).toBe(true);
       if (!sources.ok) return;
 
-      const source = sources.value.find(s => s.id === result.value.sourceId);
+      const source = sources.value.find((s) => s.id === result.value.sourceId);
       expect(source).toBeDefined();
       if (!source) return;
 
@@ -366,7 +368,7 @@ describe('runIngestPipeline', () => {
       expect(source.title).toBe('Database Test');
       // word_count should be a positive integer
       expect(typeof source.word_count).toBe('number');
-      expect((source.word_count ?? 0)).toBeGreaterThan(0);
+      expect(source.word_count ?? 0).toBeGreaterThan(0);
     } finally {
       closeDatabase(db.value);
     }

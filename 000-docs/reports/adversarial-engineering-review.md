@@ -1,5 +1,5 @@
 ---
-title: "Adversarial Engineering Review: Cognitive Workspace Protocol"
+title: 'Adversarial Engineering Review: Cognitive Workspace Protocol'
 date: 2026-04-09
 author: Jeremy Longshore
 panel: 14 engineer archetypes across 7 decades (1960s-2020s)
@@ -13,6 +13,7 @@ status: complete
 Seven adversarial review panels — each representing a decade of systems engineering wisdom from the 1960s through 2020s — evaluated the Cognitive Workspace Protocol (CWP) thesis: that AI agents need a standardized filesystem-based workspace, and that the context window should be treated as volatile cache rather than primary workspace.
 
 **Unanimous agreements:**
+
 - The gap is real — agents lack durable, inspectable working memory
 - The deterministic/probabilistic boundary is genuine engineering discipline
 - Result<T,E> non-throwing error handling is correct
@@ -20,6 +21,7 @@ Seven adversarial review panels — each representing a decade of systems engine
 - The filesystem layout is good Unix design
 
 **Unanimous criticisms:**
+
 - Triple-write pattern (SQLite + JSONL + log.md) is over-engineering — pick one authority
 - MUST/SHOULD/MAY spec with one implementation is premature standardization
 - "Paradigm shift" framing before proving with users is overreach
@@ -102,11 +104,11 @@ Seven adversarial review panels — each representing a decade of systems engine
 
 ### Points of Conflict
 
-| Topic | Old Guard (60s-80s) | New Guard (2010s-20s) |
-|-------|--------------------|-----------------------|
-| Task state machine | Too many states (7 vs 2-4) | Strict linearity is a feature for auditability |
-| Compilation pipeline | Sound engineering | Empirically unjustified without evals |
-| Filesystem metaphor | Should commit fully (FUSE) or drop | Practical debugging advantage even as convention |
+| Topic                | Old Guard (60s-80s)                | New Guard (2010s-20s)                            |
+| -------------------- | ---------------------------------- | ------------------------------------------------ |
+| Task state machine   | Too many states (7 vs 2-4)         | Strict linearity is a feature for auditability   |
+| Compilation pipeline | Sound engineering                  | Empirically unjustified without evals            |
+| Filesystem metaphor  | Should commit fully (FUSE) or drop | Practical debugging advantage even as convention |
 
 ### The Hidden Discovery
 
@@ -118,32 +120,32 @@ The adversarial process surfaced something the plan didn't explicitly state: **S
 
 ### Already Addressed
 
-| Criticism | Status in Code |
-|-----------|---------------|
-| Deterministic/probabilistic boundary | Fully enforced (Result<T,E>, kernel mediates all writes) |
-| Atomic writes | Implemented (.tmp + rename in summarize, ingest, wiki-index) |
-| Secret redaction | Two-layer defense (non-enumerable key + payload scrub) |
-| Idempotent ingestion | Handled (UNIQUE constraint → return existing) |
+| Criticism                            | Status in Code                                               |
+| ------------------------------------ | ------------------------------------------------------------ |
+| Deterministic/probabilistic boundary | Fully enforced (Result<T,E>, kernel mediates all writes)     |
+| Atomic writes                        | Implemented (.tmp + rename in summarize, ingest, wiki-index) |
+| Secret redaction                     | Two-layer defense (non-enumerable key + payload scrub)       |
+| Idempotent ingestion                 | Handled (UNIQUE constraint → return existing)                |
 
 ### Partially Addressed
 
-| Criticism | Status | Gap |
-|-----------|--------|-----|
-| `_proc/` computed views | **NEW: Implemented** (procfs.ts, 13 tests) | Only status.md + memory-map; no auto-materialization on transition yet |
-| CLI integration | **NEW: `ico inspect task <id> --proc status`** | Works but not yet integrated into transitionTask() |
+| Criticism               | Status                                         | Gap                                                                    |
+| ----------------------- | ---------------------------------------------- | ---------------------------------------------------------------------- |
+| `_proc/` computed views | **NEW: Implemented** (procfs.ts, 13 tests)     | Only status.md + memory-map; no auto-materialization on transition yet |
+| CLI integration         | **NEW: `ico inspect task <id> --proc status`** | Works but not yet integrated into transitionTask()                     |
 
 ### Unaddressed (Actionable)
 
-| Priority | Issue | Source | Effort |
-|----------|-------|--------|--------|
-| P0 | `readLastLine` reads entire file (O(n)) | 2000s Dean | 1h |
-| P0 | No `db.transaction()` on multi-step mutations | 2000s Vogels | 2h |
-| P1 | Triple-write → single authority + reindex | 1970s Thompson | 1 day |
-| P1 | No eval framework / baseline comparison | 2010s Karpathy | 2 days |
-| P1 | Integrity chain never verified | 2000s Dean | 2h |
-| P2 | No `ico doctor` health check | 2000s Vogels | 4h |
-| P2 | MCP server | All panels | 2-3 days |
-| P3 | FUSE synthetic filesystem | 1980s Pike | Deferred |
+| Priority | Issue                                         | Source         | Effort   |
+| -------- | --------------------------------------------- | -------------- | -------- |
+| P0       | `readLastLine` reads entire file (O(n))       | 2000s Dean     | 1h       |
+| P0       | No `db.transaction()` on multi-step mutations | 2000s Vogels   | 2h       |
+| P1       | Triple-write → single authority + reindex     | 1970s Thompson | 1 day    |
+| P1       | No eval framework / baseline comparison       | 2010s Karpathy | 2 days   |
+| P1       | Integrity chain never verified                | 2000s Dean     | 2h       |
+| P2       | No `ico doctor` health check                  | 2000s Vogels   | 4h       |
+| P2       | MCP server                                    | All panels     | 2-3 days |
+| P3       | FUSE synthetic filesystem                     | 1980s Pike     | Deferred |
 
 ---
 
@@ -152,45 +154,51 @@ The adversarial process surfaced something the plan didn't explicitly state: **S
 Based on the adversarial review, the recommended execution order changes from the original plan:
 
 ### Original Order (from plan)
+
 1. Write essay → 2. Build MCP server → 3. Extract spec → 4. Publish simultaneously
 
 ### Enhanced Order (post-review)
 
 **Phase 1: Fix critical issues (1-2 days)**
+
 - Fix `readLastLine` O(n) → O(1) with backward seek or cached hash
 - Add `db.transaction()` to createTask, transitionTask, promoteArtifact
 - Add integrity chain verification function
 - Wire `materializeStatus()` into `transitionTask()` for auto-refresh
 
 **Phase 2: Build MCP server (2-3 days)**
+
 - Ship working code before any publishing
 - Use it yourself for at least a week
 - Discover what workspace operations agents actually need
 
 **Phase 3: Build eval framework (2 days)**
+
 - Create baseline: raw docs in 1M context vs compiled wiki
 - Measure answer quality delta
 - If compilation doesn't beat raw context, simplify the pipeline
 
 **Phase 4: Write essay from experience (1-2 days)**
+
 - Frame as "what we built, what worked, what didn't"
 - Not "paradigm shift" — "convergent insight with honest assessment"
 - Include eval results
 
 **Phase 5: Extract spec from overlap (when second implementation exists)**
+
 - Not before. A spec with one implementation is a config file.
 
 ### Updated Probability Assessment
 
-| Question | Original | Post-Review |
-|----------|----------|-------------|
-| Is the gap real? | 90% | 92% (confirmed by all 7 panels) |
-| Is filesystem the right interface? | 80% | 65% (SQLite is the actual substrate) |
-| Is derivation-from-audit-trail novel? | 70% | 70% (confirmed, adjacent work exists) |
-| Full 7-file `_proc/`? | 40% | 25% (over-engineered per consensus) |
-| Minimal status.md + progress.md? | 65% | 75% (validated by implementation) |
-| Would this change the world? | 10%/50% | 5%/35% (need users first) |
-| Is building it now right? | 30%/80% | 85% for procfs (done), 90% for MCP server |
+| Question                              | Original | Post-Review                               |
+| ------------------------------------- | -------- | ----------------------------------------- |
+| Is the gap real?                      | 90%      | 92% (confirmed by all 7 panels)           |
+| Is filesystem the right interface?    | 80%      | 65% (SQLite is the actual substrate)      |
+| Is derivation-from-audit-trail novel? | 70%      | 70% (confirmed, adjacent work exists)     |
+| Full 7-file `_proc/`?                 | 40%      | 25% (over-engineered per consensus)       |
+| Minimal status.md + progress.md?      | 65%      | 75% (validated by implementation)         |
+| Would this change the world?          | 10%/50%  | 5%/35% (need users first)                 |
+| Is building it now right?             | 30%/80%  | 85% for procfs (done), 90% for MCP server |
 
 ---
 

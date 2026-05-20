@@ -8,7 +8,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { closeDatabase, type Database,initDatabase } from '@ico/kernel';
+import { closeDatabase, type Database, initDatabase } from '@ico/kernel';
 
 import { detectStalePages, getUncompiledSources, markStale } from './staleness.js';
 
@@ -34,13 +34,7 @@ function insertSource(
   db.prepare(
     `INSERT INTO sources (id, path, type, ingested_at, hash)
      VALUES (?, ?, ?, ?, ?)`,
-  ).run(
-    opts.id,
-    opts.path,
-    opts.type ?? 'markdown',
-    opts.ingestedAt,
-    `hash-${opts.id}`,
-  );
+  ).run(opts.id, opts.path, opts.type ?? 'markdown', opts.ingestedAt, `hash-${opts.id}`);
 }
 
 /**
@@ -87,8 +81,12 @@ const T2 = '2026-01-02T00:00:00.000Z'; // newer
 describe('detectStalePages', () => {
   let db: Database;
 
-  beforeEach(() => { db = openDb(); });
-  afterEach(() => { closeDatabase(db); });
+  beforeEach(() => {
+    db = openDb();
+  });
+  afterEach(() => {
+    closeDatabase(db);
+  });
 
   it('returns an empty array when there are no compilations', () => {
     const result = detectStalePages(db);
@@ -179,8 +177,12 @@ describe('detectStalePages', () => {
 describe('getUncompiledSources', () => {
   let db: Database;
 
-  beforeEach(() => { db = openDb(); });
-  afterEach(() => { closeDatabase(db); });
+  beforeEach(() => {
+    db = openDb();
+  });
+  afterEach(() => {
+    closeDatabase(db);
+  });
 
   it('returns sources that have no summary compilation', () => {
     insertSource(db, { id: 's1', path: 'raw/notes/a.md', ingestedAt: T1 });
@@ -231,8 +233,12 @@ describe('getUncompiledSources', () => {
 describe('markStale', () => {
   let db: Database;
 
-  beforeEach(() => { db = openDb(); });
-  afterEach(() => { closeDatabase(db); });
+  beforeEach(() => {
+    db = openDb();
+  });
+  afterEach(() => {
+    closeDatabase(db);
+  });
 
   it('returns 0 when given an empty array', () => {
     const result = markStale(db, []);

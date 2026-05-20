@@ -84,15 +84,79 @@ const TRUNCATION_MARKER = '\n\n[...truncated]\n';
  * helper from the kernel's public surface.
  */
 const STOP_WORDS: ReadonlySet<string> = new Set([
-  'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-  'should', 'may', 'might', 'shall', 'can',
-  'what', 'which', 'who', 'whom', 'whose', 'when', 'where', 'why', 'how',
-  'that', 'this', 'these', 'those', 'it', 'its', 'in', 'on', 'at', 'to',
-  'for', 'of', 'and', 'or', 'but', 'not', 'with', 'from', 'by', 'as', 'if',
-  'so', 'me', 'my', 'you', 'your', 'we', 'our', 'they', 'their', 'i',
-  'define', 'explain', 'describe', 'tell', 'please', 'give', 'show',
-  'also', 'about',
+  'a',
+  'an',
+  'the',
+  'is',
+  'are',
+  'was',
+  'were',
+  'be',
+  'been',
+  'being',
+  'have',
+  'has',
+  'had',
+  'do',
+  'does',
+  'did',
+  'will',
+  'would',
+  'could',
+  'should',
+  'may',
+  'might',
+  'shall',
+  'can',
+  'what',
+  'which',
+  'who',
+  'whom',
+  'whose',
+  'when',
+  'where',
+  'why',
+  'how',
+  'that',
+  'this',
+  'these',
+  'those',
+  'it',
+  'its',
+  'in',
+  'on',
+  'at',
+  'to',
+  'for',
+  'of',
+  'and',
+  'or',
+  'but',
+  'not',
+  'with',
+  'from',
+  'by',
+  'as',
+  'if',
+  'so',
+  'me',
+  'my',
+  'you',
+  'your',
+  'we',
+  'our',
+  'they',
+  'their',
+  'i',
+  'define',
+  'explain',
+  'describe',
+  'tell',
+  'please',
+  'give',
+  'show',
+  'also',
+  'about',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -269,7 +333,7 @@ export function collectEvidence(
     return err(
       new Error(
         `No matching pages found for brief. Task ${taskId} remains in 'created'. ` +
-        `Consider refining the brief or compiling additional sources.`,
+          `Consider refining the brief or compiling additional sources.`,
       ),
     );
   }
@@ -297,22 +361,14 @@ export function collectEvidence(
 
     const body = stripFrontmatter(pageContent);
     const truncated = body.length > maxExcerptChars;
-    const excerpt = truncated
-      ? body.slice(0, maxExcerptChars) + TRUNCATION_MARKER
-      : body;
+    const excerpt = truncated ? body.slice(0, maxExcerptChars) + TRUNCATION_MARKER : body;
 
     const idx = String(i + 1).padStart(2, '0');
     const filename = `${idx}-${slugifyPath(match.path)}.md`;
     const evidenceAbsPath = join(evidenceDir, filename);
     const evidenceRelPath = join(task.workspace_path, 'evidence', filename);
 
-    const fileContent = composeEvidenceFile(
-      taskId,
-      match,
-      excerpt,
-      collectedAt,
-      truncated,
-    );
+    const fileContent = composeEvidenceFile(taskId, match, excerpt, collectedAt, truncated);
 
     try {
       writeFileSync(evidenceAbsPath, fileContent, 'utf-8');

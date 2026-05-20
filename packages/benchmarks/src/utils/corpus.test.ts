@@ -101,8 +101,8 @@ describe('generateCorpus', () => {
   });
 
   it('rejects sourceCount < 1', () => {
-    expect(() =>
-      generateCorpus({ outputDir: dir, sourceCount: 0, seed: 1 }),
-    ).toThrow(/sourceCount must be >= 1/);
+    expect(() => generateCorpus({ outputDir: dir, sourceCount: 0, seed: 1 })).toThrow(
+      /sourceCount must be >= 1/,
+    );
   });
 });

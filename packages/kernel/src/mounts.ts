@@ -10,7 +10,7 @@ import { existsSync } from 'node:fs';
 import type { Database } from 'better-sqlite3';
 
 import { err, ok, type Result } from '@ico/types';
-import { type Mount,MountSchema } from '@ico/types';
+import { type Mount, MountSchema } from '@ico/types';
 
 /** Row shape returned directly from better-sqlite3 for the mounts table. */
 interface MountRow {
@@ -46,11 +46,7 @@ function parseRow(row: MountRow): Result<Mount, Error> {
  * @returns `ok(mount)` on success, or `err(error)` if the path does not
  *          exist, the name is already registered, or the insert fails.
  */
-export function registerMount(
-  db: Database,
-  name: string,
-  path: string,
-): Result<Mount, Error> {
+export function registerMount(db: Database, name: string, path: string): Result<Mount, Error> {
   // Verify the path exists before touching the database.
   if (!existsSync(path)) {
     return err(new Error(`Path does not exist: ${path}`));
@@ -72,9 +68,7 @@ export function registerMount(
     return err(e instanceof Error ? e : new Error(String(e)));
   }
 
-  const row = db
-    .prepare<[string], MountRow>('SELECT * FROM mounts WHERE id = ?')
-    .get(id);
+  const row = db.prepare<[string], MountRow>('SELECT * FROM mounts WHERE id = ?').get(id);
 
   if (!row) {
     return err(new Error('Mount was inserted but could not be retrieved'));
@@ -92,9 +86,7 @@ export function registerMount(
 export function listMounts(db: Database): Result<Mount[], Error> {
   let rows: MountRow[];
   try {
-    rows = db
-      .prepare<[], MountRow>('SELECT * FROM mounts ORDER BY name')
-      .all();
+    rows = db.prepare<[], MountRow>('SELECT * FROM mounts ORDER BY name').all();
   } catch (e) {
     return err(e instanceof Error ? e : new Error(String(e)));
   }
@@ -120,9 +112,7 @@ export function listMounts(db: Database): Result<Mount[], Error> {
 export function getMount(db: Database, id: string): Result<Mount | null, Error> {
   let row: MountRow | undefined;
   try {
-    row = db
-      .prepare<[string], MountRow>('SELECT * FROM mounts WHERE id = ?')
-      .get(id);
+    row = db.prepare<[string], MountRow>('SELECT * FROM mounts WHERE id = ?').get(id);
   } catch (e) {
     return err(e instanceof Error ? e : new Error(String(e)));
   }
@@ -142,9 +132,7 @@ export function getMount(db: Database, id: string): Result<Mount | null, Error> 
 export function getMountByName(db: Database, name: string): Result<Mount | null, Error> {
   let row: MountRow | undefined;
   try {
-    row = db
-      .prepare<[string], MountRow>('SELECT * FROM mounts WHERE name = ?')
-      .get(name);
+    row = db.prepare<[string], MountRow>('SELECT * FROM mounts WHERE name = ?').get(name);
   } catch (e) {
     return err(e instanceof Error ? e : new Error(String(e)));
   }
@@ -164,9 +152,7 @@ export function getMountByName(db: Database, name: string): Result<Mount | null,
 export function removeMount(db: Database, id: string): Result<boolean, Error> {
   let changes: number;
   try {
-    const info = db
-      .prepare<[string], void>('DELETE FROM mounts WHERE id = ?')
-      .run(id);
+    const info = db.prepare<[string], void>('DELETE FROM mounts WHERE id = ?').run(id);
     changes = info.changes;
   } catch (e) {
     return err(e instanceof Error ? e : new Error(String(e)));

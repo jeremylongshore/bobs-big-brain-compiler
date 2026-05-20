@@ -16,21 +16,10 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import {
-  appendAuditLog,
-  type Database,
-  recordProvenance,
-  writeTrace,
-} from '@ico/kernel';
+import { appendAuditLog, type Database, recordProvenance, writeTrace } from '@ico/kernel';
 import { err, ok, type Result } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
@@ -228,8 +217,8 @@ export async function extractConcepts(
   // 5. Split response into individual pages.
   const rawPages = content
     .split(PAGE_BREAK)
-    .map(p => p.trim())
-    .filter(p => p.length > 0);
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
 
   if (rawPages.length === 0) {
     return ok([]);

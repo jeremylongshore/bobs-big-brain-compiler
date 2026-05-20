@@ -89,8 +89,7 @@ function buildUserPrompt(
 ): string {
   const criteriaBlock = criteria
     .map(
-      (c) =>
-        `<criterion id="${escapeXmlAttr(c.id)}">${escapeXmlText(c.description)}</criterion>`,
+      (c) => `<criterion id="${escapeXmlAttr(c.id)}">${escapeXmlText(c.description)}</criterion>`,
     )
     .join('\n');
 
@@ -250,9 +249,7 @@ export async function runCompilationEval(
   }
   if (!existsSync(absPage)) {
     return err(
-      new Error(
-        `Compilation eval '${spec.id}': target_page not found at ${spec.target_page}`,
-      ),
+      new Error(`Compilation eval '${spec.id}': target_page not found at ${spec.target_page}`),
     );
   }
   let pageContent: string;
@@ -298,9 +295,7 @@ export async function runCompilationEval(
   const normalized = meanScore / 5; // map 1–5 → 0.2–1.0; pass thresholds use this
   const passed = normalized >= threshold;
 
-  const breakdown = parsed.value.scores
-    .map((s) => `${s.id}=${s.score}`)
-    .join(' ');
+  const breakdown = parsed.value.scores.map((s) => `${s.id}=${s.score}`).join(' ');
   const details = `mean=${meanScore.toFixed(2)}/5 (${(normalized * 100).toFixed(0)}%) ${passed ? '≥' : '<'} ${threshold} · ${breakdown}${parsed.value.summary ? ' · ' + parsed.value.summary : ''}`;
 
   const result: EvalResult = {

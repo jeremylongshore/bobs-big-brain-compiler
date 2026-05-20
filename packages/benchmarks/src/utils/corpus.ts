@@ -232,7 +232,7 @@ function renderSource(args: RenderSourceArgs): string {
   // Stable synthetic date — keeps frontmatter parseable but not Date.now-
   // dependent.
   const day = 1 + (index % 28);
-  const month = 1 + ((index / 28) | 0) % 12;
+  const month = 1 + (((index / 28) | 0) % 12);
   const created = `2026-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
   const body = renderBody(rng, bodyWords);

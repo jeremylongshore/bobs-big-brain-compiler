@@ -116,7 +116,12 @@ RULES:
  */
 function buildUserPrompt(
   brief: string,
-  evidence: ReadonlyArray<{ sourceTitle: string; sourcePath: string; truncated: boolean; body: string }>,
+  evidence: ReadonlyArray<{
+    sourceTitle: string;
+    sourcePath: string;
+    truncated: boolean;
+    body: string;
+  }>,
 ): string {
   const blocks = evidence
     .map(
@@ -280,9 +285,7 @@ export async function summarizeEvidence(
   }
   if (evidenceFilenames.length === 0) {
     return err(
-      new Error(
-        `No evidence files found for task ${taskId}. The Collector agent must run first.`,
-      ),
+      new Error(`No evidence files found for task ${taskId}. The Collector agent must run first.`),
     );
   }
 
@@ -345,9 +348,7 @@ export async function summarizeEvidence(
 
   // 6. Compose the final notes markdown with frontmatter.
   const synthesizedAt = new Date().toISOString();
-  const sourcePathsYaml = evidenceSources
-    .map((s) => `  - ${s.sourcePath}`)
-    .join('\n');
+  const sourcePathsYaml = evidenceSources.map((s) => `  - ${s.sourcePath}`).join('\n');
   const frontmatter = [
     '---',
     `task_id: ${taskId}`,

@@ -3,7 +3,7 @@ import { rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
-import { afterEach,beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { appendAuditLog } from './audit-log.js';
 
@@ -17,7 +17,10 @@ const INITIAL_LOG = [
 ].join('\n');
 
 function createTmpWorkspace(): string {
-  const dir = resolve(tmpdir(), `ico-audit-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const dir = resolve(
+    tmpdir(),
+    `ico-audit-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
   mkdirSync(resolve(dir, 'audit'), { recursive: true });
   writeFileSync(resolve(dir, 'audit', 'log.md'), INITIAL_LOG, 'utf-8');
   return dir;
@@ -35,7 +38,11 @@ describe('appendAuditLog', () => {
   });
 
   it('appends a new row and the file contains it in the correct format', () => {
-    const result = appendAuditLog(workspacePath, 'ingest.start', 'Ingestion started for article.md');
+    const result = appendAuditLog(
+      workspacePath,
+      'ingest.start',
+      'Ingestion started for article.md',
+    );
 
     expect(result.ok).toBe(true);
 
@@ -46,7 +53,9 @@ describe('appendAuditLog', () => {
     expect(rows).toHaveLength(4);
 
     const newRow = rows[3];
-    expect(newRow).toMatch(/^\| \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z \| ingest\.start \| Ingestion started for article\.md \|$/);
+    expect(newRow).toMatch(
+      /^\| \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z \| ingest\.start \| Ingestion started for article\.md \|$/,
+    );
   });
 
   it('multiple entries appear in chronological order', () => {
@@ -56,7 +65,10 @@ describe('appendAuditLog', () => {
     const contents = readFileSync(resolve(workspacePath, 'audit', 'log.md'), 'utf-8');
     const dataRows = contents
       .split('\n')
-      .filter((line) => line.startsWith('|') && !line.startsWith('| Timestamp') && !line.startsWith('|---'));
+      .filter(
+        (line) =>
+          line.startsWith('|') && !line.startsWith('| Timestamp') && !line.startsWith('|---'),
+      );
 
     expect(dataRows).toHaveLength(3);
     expect(dataRows[1]).toContain('ingest.start');
@@ -88,7 +100,10 @@ describe('appendAuditLog', () => {
     // Must start and end with a pipe
     expect(lastRow).toMatch(/^\|.*\|$/);
 
-    const cells = lastRow.split('|').map((c) => c.trim()).filter(Boolean);
+    const cells = lastRow
+      .split('|')
+      .map((c) => c.trim())
+      .filter(Boolean);
     expect(cells).toHaveLength(3);
 
     const [timestamp, operation, summary] = cells;

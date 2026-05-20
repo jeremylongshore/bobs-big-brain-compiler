@@ -108,15 +108,10 @@ export function ingestMarkdown(filePath: string): Result<IngestResult, Error> {
 
   const { frontmatter, body } = parseFrontmatter(raw);
 
-  const fmTitle =
-    typeof frontmatter['title'] === 'string' ? frontmatter['title'] : null;
-  const fmAuthor =
-    typeof frontmatter['author'] === 'string' ? frontmatter['author'] : null;
-  const fmDate =
-    typeof frontmatter['date'] === 'string' ? frontmatter['date'] : null;
-  const fmTags = Array.isArray(frontmatter['tags'])
-    ? (frontmatter['tags'])
-    : [];
+  const fmTitle = typeof frontmatter['title'] === 'string' ? frontmatter['title'] : null;
+  const fmAuthor = typeof frontmatter['author'] === 'string' ? frontmatter['author'] : null;
+  const fmDate = typeof frontmatter['date'] === 'string' ? frontmatter['date'] : null;
+  const fmTags = Array.isArray(frontmatter['tags']) ? frontmatter['tags'] : [];
 
   const title = fmTitle !== null && fmTitle !== '' ? fmTitle : firstHeading(body);
 

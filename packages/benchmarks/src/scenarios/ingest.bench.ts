@@ -115,7 +115,9 @@ async function main(): Promise<void> {
   console.log(`ingest: median per-file = ${out.perFile.medianMs.toFixed(1)} ms`);
   console.log(`ingest: min   per-file = ${out.perFile.minMs.toFixed(1)} ms`);
   console.log(`ingest: max   per-file = ${out.perFile.maxMs.toFixed(1)} ms`);
-  console.log(`ingest: batch total    = ${out.batchTotalMs.toFixed(0)} ms over ${out.sourceCount} files`);
+  console.log(
+    `ingest: batch total    = ${out.batchTotalMs.toFixed(0)} ms over ${out.sourceCount} files`,
+  );
   console.log(`ingest: Δrss            = ${out.perFile.rssDeltaMb.toFixed(1)} MB`);
 }
 

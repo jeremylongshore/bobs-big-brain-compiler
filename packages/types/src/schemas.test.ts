@@ -45,8 +45,13 @@ describe('SourceSchema', () => {
 describe('TaskSchema', () => {
   it('validates all 7 task statuses', () => {
     const statuses = [
-      'created', 'collecting', 'synthesizing', 'critiquing',
-      'rendering', 'completed', 'archived',
+      'created',
+      'collecting',
+      'synthesizing',
+      'critiquing',
+      'rendering',
+      'completed',
+      'archived',
     ] as const;
     for (const status of statuses) {
       const task = {
@@ -102,7 +107,14 @@ describe('TraceEnvelopeSchema', () => {
 
 describe('CompilationSchema', () => {
   it('validates all compilation types', () => {
-    const types = ['summary', 'concept', 'topic', 'entity', 'contradiction', 'open-question'] as const;
+    const types = [
+      'summary',
+      'concept',
+      'topic',
+      'entity',
+      'contradiction',
+      'open-question',
+    ] as const;
     for (const type of types) {
       const comp = {
         id: '550e8400-e29b-41d4-a716-446655440000',

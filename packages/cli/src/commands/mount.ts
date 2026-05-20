@@ -21,13 +21,7 @@ import {
   removeMount,
 } from '@ico/kernel';
 
-import {
-  formatError,
-  formatInfo,
-  formatJSON,
-  formatSuccess,
-  formatTable,
-} from '../lib/output.js';
+import { formatError, formatInfo, formatJSON, formatSuccess, formatTable } from '../lib/output.js';
 
 // ---------------------------------------------------------------------------
 // Workspace resolution (temporary — replaced by B08 workspace discovery)
@@ -136,11 +130,7 @@ function handleList(globalOpts: { workspace?: string; json?: boolean }): void {
       return;
     }
 
-    const rows = mounts.map((m) => [
-      m.name,
-      m.path,
-      new Date(m.created_at).toLocaleString(),
-    ]);
+    const rows = mounts.map((m) => [m.name, m.path, new Date(m.created_at).toLocaleString()]);
 
     console.log(formatTable(['Name', 'Path', 'Created'], rows));
   } finally {
@@ -153,10 +143,7 @@ function handleList(globalOpts: { workspace?: string; json?: boolean }): void {
  *
  * Looks up the mount by name, then removes it by id.
  */
-function handleRemove(
-  name: string,
-  globalOpts: { workspace?: string; json?: boolean },
-): void {
+function handleRemove(name: string, globalOpts: { workspace?: string; json?: boolean }): void {
   const dbPath = resolveWorkspaceDb(globalOpts);
   const dbResult = initDatabase(dbPath);
 
@@ -218,7 +205,10 @@ export function register(program: Command): void {
   const mount = program
     .command('mount')
     .description('Manage corpus mount points')
-    .addHelpText('after', '\nExamples:\n  $ ico mount add papers ~/research/papers\n  $ ico mount list\n  $ ico mount remove papers');
+    .addHelpText(
+      'after',
+      '\nExamples:\n  $ ico mount add papers ~/research/papers\n  $ ico mount list\n  $ ico mount remove papers',
+    );
 
   mount
     .command('add <name> <path>')

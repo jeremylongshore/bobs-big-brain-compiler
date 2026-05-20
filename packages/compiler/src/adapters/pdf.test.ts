@@ -38,9 +38,7 @@ const MINIMAL_PDF = Buffer.from(
 );
 
 /** Random bytes that are not a valid PDF in any format. */
-const CORRUPTED_BYTES = Buffer.from(
-  'this is definitely not a pdf just garbage bytes 0x00 0xFF',
-);
+const CORRUPTED_BYTES = Buffer.from('this is definitely not a pdf just garbage bytes 0x00 0xFF');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -128,10 +126,7 @@ describe('ingestPdf', () => {
     if (!result.ok) return;
 
     const { content, metadata } = result.value;
-    const expectedCount =
-      content.trim().length === 0
-        ? 0
-        : content.trim().split(/\s+/).length;
+    const expectedCount = content.trim().length === 0 ? 0 : content.trim().split(/\s+/).length;
 
     expect(metadata.wordCount).toBe(expectedCount);
   });
@@ -192,9 +187,7 @@ describe('ingestPdf', () => {
   });
 
   it('does not throw when the file does not exist', async () => {
-    await expect(ingestPdf(join(tmpDir, 'ghost.pdf'))).resolves.toMatchObject(
-      { ok: false },
-    );
+    await expect(ingestPdf(join(tmpDir, 'ghost.pdf'))).resolves.toMatchObject({ ok: false });
   });
 
   // -------------------------------------------------------------------------

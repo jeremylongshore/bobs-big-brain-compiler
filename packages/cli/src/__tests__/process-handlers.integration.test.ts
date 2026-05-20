@@ -38,7 +38,10 @@ interface SpawnResult {
   signal: NodeJS.Signals | null;
 }
 
-function spawnCli(args: string[], opts: { env?: Record<string, string> } = {}): Promise<SpawnResult> {
+function spawnCli(
+  args: string[],
+  opts: { env?: Record<string, string> } = {},
+): Promise<SpawnResult> {
   return new Promise((resolve_) => {
     const child = spawn('node', [CLI_PATH, ...args], {
       env: { ...process.env, ...opts.env, NO_COLOR: '1' },
@@ -107,15 +110,16 @@ describe('top-level process handlers — unhandled rejection', () => {
         });
       });
     `;
-    const result = await spawnCli([], {}).then(() =>
-      new Promise<SpawnResult>((r) => {
-        const child = spawn('node', ['--input-type=module', '-e', code], {
-          env: { ...process.env, NO_COLOR: '1' },
-        });
-        let stderr = '';
-        child.stderr.on('data', (d: Buffer) => (stderr += d.toString('utf-8')));
-        child.on('close', (c, s) => r({ stdout: '', stderr, code: c, signal: s }));
-      }),
+    const result = await spawnCli([], {}).then(
+      () =>
+        new Promise<SpawnResult>((r) => {
+          const child = spawn('node', ['--input-type=module', '-e', code], {
+            env: { ...process.env, NO_COLOR: '1' },
+          });
+          let stderr = '';
+          child.stderr.on('data', (d: Buffer) => (stderr += d.toString('utf-8')));
+          child.on('close', (c, s) => r({ stdout: '', stderr, code: c, signal: s }));
+        }),
     );
 
     expect(result.stderr).toMatch(/\[ico\] unhandled rejection/);
@@ -206,11 +210,9 @@ describe('top-level process handlers — stack traces', () => {
     const result = await new Promise<SpawnResult>((r) => {
       // Pass --verbose AFTER `--` so Node forwards it to script argv rather
       // than trying to parse it as a Node flag.
-      const child = spawn(
-        'node',
-        ['--input-type=module', '-e', code, '--', '--verbose'],
-        { env: { ...process.env, NO_COLOR: '1' } },
-      );
+      const child = spawn('node', ['--input-type=module', '-e', code, '--', '--verbose'], {
+        env: { ...process.env, NO_COLOR: '1' },
+      });
       let stderr = '';
       child.stderr.on('data', (d: Buffer) => (stderr += d.toString('utf-8')));
       child.on('close', (c, s) => r({ stdout: '', stderr, code: c, signal: s }));

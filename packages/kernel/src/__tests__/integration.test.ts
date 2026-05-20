@@ -10,13 +10,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -26,16 +20,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { appendAuditLog } from '../audit-log.js';
 import { redactSecrets } from '../config.js';
 import { registerMount } from '../mounts.js';
-import {
-  getDerivations,
-  getProvenance,
-  recordProvenance,
-} from '../provenance.js';
-import {
-  computeFileHash,
-  isSourceChanged,
-  registerSource,
-} from '../sources.js';
+import { getDerivations, getProvenance, recordProvenance } from '../provenance.js';
+import { computeFileHash, isSourceChanged, registerSource } from '../sources.js';
 import type { Database } from '../state.js';
 import { closeDatabase, initDatabase } from '../state.js';
 import { createTask, getTask, listTasks, transitionTask } from '../tasks.js';
@@ -62,12 +48,7 @@ function sha256Hex(line: string): string {
  * Create a minimal compiled markdown page with YAML frontmatter in `dir`.
  * Used by the wiki-index tests.
  */
-function createMockCompiledPage(
-  dir: string,
-  filename: string,
-  type: string,
-  title: string,
-): void {
+function createMockCompiledPage(dir: string, filename: string, type: string, title: string): void {
   writeFileSync(
     join(dir, filename),
     [
@@ -248,10 +229,7 @@ describe('workspace + DB integration', () => {
     ];
 
     for (const dir of expectedDirs) {
-      expect(
-        existsSync(join(workspacePath, dir)),
-        `expected directory ${dir} to exist`,
-      ).toBe(true);
+      expect(existsSync(join(workspacePath, dir)), `expected directory ${dir} to exist`).toBe(true);
     }
   });
 
@@ -277,9 +255,10 @@ describe('workspace + DB integration', () => {
     ] as const;
 
     const rows = db
-      .prepare<[], { name: string }>(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE '\\_%' ESCAPE '\\'",
-      )
+      .prepare<
+        [],
+        { name: string }
+      >("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE '\\_%' ESCAPE '\\'")
       .all();
     const tableNames = new Set(rows.map((r) => r.name));
 
@@ -326,9 +305,7 @@ describe('mount → source → provenance chain', () => {
     // The Source type (from @ico/types SourceSchema) does not expose mount_id.
     // Verify the association persisted correctly by querying the raw row.
     const rawRow = db
-      .prepare<[string], { mount_id: string | null }>(
-        'SELECT mount_id FROM sources WHERE id = ?',
-      )
+      .prepare<[string], { mount_id: string | null }>('SELECT mount_id FROM sources WHERE id = ?')
       .get(source.id);
     expect(rawRow?.mount_id).toBe(mount.id);
 
@@ -550,12 +527,7 @@ describe('wiki index after mock compilation', () => {
       'source-summary',
       'Source Beta',
     );
-    createMockCompiledPage(
-      join(wikiDir, 'concepts'),
-      'concept-a.md',
-      'concept',
-      'Concept Alpha',
-    );
+    createMockCompiledPage(join(wikiDir, 'concepts'), 'concept-a.md', 'concept', 'Concept Alpha');
 
     const result = rebuildWikiIndex(workspacePath);
     expect(result.ok).toBe(true);
@@ -603,9 +575,7 @@ describe('audit log accumulation', () => {
       .split('\n')
       .filter(
         (line) =>
-          line.startsWith('|') &&
-          !line.startsWith('| Timestamp') &&
-          !line.startsWith('|---'),
+          line.startsWith('|') && !line.startsWith('| Timestamp') && !line.startsWith('|---'),
       );
 
     // 1 init row (seeded by initWorkspace) + 3 appended rows = 4.
@@ -627,7 +597,7 @@ describe('concurrent database access (WAL mode)', () => {
     // Open a second connection to the same file.
     const _require = createRequire(import.meta.url);
     const DatabaseCtor = _require('better-sqlite3') as {
-      new(filename: string): Database;
+      new (filename: string): Database;
     };
 
     const dbPath = join(workspacePath, '.ico', 'state.db');
@@ -638,9 +608,7 @@ describe('concurrent database access (WAL mode)', () => {
       writeTrace(db, workspacePath, 'wal.write.primary', { conn: 1 });
 
       // Read from the secondary connection — must not throw SQLITE_BUSY.
-      const rows = db2
-        .prepare<[], { id: string }>('SELECT id FROM traces')
-        .all();
+      const rows = db2.prepare<[], { id: string }>('SELECT id FROM traces').all();
 
       // The trace we just wrote must be visible from the second connection.
       expect(rows.length).toBeGreaterThanOrEqual(1);
@@ -720,11 +688,7 @@ describe('orphan detection scenario', () => {
   });
 
   it('isSourceChanged returns true for a path with no registered source', () => {
-    const result = isSourceChanged(
-      db,
-      'raw/articles/nonexistent.md',
-      'aaaa'.repeat(16),
-    );
+    const result = isSourceChanged(db, 'raw/articles/nonexistent.md', 'aaaa'.repeat(16));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     // No record for this path — treated as new.

@@ -9,14 +9,7 @@
  * Never throws — all failures are returned as `err(Error)`.
  */
 
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  realpathSync,
-  renameSync,
-  statSync,
-} from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, realpathSync, renameSync, statSync } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 
 import {
@@ -187,9 +180,7 @@ export async function runIngestPipeline(
   const rel = relative(parentDir, resolvedPath);
   if (rel.startsWith('..') || isAbsolute(rel)) {
     return err(
-      new Error(
-        `Symlink escape detected: "${filePath}" resolves outside its parent directory`,
-      ),
+      new Error(`Symlink escape detected: "${filePath}" resolves outside its parent directory`),
     );
   }
 
@@ -278,7 +269,7 @@ export async function runIngestPipeline(
     if (!allSourcesResult.ok) {
       return err(allSourcesResult.error);
     }
-    const oldRecord = allSourcesResult.value.find(s => s.path === relPath);
+    const oldRecord = allSourcesResult.value.find((s) => s.path === relPath);
     const isReingest = oldRecord !== undefined;
     const oldHash = oldRecord?.hash;
 
@@ -345,11 +336,7 @@ export async function runIngestPipeline(
     const auditMessage = isReingest
       ? `Re-ingested ${basename(filePath)} (updated content)`
       : `Ingested ${basename(filePath)}`;
-    const auditResult = appendAuditLog(
-      options.workspacePath,
-      traceEventType,
-      auditMessage,
-    );
+    const auditResult = appendAuditLog(options.workspacePath, traceEventType, auditMessage);
     if (!auditResult.ok) {
       return err(auditResult.error);
     }

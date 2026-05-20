@@ -112,15 +112,79 @@ const TRUNCATION_MARKER = '\n\n[...truncated]\n';
  * search stop list — kept local to avoid coupling to a kernel internal.
  */
 const STOP_WORDS: ReadonlySet<string> = new Set([
-  'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-  'should', 'may', 'might', 'shall', 'can',
-  'what', 'which', 'who', 'whom', 'whose', 'when', 'where', 'why', 'how',
-  'that', 'this', 'these', 'those', 'it', 'its', 'in', 'on', 'at', 'to',
-  'for', 'of', 'and', 'or', 'but', 'not', 'with', 'from', 'by', 'as', 'if',
-  'so', 'me', 'my', 'you', 'your', 'we', 'our', 'they', 'their', 'i',
-  'define', 'explain', 'describe', 'tell', 'please', 'give', 'show',
-  'also', 'about',
+  'a',
+  'an',
+  'the',
+  'is',
+  'are',
+  'was',
+  'were',
+  'be',
+  'been',
+  'being',
+  'have',
+  'has',
+  'had',
+  'do',
+  'does',
+  'did',
+  'will',
+  'would',
+  'could',
+  'should',
+  'may',
+  'might',
+  'shall',
+  'can',
+  'what',
+  'which',
+  'who',
+  'whom',
+  'whose',
+  'when',
+  'where',
+  'why',
+  'how',
+  'that',
+  'this',
+  'these',
+  'those',
+  'it',
+  'its',
+  'in',
+  'on',
+  'at',
+  'to',
+  'for',
+  'of',
+  'and',
+  'or',
+  'but',
+  'not',
+  'with',
+  'from',
+  'by',
+  'as',
+  'if',
+  'so',
+  'me',
+  'my',
+  'you',
+  'your',
+  'we',
+  'our',
+  'they',
+  'their',
+  'i',
+  'define',
+  'explain',
+  'describe',
+  'tell',
+  'please',
+  'give',
+  'show',
+  'also',
+  'about',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -150,7 +214,13 @@ RULES:
 
 function buildUserPrompt(
   topic: string,
-  pages: ReadonlyArray<{ path: string; title: string; type: string; body: string; truncated: boolean }>,
+  pages: ReadonlyArray<{
+    path: string;
+    title: string;
+    type: string;
+    body: string;
+    truncated: boolean;
+  }>,
 ): string {
   const blocks = pages
     .map(
@@ -228,7 +298,9 @@ function parseModelResponse(
     parsed = JSON.parse(jsonText);
   } catch (e) {
     return err(
-      new Error(`Failed to parse model response as JSON: ${e instanceof Error ? e.message : String(e)}`),
+      new Error(
+        `Failed to parse model response as JSON: ${e instanceof Error ? e.message : String(e)}`,
+      ),
     );
   }
 
@@ -331,7 +403,10 @@ function parsePageMeta(content: string): { title: string; type: string } {
     const colonIdx = line.indexOf(':');
     if (colonIdx === -1) continue;
     const key = line.slice(0, colonIdx).trim();
-    const value = line.slice(colonIdx + 1).trim().replace(/^['"]|['"]$/g, '');
+    const value = line
+      .slice(colonIdx + 1)
+      .trim()
+      .replace(/^['"]|['"]$/g, '');
     if (key === 'title') title = value;
     else if (key === 'type') type = value;
   }
@@ -426,10 +501,7 @@ function composeQuizFile(
     '',
   ].join('\n');
   const sections = items.map((q, i) => {
-    const refs =
-      q.source_pages.length > 0
-        ? `_sources: ${q.source_pages.join(', ')}_\n`
-        : '';
+    const refs = q.source_pages.length > 0 ? `_sources: ${q.source_pages.join(', ')}_\n` : '';
     return [
       `## Question ${i + 1}`,
       '',

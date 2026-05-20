@@ -83,21 +83,21 @@ describe('friendlyError', () => {
   });
 
   it('rewrites Claude API category errors', () => {
-    expect(
-      friendlyError(new Error('Claude API authentication_error (HTTP 401): bad key')),
-    ).toMatch(/ANTHROPIC_API_KEY/);
+    expect(friendlyError(new Error('Claude API authentication_error (HTTP 401): bad key'))).toMatch(
+      /ANTHROPIC_API_KEY/,
+    );
     expect(
       friendlyError(new Error('Claude API rate_limit_error (HTTP 429): too many requests')),
     ).toMatch(/rate limit/i);
-    expect(
-      friendlyError(new Error('Claude API overloaded_error (HTTP 529): overloaded')),
-    ).toMatch(/overloaded/i);
-    expect(
-      friendlyError(new Error('Claude API bad_request_error (HTTP 400): bad input')),
-    ).toMatch(/rejected the request/);
-    expect(
-      friendlyError(new Error('Claude API server_error (HTTP 500): server boom')),
-    ).toMatch(/server error/);
+    expect(friendlyError(new Error('Claude API overloaded_error (HTTP 529): overloaded'))).toMatch(
+      /overloaded/i,
+    );
+    expect(friendlyError(new Error('Claude API bad_request_error (HTTP 400): bad input'))).toMatch(
+      /rejected the request/,
+    );
+    expect(friendlyError(new Error('Claude API server_error (HTTP 500): server boom'))).toMatch(
+      /server error/,
+    );
   });
 
   it('returns the verbatim message for unrecognised errors', () => {

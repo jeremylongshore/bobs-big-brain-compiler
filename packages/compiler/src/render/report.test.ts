@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { err, ok } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
-import type { RenderReportOptions,ReportSource } from './report.js';
+import type { RenderReportOptions, ReportSource } from './report.js';
 import { renderReport, slugify } from './report.js';
 
 // ---------------------------------------------------------------------------
@@ -27,13 +27,15 @@ import { renderReport, slugify } from './report.js';
 function createMockClient(response: string): ClaudeClient {
   return {
     createCompletion() {
-      return Promise.resolve(ok({
-        content: response,
-        inputTokens: 100,
-        outputTokens: 200,
-        model: 'claude-sonnet-4-6',
-        stopReason: 'end_turn',
-      }));
+      return Promise.resolve(
+        ok({
+          content: response,
+          inputTokens: 100,
+          outputTokens: 200,
+          model: 'claude-sonnet-4-6',
+          stopReason: 'end_turn',
+        }),
+      );
     },
   };
 }

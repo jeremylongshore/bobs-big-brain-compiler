@@ -1,4 +1,4 @@
-import { afterEach, beforeEach,describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   bold,
@@ -234,7 +234,6 @@ describe('color suppression via NO_COLOR', () => {
 
   afterEach(() => {
     if (originalNoColor === undefined) {
-       
       delete process.env['NO_COLOR'];
     } else {
       process.env['NO_COLOR'] = originalNoColor;
@@ -291,7 +290,6 @@ describe('bold and dim ANSI codes', () => {
 
   afterEach(() => {
     if (originalNoColor === undefined) {
-       
       delete process.env['NO_COLOR'];
     } else {
       process.env['NO_COLOR'] = originalNoColor;

@@ -25,7 +25,13 @@ import {
 } from '@ico/kernel';
 import type { Source } from '@ico/types';
 
-import { formatError, formatInfo, formatJSON, formatSuccess, formatWarning } from '../lib/output.js';
+import {
+  formatError,
+  formatInfo,
+  formatJSON,
+  formatSuccess,
+  formatWarning,
+} from '../lib/output.js';
 import { resolveWorkspace } from '../lib/workspace-resolver.js';
 
 // ---------------------------------------------------------------------------
@@ -34,10 +40,10 @@ import { resolveWorkspace } from '../lib/workspace-resolver.js';
 
 /** Maximum file sizes in bytes, per type. Matches workspace policy defaults. */
 const SIZE_LIMITS: Record<SourceType, number> = {
-  pdf: 52_428_800,      // 50 MiB
-  markdown: 5_242_880,  // 5 MiB
-  html: 10_485_760,     // 10 MiB
-  text: 5_242_880,      // 5 MiB
+  pdf: 52_428_800, // 50 MiB
+  markdown: 5_242_880, // 5 MiB
+  html: 10_485_760, // 10 MiB
+  text: 5_242_880, // 5 MiB
 };
 
 /** Maps source type to raw/ subdirectory name. */
@@ -419,8 +425,8 @@ function printHumanOutput(displayName: string, result: IngestResult): void {
 async function confirm(message: string): Promise<boolean> {
   if (!process.stdin.isTTY) return false;
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise(resolve => {
-    rl.question(message, answer => {
+  return new Promise((resolve) => {
+    rl.question(message, (answer) => {
       rl.close();
       resolve(answer.toLowerCase() !== 'n');
     });
@@ -437,10 +443,12 @@ async function confirm(message: string): Promise<boolean> {
 async function showPreview(filePath: string, type: SourceType, fileSize: number): Promise<void> {
   const adapterResult = await ingestSource(filePath, type);
 
-  const title = adapterResult.ok ? (adapterResult.value.metadata.title ?? '(untitled)') : '(untitled)';
+  const title = adapterResult.ok
+    ? (adapterResult.value.metadata.title ?? '(untitled)')
+    : '(untitled)';
   const author = adapterResult.ok ? (adapterResult.value.metadata.author ?? '') : '';
   const wordCount = adapterResult.ok ? adapterResult.value.metadata.wordCount : 0;
-  const estTokens = Math.round(wordCount * 1.33 / 4) * 4;
+  const estTokens = Math.round((wordCount * 1.33) / 4) * 4;
   const sizeMb = (fileSize / (1024 * 1024)).toFixed(1);
 
   process.stdout.write('\n');
@@ -473,7 +481,10 @@ export function register(program: Command): void {
     .option('--author <author>', 'Source author')
     .option('--force', 'Override size limits')
     .option('--yes', 'Skip confirmation prompt')
-    .addHelpText('after', '\nExamples:\n  $ ico ingest paper.pdf\n  $ ico ingest notes.md --title "Meeting Notes" --author "Jeremy"\n  $ ico ingest paper.pdf --yes')
+    .addHelpText(
+      'after',
+      '\nExamples:\n  $ ico ingest paper.pdf\n  $ ico ingest notes.md --title "Meeting Notes" --author "Jeremy"\n  $ ico ingest paper.pdf --yes',
+    )
     .action(async (filePath: string, opts: IngestOptions & { yes?: boolean }, cmd: Command) => {
       const globalOpts = cmd.optsWithGlobals<GlobalOptions & IngestOptions & { yes?: boolean }>();
 
@@ -519,7 +530,11 @@ export function register(program: Command): void {
         for (const file of files) {
           if (!skipConfirm && process.stdin.isTTY) {
             let fileSize = 0;
-            try { fileSize = statSync(file).size; } catch { /* non-fatal */ }
+            try {
+              fileSize = statSync(file).size;
+            } catch {
+              /* non-fatal */
+            }
             const previewType = detectSourceType(file);
             await showPreview(file, previewType, fileSize);
             const confirmed = await confirm('Ingest this file? [Y/n] ');
@@ -552,7 +567,7 @@ export function register(program: Command): void {
         process.stdout.write(
           formatSuccess(
             `Ingested ${batchIngested} of ${files.length} files` +
-            ` (${batchSkipped} skipped, ${batchAlreadyIngested} already ingested)`,
+              ` (${batchSkipped} skipped, ${batchAlreadyIngested} already ingested)`,
           ) + '\n',
         );
 

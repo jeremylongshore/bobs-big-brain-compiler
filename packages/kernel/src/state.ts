@@ -34,8 +34,8 @@ import type { Database } from 'better-sqlite3';
  */
 const _require = createRequire(import.meta.url);
 const DatabaseCtor = _require('better-sqlite3') as {
-  new(filename: string): Database;
-  new(filename: string, options: Record<string, unknown>): Database;
+  new (filename: string): Database;
+  new (filename: string, options: Record<string, unknown>): Database;
 };
 
 const __filename = fileURLToPath(import.meta.url);
@@ -146,10 +146,7 @@ export function initDatabaseWithMigrations(
  *          migrations, or `err(error)` if reading files or executing SQL
  *          fails. On failure the migration transaction is fully rolled back.
  */
-export function runMigrations(
-  db: Database,
-  migrationsDir: string,
-): Result<number, Error> {
+export function runMigrations(db: Database, migrationsDir: string): Result<number, Error> {
   // Ensure the tracking table exists before we query it.
   try {
     db.exec(CREATE_MIGRATIONS_TABLE_SQL);
@@ -160,10 +157,8 @@ export function runMigrations(
   // Collect the names of already-applied migrations.
   let appliedNames: Set<string>;
   try {
-    const rows = db
-      .prepare<[], { name: string }>('SELECT name FROM _migrations ORDER BY id')
-      .all();
-    appliedNames = new Set(rows.map(r => r.name));
+    const rows = db.prepare<[], { name: string }>('SELECT name FROM _migrations ORDER BY id').all();
+    appliedNames = new Set(rows.map((r) => r.name));
   } catch (e) {
     return err(e instanceof Error ? e : new Error(String(e)));
   }
@@ -172,14 +167,14 @@ export function runMigrations(
   let files: string[];
   try {
     files = readdirSync(migrationsDir)
-      .filter(f => f.endsWith('.sql'))
+      .filter((f) => f.endsWith('.sql'))
       .sort();
   } catch (e) {
     return err(e instanceof Error ? e : new Error(String(e)));
   }
 
   // Determine which migrations are pending.
-  const pending = files.filter(f => !appliedNames.has(f));
+  const pending = files.filter((f) => !appliedNames.has(f));
   if (pending.length === 0) {
     return ok(0);
   }
@@ -216,7 +211,7 @@ export function runMigrations(
   // Apply all pending migrations inside a single transaction so that a
   // partial failure leaves the schema at the last clean checkpoint.
   const insertStmt = db.prepare<[string, string], void>(
-    "INSERT INTO _migrations (name, applied_at) VALUES (?, ?)",
+    'INSERT INTO _migrations (name, applied_at) VALUES (?, ?)',
   );
 
   const applyAll = db.transaction(() => {

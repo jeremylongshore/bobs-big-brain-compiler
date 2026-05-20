@@ -17,7 +17,7 @@ description: |
 type: compilation
 pass: summarize
 target_page: sources/attention-paper.md
-threshold: 0.8     # pass when normalized score >= 0.8 (mean criterion >= 4.0)
+threshold: 0.8 # pass when normalized score >= 0.8 (mean criterion >= 4.0)
 criteria:
   - id: completeness
     description: |

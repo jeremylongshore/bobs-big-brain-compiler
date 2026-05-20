@@ -42,7 +42,10 @@ describe('loadConfig', () => {
   });
 
   it('env vars override .env file', () => {
-    writeFileSync(join(tempDir, '.env'), 'ANTHROPIC_API_KEY=file-key\nICO_MODEL=claude-haiku-4-5\n');
+    writeFileSync(
+      join(tempDir, '.env'),
+      'ANTHROPIC_API_KEY=file-key\nICO_MODEL=claude-haiku-4-5\n',
+    );
     process.env['ANTHROPIC_API_KEY'] = 'env-key';
     process.env['ICO_MODEL'] = 'claude-opus-4-6';
     const config = loadConfig(tempDir);
@@ -61,11 +64,10 @@ describe('loadConfig', () => {
   });
 
   it('respects custom config values', () => {
-    writeFileSync(join(tempDir, '.env'), [
-      'ANTHROPIC_API_KEY=sk-test',
-      'ICO_WORKSPACE=/custom/path',
-      'ICO_LOG_LEVEL=debug',
-    ].join('\n'));
+    writeFileSync(
+      join(tempDir, '.env'),
+      ['ANTHROPIC_API_KEY=sk-test', 'ICO_WORKSPACE=/custom/path', 'ICO_LOG_LEVEL=debug'].join('\n'),
+    );
     const config = loadConfig(tempDir);
     expect(config.workspace).toBe('/custom/path');
     expect(config.logLevel).toBe('debug');

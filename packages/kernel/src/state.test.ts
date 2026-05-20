@@ -6,12 +6,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { Database } from './state.js';
-import {
-  closeDatabase,
-  initDatabase,
-  initDatabaseWithMigrations,
-  runMigrations,
-} from './state.js';
+import { closeDatabase, initDatabase, initDatabaseWithMigrations, runMigrations } from './state.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -59,7 +54,11 @@ beforeEach(() => {
 
 afterEach(() => {
   closeDatabase(db);
-  try { rmSync(dbPath); } catch { /* already gone */ }
+  try {
+    rmSync(dbPath);
+  } catch {
+    /* already gone */
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -90,11 +89,12 @@ describe('initDatabase — pragmas', () => {
 describe('initDatabase — schema', () => {
   it('creates all 8 application tables', () => {
     const rows = db
-      .prepare<[], { name: string }>(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE '\\_%' ESCAPE '\\'",
-      )
+      .prepare<
+        [],
+        { name: string }
+      >("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE '\\_%' ESCAPE '\\'")
       .all();
-    const tableNames = new Set(rows.map(r => r.name));
+    const tableNames = new Set(rows.map((r) => r.name));
 
     for (const table of EXPECTED_TABLES) {
       expect(tableNames, `expected table "${table}" to exist`).toContain(table);
@@ -103,18 +103,20 @@ describe('initDatabase — schema', () => {
 
   it('creates the _migrations tracking table', () => {
     const row = db
-      .prepare<[], { name: string }>(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='_migrations'",
-      )
+      .prepare<
+        [],
+        { name: string }
+      >("SELECT name FROM sqlite_master WHERE type='table' AND name='_migrations'")
       .get();
     expect(row).toBeDefined();
   });
 
   it('records migration 001-initial-schema.sql in _migrations', () => {
     const row = db
-      .prepare<[], { name: string }>(
-        "SELECT name FROM _migrations WHERE name='001-initial-schema.sql'",
-      )
+      .prepare<
+        [],
+        { name: string }
+      >("SELECT name FROM _migrations WHERE name='001-initial-schema.sql'")
       .get();
     expect(row).toBeDefined();
     expect(row?.name).toBe('001-initial-schema.sql');
@@ -139,10 +141,8 @@ describe('runMigrations — idempotency', () => {
     runMigrations(db, KERNEL_MIGRATIONS_DIR);
     runMigrations(db, KERNEL_MIGRATIONS_DIR);
 
-    const rows = db
-      .prepare<[], { name: string }>('SELECT name FROM _migrations')
-      .all();
-    const names = rows.map(r => r.name);
+    const rows = db.prepare<[], { name: string }>('SELECT name FROM _migrations').all();
+    const names = rows.map((r) => r.name);
     const unique = new Set(names);
     expect(unique.size).toBe(names.length);
   });
@@ -172,12 +172,7 @@ describe('runMigrations — rollback on failure', () => {
 
     writeFileSync(
       join(migrationsDir, '002-broken.sql'),
-      [
-        '-- === UP ===',
-        'THIS IS NOT VALID SQL;',
-        '-- === DOWN ===',
-        '',
-      ].join('\n'),
+      ['-- === UP ===', 'THIS IS NOT VALID SQL;', '-- === DOWN ===', ''].join('\n'),
     );
 
     // Use an isolated database for this test.
@@ -202,9 +197,10 @@ describe('runMigrations — rollback on failure', () => {
 
       // The canary table must not exist — the batch was atomic.
       const tableRow = verifyDb
-        .prepare<[], { name: string }>(
-          "SELECT name FROM sqlite_master WHERE type='table' AND name='canary'",
-        )
+        .prepare<
+          [],
+          { name: string }
+        >("SELECT name FROM sqlite_master WHERE type='table' AND name='canary'")
         .get();
       expect(tableRow).toBeUndefined();
 
@@ -212,7 +208,11 @@ describe('runMigrations — rollback on failure', () => {
     }
 
     cleanupDir();
-    try { rmSync(isolatedPath); } catch { /* ok */ }
+    try {
+      rmSync(isolatedPath);
+    } catch {
+      /* ok */
+    }
   });
 });
 
@@ -256,7 +256,11 @@ describe('closeDatabase', () => {
     expect(() => closeDatabase(testDb)).not.toThrow();
     expect(testDb.open).toBe(false);
 
-    try { rmSync(path); } catch { /* ok */ }
+    try {
+      rmSync(path);
+    } catch {
+      /* ok */
+    }
   });
 
   it('is safe to call on an already-closed database', () => {
@@ -268,6 +272,10 @@ describe('closeDatabase', () => {
     closeDatabase(testDb);
     expect(() => closeDatabase(testDb)).not.toThrow();
 
-    try { rmSync(path); } catch { /* ok */ }
+    try {
+      rmSync(path);
+    } catch {
+      /* ok */
+    }
   });
 });

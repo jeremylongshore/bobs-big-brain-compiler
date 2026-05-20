@@ -32,15 +32,79 @@ const DEFAULT_K = 5;
  * AND (precision-friendly).
  */
 const STOP_WORDS: ReadonlySet<string> = new Set([
-  'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-  'should', 'may', 'might', 'shall', 'can',
-  'what', 'which', 'who', 'whom', 'whose', 'when', 'where', 'why', 'how',
-  'that', 'this', 'these', 'those', 'it', 'its', 'in', 'on', 'at', 'to',
-  'for', 'of', 'and', 'or', 'but', 'not', 'with', 'from', 'by', 'as', 'if',
-  'so', 'me', 'my', 'you', 'your', 'we', 'our', 'they', 'their', 'i',
-  'define', 'explain', 'describe', 'tell', 'please', 'give', 'show',
-  'also', 'about',
+  'a',
+  'an',
+  'the',
+  'is',
+  'are',
+  'was',
+  'were',
+  'be',
+  'been',
+  'being',
+  'have',
+  'has',
+  'had',
+  'do',
+  'does',
+  'did',
+  'will',
+  'would',
+  'could',
+  'should',
+  'may',
+  'might',
+  'shall',
+  'can',
+  'what',
+  'which',
+  'who',
+  'whom',
+  'whose',
+  'when',
+  'where',
+  'why',
+  'how',
+  'that',
+  'this',
+  'these',
+  'those',
+  'it',
+  'its',
+  'in',
+  'on',
+  'at',
+  'to',
+  'for',
+  'of',
+  'and',
+  'or',
+  'but',
+  'not',
+  'with',
+  'from',
+  'by',
+  'as',
+  'if',
+  'so',
+  'me',
+  'my',
+  'you',
+  'your',
+  'we',
+  'our',
+  'they',
+  'their',
+  'i',
+  'define',
+  'explain',
+  'describe',
+  'tell',
+  'please',
+  'give',
+  'show',
+  'also',
+  'about',
 ]);
 
 function buildOrQuery(question: string): string | null {
@@ -52,10 +116,7 @@ function buildOrQuery(question: string): string | null {
   return tokens.length > 0 ? tokens.join(' OR ') : null;
 }
 
-export function runRetrievalEval(
-  db: Database,
-  spec: RetrievalEvalSpec,
-): Result<EvalResult, Error> {
+export function runRetrievalEval(db: Database, spec: RetrievalEvalSpec): Result<EvalResult, Error> {
   const start = Date.now();
   const k = spec.k ?? DEFAULT_K;
   const threshold = spec.threshold ?? 1;
@@ -98,10 +159,7 @@ export function runRetrievalEval(
 
   const minRecall = spec.min_recall ?? 0;
   const minPrecision = spec.min_precision ?? 0;
-  const passed =
-    score >= threshold &&
-    recall >= minRecall &&
-    precision >= minPrecision;
+  const passed = score >= threshold && recall >= minRecall && precision >= minPrecision;
 
   const metrics = `recall@${k}=${recall.toFixed(2)} precision@${k}=${precision.toFixed(2)} score=${score.toFixed(2)}`;
   const details = passed

@@ -74,7 +74,8 @@ function seedQuizFile(
   ].join('\n');
   const sections = questions
     .map((item, i) => {
-      const srcLine = item.sources && item.sources.length > 0 ? `_sources: ${item.sources.join(', ')}_\n` : '';
+      const srcLine =
+        item.sources && item.sources.length > 0 ? `_sources: ${item.sources.join(', ')}_\n` : '';
       return [
         `## Question ${i + 1}`,
         '',
@@ -142,7 +143,11 @@ afterEach(() => {
 describe('parseQuizFile', () => {
   it('extracts topic and ordered questions with answers', () => {
     seedQuizFile(env, 'transformer attention', 'transformer-attention', [
-      { q: 'What scales?', a: 'Attention scales quadratically.', sources: ['concepts/self-attention.md'] },
+      {
+        q: 'What scales?',
+        a: 'Attention scales quadratically.',
+        sources: ['concepts/self-attention.md'],
+      },
       { q: 'Pairs are weighted how?', a: 'Query-key dot product then softmax.' },
     ]);
 
@@ -169,7 +174,8 @@ describe('parseQuizFile', () => {
   });
 
   it('rejects files missing type: recall-quiz', () => {
-    const fm = '---\ntopic: "x"\nquestion_count: 0\n---\n\n# x\n\n## Question 1\n\nq\n\n<details><summary>Answer</summary>\n\na\n\n</details>\n';
+    const fm =
+      '---\ntopic: "x"\nquestion_count: 0\n---\n\n# x\n\n## Question 1\n\nq\n\n<details><summary>Answer</summary>\n\na\n\n</details>\n';
     const r = parseQuizFile(fm);
     expect(r.ok).toBe(false);
     if (r.ok) return;

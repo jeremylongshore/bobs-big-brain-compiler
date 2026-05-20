@@ -99,15 +99,13 @@ function slidesMd(opts: {
 }
 
 /** Insert a promotion record directly into the DB. */
-function insertPromotion(
-  database: Database,
-  sourcePath: string,
-  targetPath: string,
-): void {
-  database.prepare(
-    `INSERT INTO promotions (id, source_path, target_path, target_type, promoted_at, promoted_by)
+function insertPromotion(database: Database, sourcePath: string, targetPath: string): void {
+  database
+    .prepare(
+      `INSERT INTO promotions (id, source_path, target_path, target_type, promoted_at, promoted_by)
      VALUES (?, ?, ?, 'topic', '2024-01-15T10:00:00.000Z', 'user')`,
-  ).run(`promo-${Date.now()}-${Math.random()}`, sourcePath, targetPath);
+    )
+    .run(`promo-${Date.now()}-${Math.random()}`, sourcePath, targetPath);
 }
 
 // ---------------------------------------------------------------------------
@@ -232,10 +230,7 @@ describe('listArtifacts — promotion status', () => {
 
   it('marks promoted artifacts as promoted: true', () => {
     const reportPath = join(wsPath, 'outputs', 'reports', 'promoted.md');
-    writeFile(
-      reportPath,
-      reportMd({ title: 'Promoted', generatedAt: '2024-01-15T10:00:00.000Z' }),
-    );
+    writeFile(reportPath, reportMd({ title: 'Promoted', generatedAt: '2024-01-15T10:00:00.000Z' }));
 
     // Insert a promotion record using the workspace-relative path.
     insertPromotion(db, 'outputs/reports/promoted.md', 'wiki/topics/promoted.md');

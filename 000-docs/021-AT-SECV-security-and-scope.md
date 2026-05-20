@@ -59,15 +59,15 @@ API keys and secrets must never appear in workspace files, audit traces, JSONL l
 
 **Deny-list patterns:**
 
-| Pattern | Matches |
-|---------|---------|
-| `sk-ant-*` | Anthropic API keys |
-| `Bearer *` | Authorization headers |
-| `apiKey` | Generic API key fields |
-| `authorization` | HTTP auth headers |
-| `token` | Generic token fields |
+| Pattern             | Matches                                     |
+| ------------------- | ------------------------------------------- |
+| `sk-ant-*`          | Anthropic API keys                          |
+| `Bearer *`          | Authorization headers                       |
+| `apiKey`            | Generic API key fields                      |
+| `authorization`     | HTTP auth headers                           |
+| `token`             | Generic token fields                        |
 | `ANTHROPIC_API_KEY` | Environment variable references with values |
-| `sk-*` | Generic secret key prefixes |
+| `sk-*`              | Generic secret key prefixes                 |
 
 **DO:**
 
@@ -107,7 +107,9 @@ const stmt = db.prepare('SELECT * FROM sources WHERE id = ?');
 const source = stmt.get(sourceId);
 
 // Named parameters — also safe
-const stmt = db.prepare('INSERT INTO sources (id, path, type, hash) VALUES (@id, @path, @type, @hash)');
+const stmt = db.prepare(
+  'INSERT INTO sources (id, path, type, hash) VALUES (@id, @path, @type, @hash)',
+);
 stmt.run({ id, path, type, hash });
 ```
 
@@ -184,15 +186,15 @@ All user-facing filenames (source slugs, compiled page names, task IDs, artifact
 
 **Slug rules:**
 
-| Constraint | Rule |
-|-----------|------|
-| Character set | Lowercase `a-z`, digits `0-9`, hyphens `-` |
-| Max length | 80 characters |
-| No consecutive hyphens | `my--file` becomes `my-file` |
-| No leading/trailing hyphens | `-my-file-` becomes `my-file` |
-| Whitespace | Replaced with hyphens |
-| Invalid characters | Stripped |
-| Empty result | Rejected (throw error) |
+| Constraint                  | Rule                                       |
+| --------------------------- | ------------------------------------------ |
+| Character set               | Lowercase `a-z`, digits `0-9`, hyphens `-` |
+| Max length                  | 80 characters                              |
+| No consecutive hyphens      | `my--file` becomes `my-file`               |
+| No leading/trailing hyphens | `-my-file-` becomes `my-file`              |
+| Whitespace                  | Replaced with hyphens                      |
+| Invalid characters          | Stripped                                   |
+| Empty result                | Rejected (throw error)                     |
 
 **DO:**
 
@@ -201,10 +203,10 @@ function slugify(input: string): string {
   let slug = input
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9\s-]/g, '')   // strip invalid chars
-    .replace(/\s+/g, '-')            // whitespace to hyphens
-    .replace(/-{2,}/g, '-')          // collapse consecutive hyphens
-    .replace(/^-+|-+$/g, '');        // trim leading/trailing hyphens
+    .replace(/[^a-z0-9\s-]/g, '') // strip invalid chars
+    .replace(/\s+/g, '-') // whitespace to hyphens
+    .replace(/-{2,}/g, '-') // collapse consecutive hyphens
+    .replace(/^-+|-+$/g, ''); // trim leading/trailing hyphens
 
   if (slug.length === 0) {
     throw new ValidationError('Filename produces empty slug');
@@ -231,21 +233,21 @@ const filename = userInput.replace(/ /g, '_') + '.md';
 
 Ingest rejects files exceeding size limits before any processing occurs. This prevents resource exhaustion from oversized inputs.
 
-| Source Type | Max Size | Rationale |
-|-------------|----------|-----------|
-| PDF | 50 MB | Largest common research format |
-| Markdown | 5 MB | Text-heavy but bounded |
-| HTML | 10 MB | May include inline assets |
-| Plain text | 5 MB | Same as markdown |
+| Source Type | Max Size | Rationale                      |
+| ----------- | -------- | ------------------------------ |
+| PDF         | 50 MB    | Largest common research format |
+| Markdown    | 5 MB     | Text-heavy but bounded         |
+| HTML        | 10 MB    | May include inline assets      |
+| Plain text  | 5 MB     | Same as markdown               |
 
 **DO:**
 
 ```typescript
 const SIZE_LIMITS: Record<string, number> = {
-  pdf:      50 * 1024 * 1024,  // 50 MB
-  markdown:  5 * 1024 * 1024,  //  5 MB
-  html:     10 * 1024 * 1024,  // 10 MB
-  text:      5 * 1024 * 1024,  //  5 MB
+  pdf: 50 * 1024 * 1024, // 50 MB
+  markdown: 5 * 1024 * 1024, //  5 MB
+  html: 10 * 1024 * 1024, // 10 MB
+  text: 5 * 1024 * 1024, //  5 MB
 };
 
 function validateFileSize(filePath: string, type: string): void {
@@ -258,7 +260,7 @@ function validateFileSize(filePath: string, type: string): void {
 
   if (stat.size > limit) {
     throw new ValidationError(
-      `File exceeds ${type} size limit: ${(stat.size / 1024 / 1024).toFixed(1)} MB > ${limit / 1024 / 1024} MB`
+      `File exceeds ${type} size limit: ${(stat.size / 1024 / 1024).toFixed(1)} MB > ${limit / 1024 / 1024} MB`,
     );
   }
 }
@@ -284,9 +286,9 @@ ICO is a single-user, local-first CLI. Concurrent access to the SQLite database 
 
 ```typescript
 const db = new Database(dbPath);
-db.pragma('journal_mode = WAL');       // Write-Ahead Logging for concurrent reads
-db.pragma('busy_timeout = 5000');      // Wait up to 5s for locks instead of failing immediately
-db.pragma('foreign_keys = ON');        // Enforce referential integrity
+db.pragma('journal_mode = WAL'); // Write-Ahead Logging for concurrent reads
+db.pragma('busy_timeout = 5000'); // Wait up to 5s for locks instead of failing immediately
+db.pragma('foreign_keys = ON'); // Enforce referential integrity
 ```
 
 **Workspace lockfile:**
@@ -306,7 +308,7 @@ function acquireLock(): void {
     if (isProcessRunning(existingPid)) {
       throw new ConcurrencyError(
         `Another ico process (PID ${existingPid}) holds the workspace lock. ` +
-        `If this is stale, remove ${LOCK_PATH} manually.`
+          `If this is stale, remove ${LOCK_PATH} manually.`,
       );
     }
     // Stale lock from a crashed process — safe to reclaim
@@ -337,10 +339,10 @@ db.exec('INSERT INTO sources ...');
 
 The planned npm package name `intentional-cognition-os` has been verified as **available** on the npm registry as of 2026-04-06. The `npm view intentional-cognition-os` command returns a 404, confirming no existing package.
 
-| Name | Status | Notes |
-|------|--------|-------|
-| `intentional-cognition-os` | Available | Primary choice. Matches repo name. |
-| `ico` | Taken | Registered as `ico@0.3.3` (graph plotting library). CLI binary name `ico` is unaffected — binary names and package names are independent in npm. |
+| Name                       | Status    | Notes                                                                                                                                            |
+| -------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `intentional-cognition-os` | Available | Primary choice. Matches repo name.                                                                                                               |
+| `ico`                      | Taken     | Registered as `ico@0.3.3` (graph plotting library). CLI binary name `ico` is unaffected — binary names and package names are independent in npm. |
 
 **Action:** Register `intentional-cognition-os` on npm during the first publish in Epic 2. The `package.json` `bin` field maps the `ico` command to the CLI entry point regardless of the package name.
 
@@ -418,10 +420,10 @@ try {
   await compileSource(sourceId);
 } catch (error) {
   const traceId = generateTraceId();
-  logInternalError(traceId, error);  // Full error to audit trace (redacted)
+  logInternalError(traceId, error); // Full error to audit trace (redacted)
   console.error(
     `Compilation failed for source ${sourceId}. Trace: ${traceId}\n` +
-    `Run 'ico status --trace ${traceId}' for details.`
+      `Run 'ico status --trace ${traceId}' for details.`,
   );
 }
 ```
@@ -433,8 +435,8 @@ try {
 try {
   await compileSource(sourceId);
 } catch (error) {
-  console.error(error);  // Raw error object to user
-  console.error(error.stack);  // Full stack trace
+  console.error(error); // Raw error object to user
+  console.error(error.stack); // Full stack trace
   console.error(`API key used: ${process.env.ANTHROPIC_API_KEY}`);
 }
 ```
@@ -477,19 +479,19 @@ fs.writeFileSync(tracePath, JSON.stringify(entries));
 
 The following features are explicitly out of scope for v1 (Phases 1-4). Each deferral has a rationale. These are not forgotten — they are deliberate scope boundaries.
 
-| Feature | Rationale | Earliest Phase |
-|---------|-----------|----------------|
-| **URL ingest (web scraping)** | Security surface too large — SSRF, malicious HTML, cookie/session leakage, robots.txt compliance. Requires a hardened fetch pipeline with allowlisting, timeout enforcement, and content sanitization. Not justified for MVP when manual file ingest works. | Phase 3+ |
-| **Chart generation (matplotlib)** | Requires Python runtime as a dependency. Cross-language process management adds complexity without proportional value for MVP. Markdown tables and text-based outputs are sufficient. | Phase 3+ |
-| **Vector search** | Full-text search over compiled markdown is sufficient for v1 corpus sizes (tens to low hundreds of documents). Vector databases add infrastructure cost and operational complexity that is not justified until corpus scale demands it. | Phase 3+ |
-| **Remote mode** | No infrastructure for v1. Requires auth, multi-tenancy, object storage, job queues, and network security. Phase 5 deliverable per the master blueprint. | Phase 5 |
-| **Batch ingest as default** | Source-by-source ingest with human-in-the-loop is safer for quality control. Batch mode exists as a capability but not as the default posture until the pipeline proves reliable on diverse corpus types. | Phase 2+ (as opt-in) |
-| **Model fine-tuning** | Deferred until context and harness learning layers are stable. Fine-tuning without reliable evaluation infrastructure produces unverifiable results. Traces must accumulate first. | Phase 5+ (if ever) |
-| **Multi-user collaboration** | Local-first, single-user only in v1. Multi-user requires auth, access control, conflict resolution, and shared state management. Phase 5 deliverable. | Phase 5 |
-| **Graph visualization** | Nice-to-have for exploring backlinks and concept relationships. Not part of the core operating loop. Obsidian's graph view serves as an interim solution for users who want visual navigation. | Phase 3+ |
-| **Plugin/extension system** | Premature extensibility creates API surface commitments. Stabilize the core loop first. | Phase 4+ |
-| **Real-time file watching** | Polling or watching the raw corpus for changes adds complexity. Manual `ico ingest` is the v1 model. File watching can be added once the ingest pipeline is battle-tested. | Phase 3+ |
-| **Export to external formats** | Beyond Marp slides and markdown reports, exports to PDF, DOCX, or other formats are deferred. Markdown is the universal intermediate format. | Phase 3+ |
+| Feature                           | Rationale                                                                                                                                                                                                                                                   | Earliest Phase       |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| **URL ingest (web scraping)**     | Security surface too large — SSRF, malicious HTML, cookie/session leakage, robots.txt compliance. Requires a hardened fetch pipeline with allowlisting, timeout enforcement, and content sanitization. Not justified for MVP when manual file ingest works. | Phase 3+             |
+| **Chart generation (matplotlib)** | Requires Python runtime as a dependency. Cross-language process management adds complexity without proportional value for MVP. Markdown tables and text-based outputs are sufficient.                                                                       | Phase 3+             |
+| **Vector search**                 | Full-text search over compiled markdown is sufficient for v1 corpus sizes (tens to low hundreds of documents). Vector databases add infrastructure cost and operational complexity that is not justified until corpus scale demands it.                     | Phase 3+             |
+| **Remote mode**                   | No infrastructure for v1. Requires auth, multi-tenancy, object storage, job queues, and network security. Phase 5 deliverable per the master blueprint.                                                                                                     | Phase 5              |
+| **Batch ingest as default**       | Source-by-source ingest with human-in-the-loop is safer for quality control. Batch mode exists as a capability but not as the default posture until the pipeline proves reliable on diverse corpus types.                                                   | Phase 2+ (as opt-in) |
+| **Model fine-tuning**             | Deferred until context and harness learning layers are stable. Fine-tuning without reliable evaluation infrastructure produces unverifiable results. Traces must accumulate first.                                                                          | Phase 5+ (if ever)   |
+| **Multi-user collaboration**      | Local-first, single-user only in v1. Multi-user requires auth, access control, conflict resolution, and shared state management. Phase 5 deliverable.                                                                                                       | Phase 5              |
+| **Graph visualization**           | Nice-to-have for exploring backlinks and concept relationships. Not part of the core operating loop. Obsidian's graph view serves as an interim solution for users who want visual navigation.                                                              | Phase 3+             |
+| **Plugin/extension system**       | Premature extensibility creates API surface commitments. Stabilize the core loop first.                                                                                                                                                                     | Phase 4+             |
+| **Real-time file watching**       | Polling or watching the raw corpus for changes adds complexity. Manual `ico ingest` is the v1 model. File watching can be added once the ingest pipeline is battle-tested.                                                                                  | Phase 3+             |
+| **Export to external formats**    | Beyond Marp slides and markdown reports, exports to PDF, DOCX, or other formats are deferred. Markdown is the universal intermediate format.                                                                                                                | Phase 3+             |
 
 ---
 
@@ -497,18 +499,18 @@ The following features are explicitly out of scope for v1 (Phases 1-4). Each def
 
 Every PR that touches the following areas must verify compliance with these standards.
 
-| Area | Check |
-|------|-------|
-| Claude API calls | Prompt uses XML delimiter envelope via `buildPrompt()` |
-| Database queries | All queries use `db.prepare().run(params)` — no interpolation |
-| File operations | All user-supplied paths pass through `validatePath()` |
-| Filenames | All generated filenames pass through `slugify()` |
-| File ingest | `validateFileSize()` runs before any read |
-| Logging/traces | All output passes through `redactSecrets()` |
-| Error handling | No raw errors, stack traces, or secrets in user-facing output |
-| Dependencies | PR description justifies new dependencies; `pnpm audit` passes |
-| Concurrency | Write operations acquire workspace lock |
-| Secrets | No key material in code, config files, or workspace |
+| Area             | Check                                                          |
+| ---------------- | -------------------------------------------------------------- |
+| Claude API calls | Prompt uses XML delimiter envelope via `buildPrompt()`         |
+| Database queries | All queries use `db.prepare().run(params)` — no interpolation  |
+| File operations  | All user-supplied paths pass through `validatePath()`          |
+| Filenames        | All generated filenames pass through `slugify()`               |
+| File ingest      | `validateFileSize()` runs before any read                      |
+| Logging/traces   | All output passes through `redactSecrets()`                    |
+| Error handling   | No raw errors, stack traces, or secrets in user-facing output  |
+| Dependencies     | PR description justifies new dependencies; `pnpm audit` passes |
+| Concurrency      | Write operations acquire workspace lock                        |
+| Secrets          | No key material in code, config files, or workspace            |
 
 ---
 

@@ -267,75 +267,73 @@ function createMockClient(summaryPages: string[]): ClaudeClient {
   let summaryCallCount = 0;
 
   return {
-    createCompletion: vi.fn().mockImplementation(
-      (system: string, _user: string) => {
-        // Summarize pass — identified by its unique system prompt phrase.
-        if (system.includes('source summary page')) {
-          const page = summaryPages[summaryCallCount] ?? summaryPages[summaryPages.length - 1] ?? '';
-          summaryCallCount++;
-          return ok({
-            content: page,
-            inputTokens: 100,
-            outputTokens: 200,
-            model: 'claude-sonnet-4-6',
-            stopReason: 'end_turn',
-          });
-        }
-
-        // Extract pass.
-        if (system.includes('extract discrete concepts')) {
-          return ok({
-            content: `${MOCK_CONCEPT_PAGE}${PAGE_BREAK}\n${MOCK_ENTITY_PAGE}`,
-            inputTokens: 150,
-            outputTokens: 300,
-            model: 'claude-sonnet-4-6',
-            stopReason: 'end_turn',
-          });
-        }
-
-        // Synthesize pass.
-        if (system.includes('synthesize topic pages')) {
-          return ok({
-            content: MOCK_TOPIC_PAGE,
-            inputTokens: 200,
-            outputTokens: 250,
-            model: 'claude-sonnet-4-6',
-            stopReason: 'end_turn',
-          });
-        }
-
-        // Contradict pass — default returns a contradiction page.
-        if (system.includes('detect contradictions')) {
-          return ok({
-            content: MOCK_CONTRADICTION_PAGE,
-            inputTokens: 120,
-            outputTokens: 180,
-            model: 'claude-sonnet-4-6',
-            stopReason: 'end_turn',
-          });
-        }
-
-        // Gap pass.
-        if (system.includes('knowledge gaps')) {
-          return ok({
-            content: MOCK_GAP_PAGE,
-            inputTokens: 130,
-            outputTokens: 190,
-            model: 'claude-sonnet-4-6',
-            stopReason: 'end_turn',
-          });
-        }
-
-        // Fallback — should not normally be reached.
+    createCompletion: vi.fn().mockImplementation((system: string, _user: string) => {
+      // Summarize pass — identified by its unique system prompt phrase.
+      if (system.includes('source summary page')) {
+        const page = summaryPages[summaryCallCount] ?? summaryPages[summaryPages.length - 1] ?? '';
+        summaryCallCount++;
         return ok({
-          content: '---\ntype: unknown\n---\nFallback response.',
-          inputTokens: 10,
-          outputTokens: 10,
+          content: page,
+          inputTokens: 100,
+          outputTokens: 200,
           model: 'claude-sonnet-4-6',
           stopReason: 'end_turn',
         });
-      },
-    ),
+      }
+
+      // Extract pass.
+      if (system.includes('extract discrete concepts')) {
+        return ok({
+          content: `${MOCK_CONCEPT_PAGE}${PAGE_BREAK}\n${MOCK_ENTITY_PAGE}`,
+          inputTokens: 150,
+          outputTokens: 300,
+          model: 'claude-sonnet-4-6',
+          stopReason: 'end_turn',
+        });
+      }
+
+      // Synthesize pass.
+      if (system.includes('synthesize topic pages')) {
+        return ok({
+          content: MOCK_TOPIC_PAGE,
+          inputTokens: 200,
+          outputTokens: 250,
+          model: 'claude-sonnet-4-6',
+          stopReason: 'end_turn',
+        });
+      }
+
+      // Contradict pass — default returns a contradiction page.
+      if (system.includes('detect contradictions')) {
+        return ok({
+          content: MOCK_CONTRADICTION_PAGE,
+          inputTokens: 120,
+          outputTokens: 180,
+          model: 'claude-sonnet-4-6',
+          stopReason: 'end_turn',
+        });
+      }
+
+      // Gap pass.
+      if (system.includes('knowledge gaps')) {
+        return ok({
+          content: MOCK_GAP_PAGE,
+          inputTokens: 130,
+          outputTokens: 190,
+          model: 'claude-sonnet-4-6',
+          stopReason: 'end_turn',
+        });
+      }
+
+      // Fallback — should not normally be reached.
+      return ok({
+        content: '---\ntype: unknown\n---\nFallback response.',
+        inputTokens: 10,
+        outputTokens: 10,
+        model: 'claude-sonnet-4-6',
+        stopReason: 'end_turn',
+      });
+    }),
   };
 }
 
@@ -347,64 +345,62 @@ function createNoContradictionsClient(summaryPages: string[]): ClaudeClient {
   let summaryCallCount = 0;
 
   return {
-    createCompletion: vi.fn().mockImplementation(
-      (system: string, _user: string) => {
-        if (system.includes('source summary page')) {
-          const page = summaryPages[summaryCallCount] ?? summaryPages[summaryPages.length - 1] ?? '';
-          summaryCallCount++;
-          return ok({
-            content: page,
-            inputTokens: 100,
-            outputTokens: 200,
-            model: 'claude-sonnet-4-6',
-            stopReason: 'end_turn',
-          });
-        }
-        if (system.includes('extract discrete concepts')) {
-          return ok({
-            content: MOCK_CONCEPT_PAGE,
-            inputTokens: 150,
-            outputTokens: 300,
-            model: 'claude-sonnet-4-6',
-            stopReason: 'end_turn',
-          });
-        }
-        if (system.includes('synthesize topic pages')) {
-          return ok({
-            content: MOCK_TOPIC_PAGE,
-            inputTokens: 200,
-            outputTokens: 250,
-            model: 'claude-sonnet-4-6',
-            stopReason: 'end_turn',
-          });
-        }
-        if (system.includes('detect contradictions')) {
-          return ok({
-            content: 'NO_CONTRADICTIONS_FOUND',
-            inputTokens: 120,
-            outputTokens: 5,
-            model: 'claude-sonnet-4-6',
-            stopReason: 'end_turn',
-          });
-        }
-        if (system.includes('knowledge gaps')) {
-          return ok({
-            content: MOCK_GAP_PAGE,
-            inputTokens: 130,
-            outputTokens: 190,
-            model: 'claude-sonnet-4-6',
-            stopReason: 'end_turn',
-          });
-        }
+    createCompletion: vi.fn().mockImplementation((system: string, _user: string) => {
+      if (system.includes('source summary page')) {
+        const page = summaryPages[summaryCallCount] ?? summaryPages[summaryPages.length - 1] ?? '';
+        summaryCallCount++;
         return ok({
-          content: '---\ntype: unknown\n---\nFallback.',
-          inputTokens: 10,
-          outputTokens: 10,
+          content: page,
+          inputTokens: 100,
+          outputTokens: 200,
           model: 'claude-sonnet-4-6',
           stopReason: 'end_turn',
         });
-      },
-    ),
+      }
+      if (system.includes('extract discrete concepts')) {
+        return ok({
+          content: MOCK_CONCEPT_PAGE,
+          inputTokens: 150,
+          outputTokens: 300,
+          model: 'claude-sonnet-4-6',
+          stopReason: 'end_turn',
+        });
+      }
+      if (system.includes('synthesize topic pages')) {
+        return ok({
+          content: MOCK_TOPIC_PAGE,
+          inputTokens: 200,
+          outputTokens: 250,
+          model: 'claude-sonnet-4-6',
+          stopReason: 'end_turn',
+        });
+      }
+      if (system.includes('detect contradictions')) {
+        return ok({
+          content: 'NO_CONTRADICTIONS_FOUND',
+          inputTokens: 120,
+          outputTokens: 5,
+          model: 'claude-sonnet-4-6',
+          stopReason: 'end_turn',
+        });
+      }
+      if (system.includes('knowledge gaps')) {
+        return ok({
+          content: MOCK_GAP_PAGE,
+          inputTokens: 130,
+          outputTokens: 190,
+          model: 'claude-sonnet-4-6',
+          stopReason: 'end_turn',
+        });
+      }
+      return ok({
+        content: '---\ntype: unknown\n---\nFallback.',
+        inputTokens: 10,
+        outputTokens: 10,
+        model: 'claude-sonnet-4-6',
+        stopReason: 'end_turn',
+      });
+    }),
   };
 }
 
@@ -491,8 +487,16 @@ describe('compiler integration', () => {
       expect(ingest2.ok, `ingest2: ${!ingest2.ok ? ingest2.error.message : ''}`).toBe(true);
       if (!ingest2.ok) return;
 
-      const summary1 = makeMockSummary(ingest1.value.sourceId, ingest1.value.path, ingest1.value.hash);
-      const summary2 = makeMockSummary2(ingest2.value.sourceId, ingest2.value.path, ingest2.value.hash);
+      const summary1 = makeMockSummary(
+        ingest1.value.sourceId,
+        ingest1.value.path,
+        ingest1.value.hash,
+      );
+      const summary2 = makeMockSummary2(
+        ingest2.value.sourceId,
+        ingest2.value.path,
+        ingest2.value.hash,
+      );
       const client = createMockClient([summary1, summary2]);
 
       // ---- Pass 1: summarize both sources ----------------------------------
@@ -520,18 +524,21 @@ describe('compiler integration', () => {
       if (!sum1.ok || !sum2.ok) return;
 
       // ---- Pass 2: extract concepts ----------------------------------------
-      const extractResult = await extractConcepts(
-        client,
-        env.db,
-        env.wsRoot,
-        [sum1.value.outputPath, sum2.value.outputPath],
-      );
-      expect(extractResult.ok, `extract: ${!extractResult.ok ? extractResult.error.message : ''}`).toBe(true);
+      const extractResult = await extractConcepts(client, env.db, env.wsRoot, [
+        sum1.value.outputPath,
+        sum2.value.outputPath,
+      ]);
+      expect(
+        extractResult.ok,
+        `extract: ${!extractResult.ok ? extractResult.error.message : ''}`,
+      ).toBe(true);
       if (!extractResult.ok) return;
 
       // ---- Pass 3: synthesize topics ---------------------------------------
       const synthResult = await synthesizeTopics(client, env.db, env.wsRoot);
-      expect(synthResult.ok, `synth: ${!synthResult.ok ? synthResult.error.message : ''}`).toBe(true);
+      expect(synthResult.ok, `synth: ${!synthResult.ok ? synthResult.error.message : ''}`).toBe(
+        true,
+      );
       if (!synthResult.ok) return;
 
       // ---- Pass 4: add backlinks (deterministic) ---------------------------
@@ -541,7 +548,10 @@ describe('compiler integration', () => {
 
       // ---- Pass 5: detect contradictions -----------------------------------
       const contradictResult = await detectContradictions(client, env.db, env.wsRoot);
-      expect(contradictResult.ok, `contradict: ${!contradictResult.ok ? contradictResult.error.message : ''}`).toBe(true);
+      expect(
+        contradictResult.ok,
+        `contradict: ${!contradictResult.ok ? contradictResult.error.message : ''}`,
+      ).toBe(true);
       if (!contradictResult.ok) return;
 
       // ---- Pass 6: identify gaps -------------------------------------------
@@ -553,38 +563,46 @@ describe('compiler integration', () => {
 
       // wiki/sources/ has 2 summary files
       const sourcesDir = resolve(env.wsRoot, 'wiki', 'sources');
-      const summaryFiles = readdirSync(sourcesDir).filter(f => f.endsWith('.md') && f !== '.gitkeep');
+      const summaryFiles = readdirSync(sourcesDir).filter(
+        (f) => f.endsWith('.md') && f !== '.gitkeep',
+      );
       expect(summaryFiles.length).toBe(2);
 
       // wiki/concepts/ has at least 1 concept file (mock returns concept + entity)
       const conceptsDir = resolve(env.wsRoot, 'wiki', 'concepts');
       expect(existsSync(conceptsDir)).toBe(true);
-      const conceptFiles = readdirSync(conceptsDir).filter(f => f.endsWith('.md') && f !== '.gitkeep');
+      const conceptFiles = readdirSync(conceptsDir).filter(
+        (f) => f.endsWith('.md') && f !== '.gitkeep',
+      );
       expect(conceptFiles.length).toBeGreaterThanOrEqual(1);
 
       // wiki/topics/ has at least 1 topic file
       const topicsDir = resolve(env.wsRoot, 'wiki', 'topics');
       expect(existsSync(topicsDir)).toBe(true);
-      const topicFiles = readdirSync(topicsDir).filter(f => f.endsWith('.md') && f !== '.gitkeep');
+      const topicFiles = readdirSync(topicsDir).filter(
+        (f) => f.endsWith('.md') && f !== '.gitkeep',
+      );
       expect(topicFiles.length).toBeGreaterThanOrEqual(1);
 
       // wiki/contradictions/ has at least 1 file
       const contradictionsDir = resolve(env.wsRoot, 'wiki', 'contradictions');
       expect(existsSync(contradictionsDir)).toBe(true);
-      const contradictionFiles = readdirSync(contradictionsDir).filter(f => f.endsWith('.md') && f !== '.gitkeep');
+      const contradictionFiles = readdirSync(contradictionsDir).filter(
+        (f) => f.endsWith('.md') && f !== '.gitkeep',
+      );
       expect(contradictionFiles.length).toBeGreaterThanOrEqual(1);
 
       // wiki/open-questions/ has at least 1 file
       const openQDir = resolve(env.wsRoot, 'wiki', 'open-questions');
       expect(existsSync(openQDir)).toBe(true);
-      const gapFiles = readdirSync(openQDir).filter(f => f.endsWith('.md') && f !== '.gitkeep');
+      const gapFiles = readdirSync(openQDir).filter((f) => f.endsWith('.md') && f !== '.gitkeep');
       expect(gapFiles.length).toBeGreaterThanOrEqual(1);
 
       // ---- Assertions: compilation records in DB ---------------------------
       const compilations = env.db
         .prepare<[], { type: string }>('SELECT type FROM compilations')
         .all();
-      const types = compilations.map(r => r.type);
+      const types = compilations.map((r) => r.type);
       expect(types).toContain('summary');
       expect(types).toContain('concept');
       expect(types).toContain('topic');
@@ -593,7 +611,10 @@ describe('compiler integration', () => {
 
       // ---- Assertions: wiki index rebuilt and lists all pages --------------
       const indexResult = rebuildWikiIndex(env.wsRoot);
-      expect(indexResult.ok, `indexRebuild: ${!indexResult.ok ? indexResult.error.message : ''}`).toBe(true);
+      expect(
+        indexResult.ok,
+        `indexRebuild: ${!indexResult.ok ? indexResult.error.message : ''}`,
+      ).toBe(true);
       if (!indexResult.ok) return;
 
       // Total pages: 2 summaries + at least 2 extracted (concept + entity) + 1 topic + 1 contradiction + 1 gap
@@ -626,7 +647,11 @@ describe('compiler integration', () => {
       expect(ingest.ok).toBe(true);
       if (!ingest.ok) return;
 
-      const summaryPage = makeMockSummary(ingest.value.sourceId, ingest.value.path, ingest.value.hash);
+      const summaryPage = makeMockSummary(
+        ingest.value.sourceId,
+        ingest.value.path,
+        ingest.value.hash,
+      );
       const client = createMockClient([summaryPage]);
 
       const sumResult = await summarizeSource(
@@ -666,7 +691,11 @@ describe('compiler integration', () => {
       expect(ingest.ok).toBe(true);
       if (!ingest.ok) return;
 
-      const summaryPage = makeMockSummary(ingest.value.sourceId, ingest.value.path, ingest.value.hash);
+      const summaryPage = makeMockSummary(
+        ingest.value.sourceId,
+        ingest.value.path,
+        ingest.value.hash,
+      );
       const client = createMockClient([summaryPage]);
 
       const sumResult = await summarizeSource(
@@ -681,12 +710,9 @@ describe('compiler integration', () => {
       expect(sumResult.ok).toBe(true);
       if (!sumResult.ok) return;
 
-      const extractResult = await extractConcepts(
-        client,
-        env.db,
-        env.wsRoot,
-        [sumResult.value.outputPath],
-      );
+      const extractResult = await extractConcepts(client, env.db, env.wsRoot, [
+        sumResult.value.outputPath,
+      ]);
       expect(extractResult.ok).toBe(true);
       if (!extractResult.ok) return;
       expect(extractResult.value.length).toBeGreaterThan(0);
@@ -718,7 +744,11 @@ describe('compiler integration', () => {
       expect(ingest.ok).toBe(true);
       if (!ingest.ok) return;
 
-      const summaryPage = makeMockSummary(ingest.value.sourceId, ingest.value.path, ingest.value.hash);
+      const summaryPage = makeMockSummary(
+        ingest.value.sourceId,
+        ingest.value.path,
+        ingest.value.hash,
+      );
       const client = createMockClient([summaryPage]);
 
       const sumResult = await summarizeSource(
@@ -733,12 +763,9 @@ describe('compiler integration', () => {
       expect(sumResult.ok).toBe(true);
       if (!sumResult.ok) return;
 
-      const extractResult = await extractConcepts(
-        client,
-        env.db,
-        env.wsRoot,
-        [sumResult.value.outputPath],
-      );
+      const extractResult = await extractConcepts(client, env.db, env.wsRoot, [
+        sumResult.value.outputPath,
+      ]);
       expect(extractResult.ok).toBe(true);
       if (!extractResult.ok) return;
       expect(extractResult.value.length).toBeGreaterThan(0);
@@ -758,7 +785,11 @@ describe('compiler integration', () => {
       expect(ingest.ok).toBe(true);
       if (!ingest.ok) return;
 
-      const summaryPage = makeMockSummary(ingest.value.sourceId, ingest.value.path, ingest.value.hash);
+      const summaryPage = makeMockSummary(
+        ingest.value.sourceId,
+        ingest.value.path,
+        ingest.value.hash,
+      );
       const client = createMockClient([summaryPage]);
 
       const sumResult = await summarizeSource(
@@ -775,7 +806,7 @@ describe('compiler integration', () => {
 
       const absPath = resolve(env.wsRoot, sumResult.value.outputPath);
       const content = readFileSync(absPath, 'utf-8');
-      const wordCount = content.split(/\s+/).filter(w => w.length > 0).length;
+      const wordCount = content.split(/\s+/).filter((w) => w.length > 0).length;
       expect(wordCount).toBeGreaterThanOrEqual(10);
       expect(wordCount).toBeLessThanOrEqual(5000);
     });
@@ -801,7 +832,11 @@ describe('compiler integration', () => {
       expect(ingest1.ok).toBe(true);
       if (!ingest1.ok) return;
 
-      const summaryPage = makeMockSummary(ingest1.value.sourceId, ingest1.value.path, ingest1.value.hash);
+      const summaryPage = makeMockSummary(
+        ingest1.value.sourceId,
+        ingest1.value.path,
+        ingest1.value.hash,
+      );
       const client = createMockClient([summaryPage]);
 
       // Summarize the source — this writes a compilation record with compiled_at = NOW.
@@ -837,7 +872,7 @@ describe('compiler integration', () => {
       if (!afterStale.ok) return;
       expect(afterStale.value.length).toBeGreaterThan(0);
 
-      const staleEntry = afterStale.value.find(p => p.type === 'summary');
+      const staleEntry = afterStale.value.find((p) => p.type === 'summary');
       expect(staleEntry).toBeDefined();
       expect(staleEntry?.reason).toBe('source-changed');
       expect(staleEntry?.sourceId).toBe(ingest1.value.sourceId);
@@ -861,9 +896,13 @@ describe('compiler integration', () => {
       const beforeResult = getUncompiledSources(env.db);
       expect(beforeResult.ok).toBe(true);
       if (!beforeResult.ok) return;
-      expect(beforeResult.value.some(s => s.id === ingest.value.sourceId)).toBe(true);
+      expect(beforeResult.value.some((s) => s.id === ingest.value.sourceId)).toBe(true);
 
-      const summaryPage = makeMockSummary(ingest.value.sourceId, ingest.value.path, ingest.value.hash);
+      const summaryPage = makeMockSummary(
+        ingest.value.sourceId,
+        ingest.value.path,
+        ingest.value.hash,
+      );
       const client = createMockClient([summaryPage]);
 
       const sumResult = await summarizeSource(
@@ -914,19 +953,35 @@ describe('compiler integration', () => {
       expect(ingest2.ok).toBe(true);
       if (!ingest1.ok || !ingest2.ok) return;
 
-      const summary1 = makeMockSummary(ingest1.value.sourceId, ingest1.value.path, ingest1.value.hash);
-      const summary2 = makeMockSummary2(ingest2.value.sourceId, ingest2.value.path, ingest2.value.hash);
+      const summary1 = makeMockSummary(
+        ingest1.value.sourceId,
+        ingest1.value.path,
+        ingest1.value.hash,
+      );
+      const summary2 = makeMockSummary2(
+        ingest2.value.sourceId,
+        ingest2.value.path,
+        ingest2.value.hash,
+      );
       const client = createMockClient([summary1, summary2]);
 
       const sum1 = await summarizeSource(
-        client, env.db, env.wsRoot,
-        ingest1.value.sourceId, '# Link Source One\n\nKnowledge about [[link-source-two]] compilation.',
-        ingest1.value.path, ingest1.value.hash,
+        client,
+        env.db,
+        env.wsRoot,
+        ingest1.value.sourceId,
+        '# Link Source One\n\nKnowledge about [[link-source-two]] compilation.',
+        ingest1.value.path,
+        ingest1.value.hash,
       );
       const sum2 = await summarizeSource(
-        client, env.db, env.wsRoot,
-        ingest2.value.sourceId, '# Link Source Two\n\nContent about [[link-source-one]].',
-        ingest2.value.path, ingest2.value.hash,
+        client,
+        env.db,
+        env.wsRoot,
+        ingest2.value.sourceId,
+        '# Link Source Two\n\nContent about [[link-source-one]].',
+        ingest2.value.path,
+        ingest2.value.hash,
       );
       expect(sum1.ok).toBe(true);
       expect(sum2.ok).toBe(true);
@@ -939,8 +994,8 @@ describe('compiler integration', () => {
       // Capture all file contents after first run.
       const sourcesDir = resolve(env.wsRoot, 'wiki', 'sources');
       const filesAfterFirst = readdirSync(sourcesDir)
-        .filter(f => f.endsWith('.md') && f !== '.gitkeep')
-        .map(f => ({
+        .filter((f) => f.endsWith('.md') && f !== '.gitkeep')
+        .map((f) => ({
           name: f,
           content: readFileSync(join(sourcesDir, f), 'utf-8'),
         }));
@@ -952,15 +1007,15 @@ describe('compiler integration', () => {
 
       // File contents must be identical after the second run.
       const filesAfterSecond = readdirSync(sourcesDir)
-        .filter(f => f.endsWith('.md') && f !== '.gitkeep')
-        .map(f => ({
+        .filter((f) => f.endsWith('.md') && f !== '.gitkeep')
+        .map((f) => ({
           name: f,
           content: readFileSync(join(sourcesDir, f), 'utf-8'),
         }));
 
       expect(filesAfterSecond.length).toBe(filesAfterFirst.length);
       for (const after of filesAfterSecond) {
-        const before = filesAfterFirst.find(f => f.name === after.name);
+        const before = filesAfterFirst.find((f) => f.name === after.name);
         expect(before).toBeDefined();
         expect(after.content).toBe(before!.content);
       }
@@ -1000,19 +1055,35 @@ describe('compiler integration', () => {
       expect(ingest2.ok).toBe(true);
       if (!ingest1.ok || !ingest2.ok) return;
 
-      const summary1 = makeMockSummary(ingest1.value.sourceId, ingest1.value.path, ingest1.value.hash);
-      const summary2 = makeMockSummary2(ingest2.value.sourceId, ingest2.value.path, ingest2.value.hash);
+      const summary1 = makeMockSummary(
+        ingest1.value.sourceId,
+        ingest1.value.path,
+        ingest1.value.hash,
+      );
+      const summary2 = makeMockSummary2(
+        ingest2.value.sourceId,
+        ingest2.value.path,
+        ingest2.value.hash,
+      );
       const client = createNoContradictionsClient([summary1, summary2]);
 
       const sum1 = await summarizeSource(
-        client, env.db, env.wsRoot,
-        ingest1.value.sourceId, '# No Contradiction One\n\nHarmless content.',
-        ingest1.value.path, ingest1.value.hash,
+        client,
+        env.db,
+        env.wsRoot,
+        ingest1.value.sourceId,
+        '# No Contradiction One\n\nHarmless content.',
+        ingest1.value.path,
+        ingest1.value.hash,
       );
       const sum2 = await summarizeSource(
-        client, env.db, env.wsRoot,
-        ingest2.value.sourceId, '# No Contradiction Two\n\nAlso harmless.',
-        ingest2.value.path, ingest2.value.hash,
+        client,
+        env.db,
+        env.wsRoot,
+        ingest2.value.sourceId,
+        '# No Contradiction Two\n\nAlso harmless.',
+        ingest2.value.path,
+        ingest2.value.hash,
       );
       expect(sum1.ok).toBe(true);
       expect(sum2.ok).toBe(true);
@@ -1026,7 +1097,7 @@ describe('compiler integration', () => {
 
       const contradictionsDir = resolve(env.wsRoot, 'wiki', 'contradictions');
       const contraFiles = existsSync(contradictionsDir)
-        ? readdirSync(contradictionsDir).filter(f => f.endsWith('.md') && f !== '.gitkeep')
+        ? readdirSync(contradictionsDir).filter((f) => f.endsWith('.md') && f !== '.gitkeep')
         : [];
       expect(contraFiles).toHaveLength(0);
     });

@@ -64,7 +64,7 @@ describe('writeTrace — JSONL file creation', () => {
     expect(existsSync(filePath)).toBe(true);
 
     const content = readFileSync(filePath, 'utf-8');
-    const lines = content.split('\n').filter(l => l.trim() !== '');
+    const lines = content.split('\n').filter((l) => l.trim() !== '');
     expect(lines).toHaveLength(1);
 
     const envelope = JSON.parse(lines[0]!) as Record<string, unknown>;
@@ -108,7 +108,9 @@ describe('writeTrace — prev_hash integrity chain', () => {
     if (!first.ok) return;
 
     const filePath = todayJsonlPath(workspacePath);
-    const firstLine = readFileSync(filePath, 'utf-8').split('\n').filter(l => l.trim() !== '')[0]!;
+    const firstLine = readFileSync(filePath, 'utf-8')
+      .split('\n')
+      .filter((l) => l.trim() !== '')[0]!;
     const expectedHash = sha256Hex(firstLine);
 
     const second = writeTrace(db, workspacePath, 'chain.second', { seq: 2 });
@@ -279,7 +281,7 @@ describe('readTraces — ordering', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const timestamps = result.value.map(r => r.timestamp);
+    const timestamps = result.value.map((r) => r.timestamp);
     const sorted = [...timestamps].sort();
     expect(timestamps).toEqual(sorted);
   });
@@ -291,9 +293,15 @@ describe('readTraces — ordering', () => {
 
 describe('writeTrace — audit/log.md', () => {
   it('appends a pipe-delimited row to audit/log.md', () => {
-    const result = writeTrace(db, workspacePath, 'log.test', {}, {
-      summary: 'testing log append',
-    });
+    const result = writeTrace(
+      db,
+      workspacePath,
+      'log.test',
+      {},
+      {
+        summary: 'testing log append',
+      },
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 

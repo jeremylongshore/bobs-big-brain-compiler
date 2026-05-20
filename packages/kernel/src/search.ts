@@ -182,10 +182,7 @@ export function createSearchIndex(db: Database): Result<void, Error> {
  * @param workspacePath - Absolute path to the workspace root.
  * @returns `ok(count)` with the number of pages indexed, or `err(error)`.
  */
-export function indexCompiledPages(
-  db: Database,
-  workspacePath: string,
-): Result<number, Error> {
+export function indexCompiledPages(db: Database, workspacePath: string): Result<number, Error> {
   try {
     db.prepare('DELETE FROM pages_fts').run();
   } catch (e) {
@@ -208,9 +205,7 @@ export function indexCompiledPages(
 
     let files: string[];
     try {
-      files = readdirSync(dirPath).filter(
-        (f) => f.endsWith('.md') && f !== '.gitkeep',
-      );
+      files = readdirSync(dirPath).filter((f) => f.endsWith('.md') && f !== '.gitkeep');
     } catch (e) {
       return err(e instanceof Error ? e : new Error(String(e)));
     }
@@ -326,15 +321,79 @@ const FETCH_MULTIPLIER = 3;
  * they do not appear in wiki page bodies.
  */
 const SEARCH_STOP_WORDS = new Set([
-  'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-  'should', 'may', 'might', 'shall', 'can',
-  'what', 'which', 'who', 'whom', 'whose', 'when', 'where', 'why', 'how',
-  'that', 'this', 'these', 'those', 'it', 'its', 'in', 'on', 'at', 'to',
-  'for', 'of', 'and', 'or', 'but', 'not', 'with', 'from', 'by', 'as', 'if',
-  'so', 'me', 'my', 'you', 'your', 'we', 'our', 'they', 'their', 'i',
-  'define', 'explain', 'describe', 'tell', 'please', 'give', 'show',
-  'also', 'about',
+  'a',
+  'an',
+  'the',
+  'is',
+  'are',
+  'was',
+  'were',
+  'be',
+  'been',
+  'being',
+  'have',
+  'has',
+  'had',
+  'do',
+  'does',
+  'did',
+  'will',
+  'would',
+  'could',
+  'should',
+  'may',
+  'might',
+  'shall',
+  'can',
+  'what',
+  'which',
+  'who',
+  'whom',
+  'whose',
+  'when',
+  'where',
+  'why',
+  'how',
+  'that',
+  'this',
+  'these',
+  'those',
+  'it',
+  'its',
+  'in',
+  'on',
+  'at',
+  'to',
+  'for',
+  'of',
+  'and',
+  'or',
+  'but',
+  'not',
+  'with',
+  'from',
+  'by',
+  'as',
+  'if',
+  'so',
+  'me',
+  'my',
+  'you',
+  'your',
+  'we',
+  'our',
+  'they',
+  'their',
+  'i',
+  'define',
+  'explain',
+  'describe',
+  'tell',
+  'please',
+  'give',
+  'show',
+  'also',
+  'about',
 ]);
 
 /**

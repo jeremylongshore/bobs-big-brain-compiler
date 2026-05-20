@@ -23,11 +23,11 @@ recorded honestly — pre-release, not retroactively.
 
 Last 3 runs on `main`:
 
-| Workflow | Conclusion | Branch | Commit |
-|---|---|---|---|
-| Release | success | main | f7bd287 |
-| CI | success | main | f7bd287 |
-| CI | success | main | 625691e |
+| Workflow | Conclusion | Branch | Commit  |
+| -------- | ---------- | ------ | ------- |
+| Release  | success    | main   | f7bd287 |
+| CI       | success    | main   | f7bd287 |
+| CI       | success    | main   | 625691e |
 
 All four CI jobs (Lint, Test, Typecheck, Security Audit) green on
 every merged PR since #67.
@@ -59,12 +59,12 @@ verified offline; live scoring is an operator-time exercise.
 
 Targets from epic-10 E10-B09 vs current:
 
-| Package | Lines | Target | Status |
-|---|---|---|---|
-| types | 100.0% | 100% | ✅ |
-| kernel | 84.6% | 90% | ⚠ -5.4 |
-| compiler | 62.3% | 80% | ⚠ -17.7 |
-| cli | 45.2% | 70% | ⚠ -24.8 |
+| Package  | Lines  | Target | Status  |
+| -------- | ------ | ------ | ------- |
+| types    | 100.0% | 100%   | ✅      |
+| kernel   | 84.6%  | 90%    | ⚠ -5.4  |
+| compiler | 62.3%  | 80%    | ⚠ -17.7 |
+| cli      | 45.2%  | 70%    | ⚠ -24.8 |
 
 Aggregate across the repo: **75.4% lines / 60.9% branches / 82.9%
 functions / 77.1% statements** across 1,210 passing tests.
@@ -113,10 +113,10 @@ project's conventional-commits-derived style.
 `bd list --status open --flat` returns 6 items. Critical (P0)
 breakdown:
 
-| Bead | Why open |
-|---|---|
-| `intentional-cognition-os-2rd` | Epic 10 umbrella — closes when its children all close |
-| `intentional-cognition-os-2rd.11` | This bead — closes when this doc lands |
+| Bead                              | Why open                                                  |
+| --------------------------------- | --------------------------------------------------------- |
+| `intentional-cognition-os-2rd`    | Epic 10 umbrella — closes when its children all close     |
+| `intentional-cognition-os-2rd.11` | This bead — closes when this doc lands                    |
 | `intentional-cognition-os-2rd.12` | E10-B12 v1.0 Release Cut — blocked on this bead by design |
 
 Non-critical open: 1 × P2 (E9-B11 Recall Export — Anki format only,
@@ -144,10 +144,10 @@ via `ico --help`):
 > ico init → ico mount → ico ingest → ico compile → ico status
 >
 > Advanced:
->   ico ask       Query your compiled knowledge
->   ico research  Multi-agent research with episodic workspaces
->   ico render    Generate reports, slides, briefings
->   ico promote   File artifacts back into the knowledge base
+> ico ask Query your compiled knowledge
+> ico research Multi-agent research with episodic workspaces
+> ico render Generate reports, slides, briefings
+> ico promote File artifacts back into the knowledge base
 
 All 14 commands wired through commander. Each command's
 end-to-end happy-path verified by integration tests under
@@ -158,23 +158,23 @@ end-to-end happy-path verified by integration tests under
 Benchmark suite (E10-B06) shipped in PRs #68 → #72. Measured on
 dev box, v0.22.0:
 
-| Command | Target | Measured | Headroom |
-|---|---|---|---|
-| `ico ingest <file>` | < 2 s / source | median 6–10 ms / file | 200×+ |
-| `ico lint` | < 30 s | median 11–27 ms (30 wiki pages) | 1100×+ |
-| `ico compile <topic>` | < 30 s / topic | Claude-gated — infra ready | — |
-| `ico ask <question>` | < 10 s / query | Claude-gated — infra ready | — |
-| `ico render report` | < 5 s / report | Claude-gated — infra ready | — |
+| Command               | Target         | Measured                        | Headroom |
+| --------------------- | -------------- | ------------------------------- | -------- |
+| `ico ingest <file>`   | < 2 s / source | median 6–10 ms / file           | 200×+    |
+| `ico lint`            | < 30 s         | median 11–27 ms (30 wiki pages) | 1100×+   |
+| `ico compile <topic>` | < 30 s / topic | Claude-gated — infra ready      | —        |
+| `ico ask <question>`  | < 10 s / query | Claude-gated — infra ready      | —        |
+| `ico render report`   | < 5 s / report | Claude-gated — infra ready      | —        |
 
 Headroom uses the upper-bound of the measured median (the conservative figure)
 against the target. Authoritative numbers live in the E10-B06 bead close-reason.
 
 3× degradation gate (500 source → 50 source per-unit ratio):
 
-| Scenario | Ratio | Cap | Verdict |
-|---|---|---|---|
-| ingest | 1.25× | 3.0× | ✅ PASS |
-| lint | 0.33× | 3.0× | ✅ PASS (faster at scale — cache amortisation) |
+| Scenario | Ratio | Cap  | Verdict                                        |
+| -------- | ----- | ---- | ---------------------------------------------- |
+| ingest   | 1.25× | 3.0× | ✅ PASS                                        |
+| lint     | 0.33× | 3.0× | ✅ PASS (faster at scale — cache amortisation) |
 
 System scales gracefully on all measured non-Claude commands.
 

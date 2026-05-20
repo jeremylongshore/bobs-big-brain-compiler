@@ -32,9 +32,7 @@ import type { IngestResult } from './types.js';
  *
  * @param filePath - Absolute or workspace-relative path to the PDF file.
  */
-export async function ingestPdf(
-  filePath: string,
-): Promise<Result<IngestResult, Error>> {
+export async function ingestPdf(filePath: string): Promise<Result<IngestResult, Error>> {
   // --- 1. Read raw bytes ---------------------------------------------------
   let buffer: Buffer;
   try {
@@ -76,10 +74,9 @@ export async function ingestPdf(
 
     if (cause instanceof PasswordException) {
       return err(
-        new Error(
-          `PDF is password-protected and cannot be read without a password: ${filePath}`,
-          { cause },
-        ),
+        new Error(`PDF is password-protected and cannot be read without a password: ${filePath}`, {
+          cause,
+        }),
       );
     }
     if (cause instanceof InvalidPDFException) {
@@ -91,10 +88,9 @@ export async function ingestPdf(
     }
     if (cause instanceof FormatError) {
       return err(
-        new Error(
-          `PDF file has malformed structure and could not be parsed: ${filePath}`,
-          { cause },
-        ),
+        new Error(`PDF file has malformed structure and could not be parsed: ${filePath}`, {
+          cause,
+        }),
       );
     }
 
@@ -104,18 +100,14 @@ export async function ingestPdf(
     // transfer layer before any format-specific validation takes place.
     if (cause instanceof DOMException) {
       return err(
-        new Error(
-          `PDF file is corrupted or not a valid PDF (unreadable data): ${filePath}`,
-          { cause },
-        ),
+        new Error(`PDF file is corrupted or not a valid PDF (unreadable data): ${filePath}`, {
+          cause,
+        }),
       );
     }
 
-    const message =
-      cause instanceof Error ? cause.message : String(cause);
-    return err(
-      new Error(`Unexpected error while parsing PDF: ${message}`, { cause }),
-    );
+    const message = cause instanceof Error ? cause.message : String(cause);
+    return err(new Error(`Unexpected error while parsing PDF: ${message}`, { cause }));
   }
 
   await parser.destroy().catch(() => undefined);
@@ -126,7 +118,7 @@ export async function ingestPdf(
 
   // --- 4. Extract document metadata from Info dictionary ------------------
   // `infoResult.info` is typed as `any` by pdf-parse — access defensively.
-   
+
   const info: Record<string, unknown> =
     typeof infoResult.info === 'object' && infoResult.info !== null
       ? (infoResult.info as Record<string, unknown>)
@@ -140,10 +132,7 @@ export async function ingestPdf(
   try {
     const dateNode = infoResult.getDateNode();
     const creationDate =
-      dateNode.CreationDate ??
-      dateNode.XmpCreateDate ??
-      dateNode.XapCreateDate ??
-      null;
+      dateNode.CreationDate ?? dateNode.XmpCreateDate ?? dateNode.XapCreateDate ?? null;
     if (creationDate instanceof Date && !isNaN(creationDate.getTime())) {
       date = creationDate.toISOString();
     }
@@ -152,10 +141,7 @@ export async function ingestPdf(
   }
 
   // --- 5. Word count -------------------------------------------------------
-  const wordCount =
-    content.trim().length === 0
-      ? 0
-      : content.trim().split(/\s+/).length;
+  const wordCount = content.trim().length === 0 ? 0 : content.trim().split(/\s+/).length;
 
   // --- 6. Image-only PDF detection -----------------------------------------
   const extraMetadata: Record<string, unknown> = {};

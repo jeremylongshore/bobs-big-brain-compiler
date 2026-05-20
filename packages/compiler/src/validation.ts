@@ -254,9 +254,7 @@ export function validateFrontmatter(
  *
  * @param filePath - Absolute path to the compiled `.md` page file.
  */
-export function validateCompiledPage(
-  filePath: string,
-): Result<ValidationResult, Error> {
+export function validateCompiledPage(filePath: string): Result<ValidationResult, Error> {
   // 1. Read the file.
   let raw: string;
   try {

@@ -29,10 +29,10 @@ import { rebuildWikiIndex } from './wiki-index.js';
  * Discriminated error codes for unpromote failures.
  */
 export type UnpromoteErrorCode =
-  | 'NOT_PROMOTED'           // No promotions record for this target path
-  | 'FILE_NOT_FOUND'         // Promotions record exists but file is gone
-  | 'DELETE_FAILED'          // unlinkSync or DB delete failed
-  | 'AUDIT_WRITE_FAILED'    // Trace write or audit log append failed
+  | 'NOT_PROMOTED' // No promotions record for this target path
+  | 'FILE_NOT_FOUND' // Promotions record exists but file is gone
+  | 'DELETE_FAILED' // unlinkSync or DB delete failed
+  | 'AUDIT_WRITE_FAILED' // Trace write or audit log append failed
   | 'INDEX_REBUILD_FAILED'; // Wiki index rebuild failed after unpromote
 
 /**
@@ -113,16 +113,19 @@ export function unpromoteArtifact(
   // -------------------------------------------------------------------------
 
   const record = db
-    .prepare<[string], PromotionRecord>(
-      'SELECT id, source_path, target_path, target_type FROM promotions WHERE target_path = ?',
-    )
+    .prepare<
+      [string],
+      PromotionRecord
+    >('SELECT id, source_path, target_path, target_type FROM promotions WHERE target_path = ?')
     .get(targetPath);
 
   if (record === undefined) {
-    return err(new UnpromoteError(
-      'NOT_PROMOTED',
-      `No promotion record found for target path: ${targetPath}`,
-    ));
+    return err(
+      new UnpromoteError(
+        'NOT_PROMOTED',
+        `No promotion record found for target path: ${targetPath}`,
+      ),
+    );
   }
 
   const { source_path: sourcePath, target_type: targetType } = record;
@@ -142,10 +145,9 @@ export function unpromoteArtifact(
   const absoluteTarget = join(workspacePath, targetPath);
 
   if (!existsSync(absoluteTarget)) {
-    return err(new UnpromoteError(
-      'FILE_NOT_FOUND',
-      `Promoted file not found on disk: ${targetPath}`,
-    ));
+    return err(
+      new UnpromoteError('FILE_NOT_FOUND', `Promoted file not found on disk: ${targetPath}`),
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -156,10 +158,9 @@ export function unpromoteArtifact(
     unlinkSync(absoluteTarget);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    return err(new UnpromoteError(
-      'DELETE_FAILED',
-      `Failed to delete promoted file ${targetPath}: ${msg}`,
-    ));
+    return err(
+      new UnpromoteError('DELETE_FAILED', `Failed to delete promoted file ${targetPath}: ${msg}`),
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -170,10 +171,12 @@ export function unpromoteArtifact(
     db.prepare<[string], void>('DELETE FROM promotions WHERE target_path = ?').run(targetPath);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    return err(new UnpromoteError(
-      'DELETE_FAILED',
-      `Failed to delete promotions record for ${targetPath}: ${msg}`,
-    ));
+    return err(
+      new UnpromoteError(
+        'DELETE_FAILED',
+        `Failed to delete promotions record for ${targetPath}: ${msg}`,
+      ),
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -189,10 +192,12 @@ export function unpromoteArtifact(
   );
 
   if (!traceResult.ok) {
-    return err(new UnpromoteError(
-      'AUDIT_WRITE_FAILED',
-      `Failed to write trace event: ${traceResult.error.message}`,
-    ));
+    return err(
+      new UnpromoteError(
+        'AUDIT_WRITE_FAILED',
+        `Failed to write trace event: ${traceResult.error.message}`,
+      ),
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -206,10 +211,12 @@ export function unpromoteArtifact(
   );
 
   if (!auditResult.ok) {
-    return err(new UnpromoteError(
-      'AUDIT_WRITE_FAILED',
-      `Failed to append audit log: ${auditResult.error.message}`,
-    ));
+    return err(
+      new UnpromoteError(
+        'AUDIT_WRITE_FAILED',
+        `Failed to append audit log: ${auditResult.error.message}`,
+      ),
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -218,10 +225,12 @@ export function unpromoteArtifact(
 
   const indexResult = rebuildWikiIndex(workspacePath);
   if (!indexResult.ok) {
-    return err(new UnpromoteError(
-      'INDEX_REBUILD_FAILED',
-      `Failed to rebuild wiki index: ${indexResult.error.message}`,
-    ));
+    return err(
+      new UnpromoteError(
+        'INDEX_REBUILD_FAILED',
+        `Failed to rebuild wiki index: ${indexResult.error.message}`,
+      ),
+    );
   }
 
   return ok({ targetPath, sourcePath, targetType, dryRun: false });

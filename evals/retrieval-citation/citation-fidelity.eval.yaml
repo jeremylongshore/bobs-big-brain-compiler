@@ -17,5 +17,5 @@ description: |
   every artifact before promotion or publication.
 type: citation
 target_file: outputs/reports/sample.md
-require_citations: false   # zero citations is acceptable for some artifacts
-threshold: 1.0             # any hallucination fails the eval
+require_citations: false # zero citations is acceptable for some artifacts
+threshold: 1.0 # any hallucination fails the eval

@@ -319,10 +319,7 @@ describe('detectOrphans', () => {
     const wikiPath = join(tmpBase, 'wiki');
     mkdirSync(join(wikiPath, 'sources'), { recursive: true });
 
-    writeFile(
-      join(wikiPath, 'sources', 'source-a.md'),
-      '# Source A\n\nNo incoming links.',
-    );
+    writeFile(join(wikiPath, 'sources', 'source-a.md'), '# Source A\n\nNo incoming links.');
 
     const allPages = [join(wikiPath, 'sources', 'source-a.md')];
     expect(detectOrphans(wikiPath, allPages)).toEqual([]);
@@ -348,10 +345,7 @@ describe('detectOrphans', () => {
     const wikiPath = join(tmpBase, 'wiki');
     mkdirSync(join(wikiPath, 'concepts'), { recursive: true });
 
-    writeFile(
-      join(wikiPath, 'concepts', 'self-ref.md'),
-      '# Self Ref\n\nSee [[self-ref]].',
-    );
+    writeFile(join(wikiPath, 'concepts', 'self-ref.md'), '# Self Ref\n\nSee [[self-ref]].');
 
     const allPages = [join(wikiPath, 'concepts', 'self-ref.md')];
     // The self-ref slug IS in the referenced set, so detectOrphans correctly
@@ -505,7 +499,7 @@ describe('runLint', () => {
     // the entity page by naming the concept file "type-inference.md".
     // Both slugs end up in the referenced-set → no orphans.
     const conceptContent = VALID_CONCEPT_PAGE; // references [[another-concept]]
-    const entityContent = VALID_ENTITY_PAGE;   // references [[type-inference]]
+    const entityContent = VALID_ENTITY_PAGE; // references [[type-inference]]
 
     writeFile(join(ws.root, 'wiki', 'concepts', 'type-inference.md'), conceptContent);
     writeFile(join(ws.root, 'wiki', 'entities', 'another-concept.md'), entityContent);
@@ -568,7 +562,11 @@ describe('runLint', () => {
     const db = initDatabase(ws.dbPath);
     if (!db.ok) throw db.error;
 
-    insertSource(db.value, { id: 's1', path: 'raw/notes/a.md', ingestedAt: '2026-01-01T00:00:00.000Z' });
+    insertSource(db.value, {
+      id: 's1',
+      path: 'raw/notes/a.md',
+      ingestedAt: '2026-01-01T00:00:00.000Z',
+    });
     closeDatabase(db.value);
 
     const result = runLint(ws.root, ws.dbPath);
@@ -663,10 +661,7 @@ tags: []
 # Orphan
 `,
     );
-    writeFile(
-      join(ws.root, 'wiki', 'concepts', 'broken.md'),
-      INVALID_CONCEPT_PAGE,
-    );
+    writeFile(join(ws.root, 'wiki', 'concepts', 'broken.md'), INVALID_CONCEPT_PAGE);
 
     const result = runLint(ws.root, ws.dbPath);
 

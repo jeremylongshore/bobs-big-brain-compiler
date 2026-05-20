@@ -122,11 +122,7 @@ export interface CitationEvalSpec extends BaseEvalSpec {
 }
 
 /** Union of every supported spec shape. */
-export type EvalSpec =
-  | RetrievalEvalSpec
-  | SmokeEvalSpec
-  | CompilationEvalSpec
-  | CitationEvalSpec;
+export type EvalSpec = RetrievalEvalSpec | SmokeEvalSpec | CompilationEvalSpec | CitationEvalSpec;
 
 // ---------------------------------------------------------------------------
 // Result shape

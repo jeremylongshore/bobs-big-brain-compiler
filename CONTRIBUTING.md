@@ -58,12 +58,12 @@ pnpm lint
 
 ### Branch Strategy
 
-| Branch | Purpose |
-|--------|---------|
-| `main` | Production-ready code |
-| `feature/*` | New features |
-| `fix/*` | Bug fixes |
-| `docs/*` | Documentation changes |
+| Branch      | Purpose               |
+| ----------- | --------------------- |
+| `main`      | Production-ready code |
+| `feature/*` | New features          |
+| `fix/*`     | Bug fixes             |
+| `docs/*`    | Documentation changes |
 
 ### Testing
 
@@ -86,25 +86,25 @@ pnpm --filter intentional-cognition-os test -- --reporter=verbose
 
 The four workspace packages each have their own vitest suite:
 
-| Workspace | Published name |
-|---|---|
-| `@ico/types` | private (workspace-only) |
-| `@ico/kernel` | private (workspace-only) |
-| `@ico/compiler` | private (workspace-only) |
-| `packages/cli` | **`intentional-cognition-os`** — the only npm-published package |
+| Workspace       | Published name                                                  |
+| --------------- | --------------------------------------------------------------- |
+| `@ico/types`    | private (workspace-only)                                        |
+| `@ico/kernel`   | private (workspace-only)                                        |
+| `@ico/compiler` | private (workspace-only)                                        |
+| `packages/cli`  | **`intentional-cognition-os`** — the only npm-published package |
 
 The full suite currently runs 1100+ tests in ~90 s.
 
 **Testing patterns** (see `000-docs/015-AT-TEST-testing-strategy.md` for the canonical reference):
 
-| Pattern | Why |
-|---|---|
+| Pattern                                                                    | Why                                                                                                                                                    |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `Result<T, E>` everywhere — never `throw` from kernel/compiler public APIs | Lets callers reason about every failure mode with type-safe `if (!r.ok) return err(...)`. Tests assert `r.ok === false` and inspect `r.error.message`. |
-| Atomic writes (`.tmp + renameSync`) for every file mutation | Disk failure mid-write leaves no partial file. Verified by `packages/compiler/src/recall/disk-full.test.ts`. |
-| `vi.fn()` mocks for `ClaudeClient` in agent / compiler-pass tests | Keeps tests offline, deterministic, free. Production code accepts an injected client, so tests never hit Anthropic. |
-| Real workspace + real SQLite in integration tests | Faster than spawning subprocesses and catches the kernel/compiler interaction the unit tests miss. See `recall-pipeline.integration.test.ts`. |
-| Trace assertions via `readTraces(db, { eventType })` | Asserting trace emission is the contract layer between the operator and the system; per 011-AT-TRSC every mutation emits at least one event. |
-| `correlation_id` on multi-event flows | Group related events for audit reconstruction. Tests assert the same `correlation_id` appears on `lint.run` + `lint.result`, etc. |
+| Atomic writes (`.tmp + renameSync`) for every file mutation                | Disk failure mid-write leaves no partial file. Verified by `packages/compiler/src/recall/disk-full.test.ts`.                                           |
+| `vi.fn()` mocks for `ClaudeClient` in agent / compiler-pass tests          | Keeps tests offline, deterministic, free. Production code accepts an injected client, so tests never hit Anthropic.                                    |
+| Real workspace + real SQLite in integration tests                          | Faster than spawning subprocesses and catches the kernel/compiler interaction the unit tests miss. See `recall-pipeline.integration.test.ts`.          |
+| Trace assertions via `readTraces(db, { eventType })`                       | Asserting trace emission is the contract layer between the operator and the system; per 011-AT-TRSC every mutation emits at least one event.           |
+| `correlation_id` on multi-event flows                                      | Group related events for audit reconstruction. Tests assert the same `correlation_id` appears on `lint.run` + `lint.result`, etc.                      |
 
 ### Code Review
 
@@ -129,6 +129,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 **Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `ci`
 
 **Examples:**
+
 - `feat(compiler): add concept extraction pipeline`
 - `fix(ingest): handle empty PDF gracefully`
 - `docs(readme): update installation instructions`
@@ -155,12 +156,12 @@ These constraints come from `000-docs/007-PP-PLAN-master-blueprint.md` and are e
 
 ### Project Layout
 
-| Package | Role |
-|---|---|
-| `packages/types/` | Shared `Result<T,E>`, Zod schemas, frontmatter schemas |
-| `packages/kernel/` | SQLite state, mounts, sources, provenance, traces, tasks, recall, retention, evals — the deterministic control plane |
-| `packages/compiler/` | Claude API client, ingest adapters, six compiler passes, ask pipeline, render, agents, recall generator/quiz/export |
-| `packages/cli/` | Commander entry point, per-command handlers, friendly-error mapper, top-level process handlers |
+| Package              | Role                                                                                                                 |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `packages/types/`    | Shared `Result<T,E>`, Zod schemas, frontmatter schemas                                                               |
+| `packages/kernel/`   | SQLite state, mounts, sources, provenance, traces, tasks, recall, retention, evals — the deterministic control plane |
+| `packages/compiler/` | Claude API client, ingest adapters, six compiler passes, ask pipeline, render, agents, recall generator/quiz/export  |
+| `packages/cli/`      | Commander entry point, per-command handlers, friendly-error mapper, top-level process handlers                       |
 
 Adding a new event type? Update `000-docs/011-AT-TRSC-trace-schema.md` first, then emit it. Adding a new compiled-page type? Update `000-docs/009-AT-FMSC-frontmatter-schemas.md` and the validator.
 
@@ -177,4 +178,4 @@ project's [MIT License](LICENSE).
 
 ---
 
-*Thank you for helping improve intentional-cognition-os!*
+_Thank you for helping improve intentional-cognition-os!_

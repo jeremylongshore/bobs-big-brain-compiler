@@ -23,7 +23,7 @@
  * @module commands/compile
  */
 
-import { existsSync, readdirSync,readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { Command } from 'commander';
@@ -80,8 +80,8 @@ function collectSummaryPaths(workspacePath: string): string[] {
   const sourcesDir = join(workspacePath, 'wiki', 'sources');
   if (!existsSync(sourcesDir)) return [];
   return readdirSync(sourcesDir)
-    .filter(f => f.endsWith('.md'))
-    .map(f => `wiki/sources/${f}`);
+    .filter((f) => f.endsWith('.md'))
+    .map((f) => `wiki/sources/${f}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -95,13 +95,17 @@ function collectSummaryPaths(workspacePath: string): string[] {
 async function runSummarize(ctx: CompileContext): Promise<void> {
   const uncompiledResult = getUncompiledSources(ctx.db);
   if (!uncompiledResult.ok) {
-    process.stderr.write(formatError(`Failed to list sources: ${uncompiledResult.error.message}`) + '\n');
+    process.stderr.write(
+      formatError(`Failed to list sources: ${uncompiledResult.error.message}`) + '\n',
+    );
     process.exit(1);
   }
 
   const sources = uncompiledResult.value;
   if (sources.length === 0) {
-    process.stdout.write(formatWarning('No uncompiled sources found. Run `ico ingest` first.') + '\n');
+    process.stdout.write(
+      formatWarning('No uncompiled sources found. Run `ico ingest` first.') + '\n',
+    );
     return;
   }
 
@@ -118,7 +122,8 @@ async function runSummarize(ctx: CompileContext): Promise<void> {
       content = readFileSync(absPath, 'utf-8');
     } catch (e) {
       process.stderr.write(
-        formatWarning(`  Skipped ${source.path}: ${e instanceof Error ? e.message : String(e)}`) + '\n',
+        formatWarning(`  Skipped ${source.path}: ${e instanceof Error ? e.message : String(e)}`) +
+          '\n',
       );
       failed++;
       continue;
@@ -151,7 +156,8 @@ async function runSummarize(ctx: CompileContext): Promise<void> {
     totalTokens += result.value.tokensUsed;
     compiled++;
     process.stdout.write(
-      formatSuccess(`  Done: ${result.value.outputPath} (${result.value.tokensUsed} tokens)`) + '\n',
+      formatSuccess(`  Done: ${result.value.outputPath} (${result.value.tokensUsed} tokens)`) +
+        '\n',
     );
   }
 
@@ -247,10 +253,13 @@ async function runContradict(ctx: CompileContext): Promise<void> {
   rebuildWikiIndex(ctx.workspacePath);
 
   if (result.value.length === 0) {
-    process.stdout.write(formatSuccess('Contradict pass complete: no contradictions found.') + '\n');
+    process.stdout.write(
+      formatSuccess('Contradict pass complete: no contradictions found.') + '\n',
+    );
   } else {
     process.stdout.write(
-      formatSuccess(`Contradict pass complete: ${result.value.length} contradiction(s) recorded.`) + '\n',
+      formatSuccess(`Contradict pass complete: ${result.value.length} contradiction(s) recorded.`) +
+        '\n',
     );
   }
 }
@@ -283,7 +292,15 @@ async function runGap(ctx: CompileContext): Promise<void> {
 // Compile command registration
 // ---------------------------------------------------------------------------
 
-const VALID_TARGETS = ['sources', 'concepts', 'topics', 'links', 'contradictions', 'gaps', 'all'] as const;
+const VALID_TARGETS = [
+  'sources',
+  'concepts',
+  'topics',
+  'links',
+  'contradictions',
+  'gaps',
+  'all',
+] as const;
 
 type CompileTarget = (typeof VALID_TARGETS)[number];
 
@@ -348,9 +365,7 @@ export function register(program: Command): void {
           config = { apiKey: '', model: modelOverride ?? 'claude-sonnet-4-6' };
         } else {
           closeDatabase(db);
-          process.stderr.write(
-            formatError(e instanceof Error ? e.message : String(e)) + '\n',
-          );
+          process.stderr.write(formatError(e instanceof Error ? e.message : String(e)) + '\n');
           process.exit(1);
         }
       }

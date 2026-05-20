@@ -15,11 +15,7 @@ import { resolve } from 'node:path';
 
 import type { Command } from 'commander';
 
-import {
-  closeDatabase,
-  initDatabase,
-  unpromoteArtifact,
-} from '@ico/kernel';
+import { closeDatabase, initDatabase, unpromoteArtifact } from '@ico/kernel';
 
 import {
   formatError,
@@ -179,8 +175,8 @@ export function register(program: Command): void {
     .addHelpText(
       'after',
       '\nExamples:\n' +
-      '  $ ico unpromote wiki/topics/my-topic.md --dry-run\n' +
-      '  $ ico unpromote wiki/topics/my-topic.md --yes',
+        '  $ ico unpromote wiki/topics/my-topic.md --dry-run\n' +
+        '  $ ico unpromote wiki/topics/my-topic.md --yes',
     )
     .action((targetPath: string, opts: UnpromoteCommandOptions, cmd: Command) => {
       const globalOpts = cmd.optsWithGlobals<UnpromoteCommandGlobal & UnpromoteCommandOptions>();
@@ -193,9 +189,7 @@ export function register(program: Command): void {
 
       // Resolve relative target path against workspace root when a workspace is
       // explicitly provided; otherwise treat as-is (workspace-relative).
-      const resolvedTarget = resolve(targetPath) === targetPath
-        ? targetPath
-        : targetPath; // already workspace-relative
+      const resolvedTarget = resolve(targetPath) === targetPath ? targetPath : targetPath; // already workspace-relative
 
       const result = runUnpromote(resolvedTarget, opts, global);
 

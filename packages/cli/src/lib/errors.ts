@@ -80,11 +80,7 @@ export class DatabaseError extends IcoError {
  */
 export class FileNotFoundError extends IcoError {
   constructor(path: string) {
-    super(
-      `File not found: "${path}"`,
-      'Check the path and try again.',
-      'ERR_FILE_NOT_FOUND',
-    );
+    super(`File not found: "${path}"`, 'Check the path and try again.', 'ERR_FILE_NOT_FOUND');
     this.name = 'FileNotFoundError';
   }
 }
@@ -119,11 +115,7 @@ export class ConfigError extends IcoError {
  */
 export class ValidationError extends IcoError {
   constructor(message: string, resolution?: string) {
-    super(
-      message,
-      resolution ?? 'Check the input and try again.',
-      'ERR_VALIDATION',
-    );
+    super(message, resolution ?? 'Check the input and try again.', 'ERR_VALIDATION');
     this.name = 'ValidationError';
   }
 }

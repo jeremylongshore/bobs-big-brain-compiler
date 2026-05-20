@@ -26,13 +26,7 @@ import {
   renderTaskStatusMarkdown,
 } from '@ico/kernel';
 
-import {
-  formatError,
-  formatHeader,
-  formatInfo,
-  formatJSON,
-  formatTable,
-} from '../lib/output.js';
+import { formatError, formatHeader, formatInfo, formatJSON, formatTable } from '../lib/output.js';
 
 // ---------------------------------------------------------------------------
 // Internal types
@@ -122,12 +116,7 @@ export function parseAuditLog(content: string): AuditEntry[] {
  * Columns: Timestamp | Type | Summary | ID
  */
 export function buildTraceRows(records: TraceRecord[]): string[][] {
-  return records.map((r) => [
-    r.timestamp,
-    r.event_type,
-    r.summary ?? '',
-    r.id,
-  ]);
+  return records.map((r) => [r.timestamp, r.event_type, r.summary ?? '', r.id]);
 }
 
 /**

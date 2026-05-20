@@ -11,13 +11,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  closeDatabase,
-  type Database,
-  initDatabase,
-  initWorkspace,
-  readTraces,
-} from '@ico/kernel';
+import { closeDatabase, type Database, initDatabase, initWorkspace, readTraces } from '@ico/kernel';
 import { ok } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
@@ -155,7 +149,7 @@ describe('extractConcepts', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const conceptFiles = result.value.filter(r => r.pageType === 'concept');
+    const conceptFiles = result.value.filter((r) => r.pageType === 'concept');
     expect(conceptFiles.length).toBeGreaterThanOrEqual(1);
 
     const conceptPath = join(env.wsRoot, conceptFiles[0]!.outputPath);
@@ -174,7 +168,7 @@ describe('extractConcepts', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const entityFiles = result.value.filter(r => r.pageType === 'entity');
+    const entityFiles = result.value.filter((r) => r.pageType === 'entity');
     expect(entityFiles.length).toBeGreaterThanOrEqual(1);
 
     const entityPath = join(env.wsRoot, entityFiles[0]!.outputPath);
@@ -193,7 +187,7 @@ describe('extractConcepts', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const conceptResult = result.value.find(r => r.pageType === 'concept');
+    const conceptResult = result.value.find((r) => r.pageType === 'concept');
     expect(conceptResult).toBeDefined();
     if (!conceptResult) return;
 
@@ -214,14 +208,15 @@ describe('extractConcepts', () => {
     if (!result.ok) return;
 
     const rows = env.db
-      .prepare<[], { type: string; output_path: string }>(
-        `SELECT type, output_path FROM compilations`,
-      )
+      .prepare<
+        [],
+        { type: string; output_path: string }
+      >(`SELECT type, output_path FROM compilations`)
       .all();
 
     // Should have at least one concept and one entity record.
-    const conceptRows = rows.filter(r => r.type === 'concept');
-    const entityRows = rows.filter(r => r.type === 'entity');
+    const conceptRows = rows.filter((r) => r.type === 'concept');
+    const entityRows = rows.filter((r) => r.type === 'entity');
     expect(conceptRows.length).toBeGreaterThanOrEqual(1);
     expect(entityRows.length).toBeGreaterThanOrEqual(1);
   });
@@ -299,12 +294,9 @@ describe('extractConcepts', () => {
 
   it('returns err when a summary file cannot be read', async () => {
     const client = mockClient(MOCK_API_RESPONSE);
-    const result = await extractConcepts(
-      client,
-      env.db,
-      env.wsRoot,
-      ['wiki/sources/nonexistent.md'],
-    );
+    const result = await extractConcepts(client, env.db, env.wsRoot, [
+      'wiki/sources/nonexistent.md',
+    ]);
 
     expect(result.ok).toBe(false);
   });

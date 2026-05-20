@@ -11,20 +11,10 @@
  * Never throws — all error paths return err(Error).
  */
 
-import {
-  existsSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, extname, join, relative } from 'node:path';
 
-import {
-  appendAuditLog,
-  type Database,
-  writeTrace,
-} from '@ico/kernel';
+import { appendAuditLog, type Database, writeTrace } from '@ico/kernel';
 import { err, ok, type Result } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
@@ -34,7 +24,14 @@ import type { ClaudeClient } from '../api/claude-client.js';
 // ---------------------------------------------------------------------------
 
 /** Wiki subdirectories to scan for compiled pages. */
-const WIKI_SUBDIRS = ['sources', 'concepts', 'entities', 'topics', 'contradictions', 'open-questions'] as const;
+const WIKI_SUBDIRS = [
+  'sources',
+  'concepts',
+  'entities',
+  'topics',
+  'contradictions',
+  'open-questions',
+] as const;
 
 const BACKLINK_SECTION_MARKER = '## Backlinks';
 
@@ -111,9 +108,7 @@ function collectPages(workspacePath: string, subdir: string): PageInfo[] {
  */
 function extractReferences(content: string): Set<string> {
   // Strip YAML frontmatter if present.
-  const bodyStart = content.startsWith('---')
-    ? (content.indexOf('---', 3) + 3)
-    : 0;
+  const bodyStart = content.startsWith('---') ? content.indexOf('---', 3) + 3 : 0;
   const body = content.slice(bodyStart);
 
   const refs = new Set<string>();
@@ -149,9 +144,7 @@ function stripBacklinksSection(content: string): string {
  * Build the ## Backlinks section markdown for a page.
  */
 function buildBacklinksSection(referrers: PageInfo[]): string {
-  const items = referrers
-    .map(p => `- [[${p.slug}]] (${p.relPath})`)
-    .join('\n');
+  const items = referrers.map((p) => `- [[${p.slug}]] (${p.relPath})`).join('\n');
   return `\n${BACKLINK_SECTION_MARKER}\n\n${items}\n`;
 }
 

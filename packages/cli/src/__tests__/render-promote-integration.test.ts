@@ -17,12 +17,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  type ClaudeClient,
-  renderReport,
-  renderSlides,
-  validateArtifact,
-} from '@ico/compiler';
+import { type ClaudeClient, renderReport, renderSlides, validateArtifact } from '@ico/compiler';
 import {
   closeDatabase,
   type Database,
@@ -134,7 +129,6 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('render and promote integration', () => {
-
   // -------------------------------------------------------------------------
   // Scenario 1: Render a report from a compiled topic
   // -------------------------------------------------------------------------

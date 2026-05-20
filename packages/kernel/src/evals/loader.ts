@@ -61,19 +61,14 @@ function validateSpec(raw: unknown, sourcePath: string): Result<EvalSpec, Error>
   }
   if (typeof type !== 'string' || !VALID_TYPES.has(type as EvalType)) {
     return err(
-      new Error(
-        `${sourcePath}: 'type' must be one of ${Array.from(VALID_TYPES).join(', ')}`,
-      ),
+      new Error(`${sourcePath}: 'type' must be one of ${Array.from(VALID_TYPES).join(', ')}`),
     );
   }
 
   const threshold = obj['threshold'];
   if (
     threshold !== undefined &&
-    (typeof threshold !== 'number' ||
-      Number.isNaN(threshold) ||
-      threshold < 0 ||
-      threshold > 1)
+    (typeof threshold !== 'number' || Number.isNaN(threshold) || threshold < 0 || threshold > 1)
   ) {
     return err(new Error(`${sourcePath}: 'threshold' must be a number in [0, 1]`));
   }
@@ -86,9 +81,7 @@ function validateSpec(raw: unknown, sourcePath: string): Result<EvalSpec, Error>
       return err(new Error(`${sourcePath}: retrieval spec needs non-empty 'question'`));
     }
     if (!Array.isArray(expected) || expected.length === 0) {
-      return err(
-        new Error(`${sourcePath}: retrieval spec needs non-empty 'expected_pages' array`),
-      );
+      return err(new Error(`${sourcePath}: retrieval spec needs non-empty 'expected_pages' array`));
     }
     for (let i = 0; i < expected.length; i += 1) {
       if (typeof expected[i] !== 'string') {
@@ -100,13 +93,7 @@ function validateSpec(raw: unknown, sourcePath: string): Result<EvalSpec, Error>
     }
     for (const field of ['min_recall', 'min_precision'] as const) {
       const v = obj[field];
-      if (
-        v !== undefined &&
-        (typeof v !== 'number' ||
-          Number.isNaN(v) ||
-          v < 0 ||
-          v > 1)
-      ) {
+      if (v !== undefined && (typeof v !== 'number' || Number.isNaN(v) || v < 0 || v > 1)) {
         return err(new Error(`${sourcePath}: '${field}' must be a number in [0, 1]`));
       }
     }
@@ -123,7 +110,9 @@ function validateSpec(raw: unknown, sourcePath: string): Result<EvalSpec, Error>
     const target = obj['target_file'];
     if (typeof target !== 'string' || target.trim() === '') {
       return err(
-        new Error(`${sourcePath}: citation spec needs non-empty 'target_file' (workspace-relative)`),
+        new Error(
+          `${sourcePath}: citation spec needs non-empty 'target_file' (workspace-relative)`,
+        ),
       );
     }
     const requireCit = obj['require_citations'];
@@ -158,9 +147,7 @@ function validateSpec(raw: unknown, sourcePath: string): Result<EvalSpec, Error>
       );
     }
     if (!Array.isArray(criteria) || criteria.length === 0) {
-      return err(
-        new Error(`${sourcePath}: compilation spec needs non-empty 'criteria' array`),
-      );
+      return err(new Error(`${sourcePath}: compilation spec needs non-empty 'criteria' array`));
     }
     const seenIds = new Set<string>();
     for (let i = 0; i < criteria.length; i += 1) {
@@ -178,9 +165,7 @@ function validateSpec(raw: unknown, sourcePath: string): Result<EvalSpec, Error>
       const cid = (c as Record<string, unknown>)['id'] as string;
       if (seenIds.has(cid)) {
         return err(
-          new Error(
-            `${sourcePath}: criteria[${i}].id '${cid}' duplicates an earlier criterion id`,
-          ),
+          new Error(`${sourcePath}: criteria[${i}].id '${cid}' duplicates an earlier criterion id`),
         );
       }
       seenIds.add(cid);
@@ -212,9 +197,7 @@ export function loadEvalSpec(absPath: string): Result<EvalSpec, Error> {
     parsed = yamlLoad(raw);
   } catch (e) {
     return err(
-      new Error(
-        `${absPath}: YAML parse failed: ${e instanceof Error ? e.message : String(e)}`,
-      ),
+      new Error(`${absPath}: YAML parse failed: ${e instanceof Error ? e.message : String(e)}`),
     );
   }
 
@@ -242,9 +225,7 @@ export function discoverEvalSpecs(evalsDir: string): Result<string[], Error> {
         // Missing root: not an error, just no specs.
         if (current === resolve(evalsDir)) return ok([]);
         return err(
-          new Error(
-            `Failed to read ${current}: ${e instanceof Error ? e.message : String(e)}`,
-          ),
+          new Error(`Failed to read ${current}: ${e instanceof Error ? e.message : String(e)}`),
         );
       }
       for (const ent of entries) {

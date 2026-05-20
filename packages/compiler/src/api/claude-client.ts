@@ -225,13 +225,11 @@ async function attempt(
  * @param anthropicInstance - Optional SDK-shaped object; provide in tests to avoid real HTTP
  *                            calls. Must satisfy the {@link AnthropicLike} duck type.
  */
-export function createClaudeClient(
-  apiKey: string,
-  anthropicInstance?: unknown,
-): ClaudeClient {
-  const sdkClient: AnthropicLike = anthropicInstance != null
-    ? (anthropicInstance as AnthropicLike)
-    : (new Anthropic({ apiKey, maxRetries: 0 }) as unknown as AnthropicLike);
+export function createClaudeClient(apiKey: string, anthropicInstance?: unknown): ClaudeClient {
+  const sdkClient: AnthropicLike =
+    anthropicInstance != null
+      ? (anthropicInstance as AnthropicLike)
+      : (new Anthropic({ apiKey, maxRetries: 0 }) as unknown as AnthropicLike);
 
   return {
     async createCompletion(

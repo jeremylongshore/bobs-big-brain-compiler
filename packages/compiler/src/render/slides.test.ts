@@ -15,7 +15,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { err, ok } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
-import { renderSlides, type RenderSlidesOptions, type SlideSource,slugifyTitle } from './slides.js';
+import {
+  renderSlides,
+  type RenderSlidesOptions,
+  type SlideSource,
+  slugifyTitle,
+} from './slides.js';
 
 // ---------------------------------------------------------------------------
 // Mock helpers
@@ -24,13 +29,15 @@ import { renderSlides, type RenderSlidesOptions, type SlideSource,slugifyTitle }
 function createMockClient(response: string): ClaudeClient {
   return {
     createCompletion() {
-      return Promise.resolve(ok({
-        content: response,
-        inputTokens: 100,
-        outputTokens: 200,
-        model: 'claude-sonnet-4-6',
-        stopReason: 'end_turn',
-      }));
+      return Promise.resolve(
+        ok({
+          content: response,
+          inputTokens: 100,
+          outputTokens: 200,
+          model: 'claude-sonnet-4-6',
+          stopReason: 'end_turn',
+        }),
+      );
     },
   };
 }
@@ -83,7 +90,8 @@ A foundational architecture for sequence modelling.
 const SOURCES: SlideSource[] = [
   {
     title: 'Transformer Architecture',
-    content: '## Overview\n\nTransformers use self-attention layers stacked with feed-forward layers.',
+    content:
+      '## Overview\n\nTransformers use self-attention layers stacked with feed-forward layers.',
     path: 'wiki/topics/transformers.md',
   },
   {
@@ -100,7 +108,10 @@ const SOURCES: SlideSource[] = [
 let workspacePath: string;
 
 beforeEach(() => {
-  workspacePath = join(tmpdir(), `ico-slides-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  workspacePath = join(
+    tmpdir(),
+    `ico-slides-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
   mkdirSync(workspacePath, { recursive: true });
 });
 
@@ -241,7 +252,9 @@ describe('renderSlides — output path', () => {
     if (!result.ok) return;
 
     // First source title is "Transformer Architecture" → slug "transformer-architecture"
-    expect(result.value.outputPath).toMatch(/^outputs[\\/]slides[\\/]transformer-architecture\.md$/);
+    expect(result.value.outputPath).toMatch(
+      /^outputs[\\/]slides[\\/]transformer-architecture\.md$/,
+    );
   });
 
   it('actually writes the file to disk', async () => {

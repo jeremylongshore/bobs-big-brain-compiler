@@ -141,11 +141,7 @@ export function initWorkspace(name: string, basePath: string): Result<WorkspaceI
     // Seed audit/policy/size-limits.json (do not overwrite)
     const sizeLimitsPath = resolve(root, 'audit', 'policy', 'size-limits.json');
     if (!existsSync(sizeLimitsPath)) {
-      writeFileSync(
-        sizeLimitsPath,
-        JSON.stringify(SIZE_LIMITS_POLICY, null, 2) + '\n',
-        'utf-8',
-      );
+      writeFileSync(sizeLimitsPath, JSON.stringify(SIZE_LIMITS_POLICY, null, 2) + '\n', 'utf-8');
     }
 
     const dbPath = resolve(root, '.ico', 'state.db');

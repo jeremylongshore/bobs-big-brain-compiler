@@ -12,13 +12,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import {
-  appendFileSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-} from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { Database } from 'better-sqlite3';
@@ -149,17 +143,12 @@ export function recordProvenance(
     appendFileSync(filePath, JSON.stringify(record) + '\n', 'utf-8');
 
     // Write a trace event so the provenance record appears in the audit trail.
-    const traceResult = writeTrace(
-      db,
-      workspacePath,
-      'provenance.record',
-      {
-        sourceId: params.sourceId,
-        outputPath: params.outputPath,
-        outputType: params.outputType,
-        operation: params.operation,
-      },
-    );
+    const traceResult = writeTrace(db, workspacePath, 'provenance.record', {
+      sourceId: params.sourceId,
+      outputPath: params.outputPath,
+      outputType: params.outputType,
+      operation: params.operation,
+    });
 
     if (!traceResult.ok) {
       return err(traceResult.error);
@@ -198,7 +187,7 @@ export function getProvenance(
 
     let files: string[];
     try {
-      files = readdirSync(dir).filter(f => f.endsWith('.jsonl'));
+      files = readdirSync(dir).filter((f) => f.endsWith('.jsonl'));
     } catch (e) {
       return err(e instanceof Error ? e : new Error(String(e)));
     }

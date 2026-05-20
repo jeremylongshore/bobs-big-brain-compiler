@@ -20,16 +20,19 @@ bd doctor                             # Health check
 ## Core Workflow
 
 ### Session Start
+
 1. Run `/beads` or `bd prime` to recover context
 2. Run `bd ready` to see available tasks
 3. Pick a task and claim it: `bd update <id> --status in_progress`
 
 ### During Work
+
 - Keep notes: `bd note <id> "what I did"`
 - Create subtasks: `bd create "Subtask" --parent <id> -p 2`
 - Check blockers: `bd blocked`
 
 ### Session End (Landing the Plane)
+
 1. Close finished tasks: `bd close <id> -r "Evidence of completion"`
 2. Update in-progress tasks with status notes
 3. Run quality gates (tests, linters, builds)
@@ -42,12 +45,12 @@ bd doctor                             # Health check
 
 ## Priority Levels
 
-| Priority | Label | Meaning |
-|----------|-------|---------|
-| P0 | Critical | Blocks everything, fix immediately |
-| P1 | High | Important, address this session |
-| P2 | Normal | Standard priority |
-| P3 | Low | Nice-to-have, address when convenient |
+| Priority | Label    | Meaning                               |
+| -------- | -------- | ------------------------------------- |
+| P0       | Critical | Blocks everything, fix immediately    |
+| P1       | High     | Important, address this session       |
+| P2       | Normal   | Standard priority                     |
+| P3       | Low      | Nice-to-have, address when convenient |
 
 ## Critical Rules
 
@@ -85,6 +88,7 @@ bd graph <id>                   # View dependency graph
 ```
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
+
 ## Beads Issue Tracker
 
 This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
@@ -125,6 +129,7 @@ bd close <id>         # Complete work
 7. **Hand off** - Provide context for next session
 
 **CRITICAL RULES:**
+
 - Work is NOT complete until `git push` succeeds
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push

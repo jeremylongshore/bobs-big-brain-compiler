@@ -61,7 +61,7 @@ export class Logger {
   private write(level: LogLevel, message: string, args: unknown[]): void {
     const timestamp = new Date().toISOString();
     const redactedMessage = redactString(message);
-    const redactedArgs = args.map(a => {
+    const redactedArgs = args.map((a) => {
       if (typeof a === 'string') return redactString(a);
       if (typeof a === 'object' && a !== null && !Array.isArray(a)) {
         return redactSecrets(a as Record<string, unknown>);

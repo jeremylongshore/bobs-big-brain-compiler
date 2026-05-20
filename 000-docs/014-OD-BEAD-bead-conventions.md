@@ -1,4 +1,5 @@
 # Bead Workflow and Epic Execution Conventions
+
 > Claim it. Work it. Close it with evidence. No exceptions.
 
 **Author:** Jeremy Longshore — Intent Solutions
@@ -27,11 +28,11 @@ intentional-cognition-os-<hash>.<N>    # Child beads (auto-assigned by --parent)
 
 Examples from this project:
 
-| System ID | Human Label | Description |
-|-----------|-------------|-------------|
-| `intentional-cognition-os-0cf` | Epic 1 | Canonical Design Pack epic parent |
-| `intentional-cognition-os-0cf.7` | E1-B06 | Bead Workflow and Epic Execution Conventions |
-| `intentional-cognition-os-wlu` | Epic 2 | Repo Foundation epic parent |
+| System ID                        | Human Label | Description                                  |
+| -------------------------------- | ----------- | -------------------------------------------- |
+| `intentional-cognition-os-0cf`   | Epic 1      | Canonical Design Pack epic parent            |
+| `intentional-cognition-os-0cf.7` | E1-B06      | Bead Workflow and Epic Execution Conventions |
+| `intentional-cognition-os-wlu`   | Epic 2      | Repo Foundation epic parent                  |
 
 You never choose the system ID. Beads assigns it. You reference it in commands.
 
@@ -48,13 +49,13 @@ E{N}-B{NN}: <Short Description>
 
 Examples:
 
-| Human Label | Title |
-|-------------|-------|
-| `E1-B00` | Canonical Glossary and Terminology Lock |
-| `E1-B06` | Bead Workflow and Epic Execution Conventions |
-| `E3-B04` | Source Registry and Content Hashing |
-| `E6-B02` | Summarize Pass |
-| `E10-B11` | v1 Gate and Release |
+| Human Label | Title                                        |
+| ----------- | -------------------------------------------- |
+| `E1-B00`    | Canonical Glossary and Terminology Lock      |
+| `E1-B06`    | Bead Workflow and Epic Execution Conventions |
+| `E3-B04`    | Source Registry and Content Hashing          |
+| `E6-B02`    | Summarize Pass                               |
+| `E10-B11`   | v1 Gate and Release                          |
 
 The human label is embedded in the bead title. It is not a separate metadata field. When creating beads, the title MUST start with the human label:
 
@@ -166,14 +167,14 @@ epic:1    epic:2    epic:3    ...    epic:10
 
 Exactly one of the following type labels per bead:
 
-| Label | Meaning | Typical Deliverable |
-|-------|---------|---------------------|
-| `type:standards` | Design specification or convention document | Markdown doc in `000-docs/` |
-| `type:implementation` | Application code | TypeScript source in `packages/` |
-| `type:test` | Test code or test infrastructure | Vitest specs, fixtures |
-| `type:docs` | Operational or process documentation | Markdown doc, CLAUDE.md updates |
-| `type:infra` | CI/CD, tooling, repo scaffolding | Workflow YAML, config files |
-| `type:review` | Exit review, cross-reference audit | Checklist, pass/fail results |
+| Label                 | Meaning                                     | Typical Deliverable              |
+| --------------------- | ------------------------------------------- | -------------------------------- |
+| `type:standards`      | Design specification or convention document | Markdown doc in `000-docs/`      |
+| `type:implementation` | Application code                            | TypeScript source in `packages/` |
+| `type:test`           | Test code or test infrastructure            | Vitest specs, fixtures           |
+| `type:docs`           | Operational or process documentation        | Markdown doc, CLAUDE.md updates  |
+| `type:infra`          | CI/CD, tooling, repo scaffolding            | Workflow YAML, config files      |
+| `type:review`         | Exit review, cross-reference audit          | Checklist, pass/fail results     |
 
 ### 5.3 Applying Labels
 
@@ -210,26 +211,26 @@ Use bd's built-in fields. Do not invent custom metadata unless there is no built
 
 ### 6.1 Required Fields (Set at Creation)
 
-| Field | Flag | Content |
-|-------|------|---------|
-| Title | `--title` | Human label + short description. e.g., `E1-B06: Bead Workflow and Epic Execution Conventions` |
-| Description | `--description` | What the bead delivers and why. Reference the `Produces:` line from the epic doc. |
-| Priority | `--priority` | `P0` for epics, `P1` for standard child beads. |
-| Parent | `--parent` | System ID of the epic parent bead. |
-| Labels | `--labels` | `epic:N,type:<classification>` |
-| Acceptance | `--acceptance` | Bullet list of verification criteria. See Section 7. |
+| Field       | Flag            | Content                                                                                       |
+| ----------- | --------------- | --------------------------------------------------------------------------------------------- |
+| Title       | `--title`       | Human label + short description. e.g., `E1-B06: Bead Workflow and Epic Execution Conventions` |
+| Description | `--description` | What the bead delivers and why. Reference the `Produces:` line from the epic doc.             |
+| Priority    | `--priority`    | `P0` for epics, `P1` for standard child beads.                                                |
+| Parent      | `--parent`      | System ID of the epic parent bead.                                                            |
+| Labels      | `--labels`      | `epic:N,type:<classification>`                                                                |
+| Acceptance  | `--acceptance`  | Bullet list of verification criteria. See Section 7.                                          |
 
 ### 6.2 Optional Fields
 
-| Field | Flag | When to Use |
-|-------|------|-------------|
-| Assignee | `--assignee` | Set when claiming. Or use `--claim`. |
-| Notes | `--notes` | Implementation context, design rationale, gotchas discovered during work. |
-| Design | `--design` | Architectural decisions made while working the bead. |
-| Estimate | `--estimate` | Time estimate in minutes. Set if tracking velocity. |
-| Due | `--due` | Hard deadlines only. Do not set speculatively. |
-| External ref | `--external-ref` | Link to GitHub issue, PR, or external tracker. e.g., `gh-42` |
-| Spec ID | `--spec-id` | Link to specification document path. e.g., `000-docs/014-OD-BEAD-bead-conventions.md` |
+| Field        | Flag             | When to Use                                                                           |
+| ------------ | ---------------- | ------------------------------------------------------------------------------------- |
+| Assignee     | `--assignee`     | Set when claiming. Or use `--claim`.                                                  |
+| Notes        | `--notes`        | Implementation context, design rationale, gotchas discovered during work.             |
+| Design       | `--design`       | Architectural decisions made while working the bead.                                  |
+| Estimate     | `--estimate`     | Time estimate in minutes. Set if tracking velocity.                                   |
+| Due          | `--due`          | Hard deadlines only. Do not set speculatively.                                        |
+| External ref | `--external-ref` | Link to GitHub issue, PR, or external tracker. e.g., `gh-42`                          |
+| Spec ID      | `--spec-id`      | Link to specification document path. e.g., `000-docs/014-OD-BEAD-bead-conventions.md` |
 
 ---
 
@@ -247,6 +248,7 @@ Ensure: <constraint that must hold>.
 ### 7.2 Examples by Bead Type
 
 **Standards bead (E1-B01):**
+
 ```
 Verify: each of the 7 compiled page types has a complete frontmatter schema.
 Verify: every schema includes at least one complete example document.
@@ -255,6 +257,7 @@ Ensure: schemas cover every field referenced in the blueprint.
 ```
 
 **Implementation bead (E3-B04):**
+
 ```
 Verify: source registry stores SHA-256 content hash per ingested file.
 Verify: duplicate detection rejects re-ingest of identical content.
@@ -263,6 +266,7 @@ Ensure: unit tests pass with 90%+ line coverage.
 ```
 
 **Test bead (E2-B09):**
+
 ```
 Verify: fixture workspace contains raw sources, compiled pages, and task snapshots.
 Verify: vitest discovers and runs all fixture-based tests.
@@ -270,6 +274,7 @@ Ensure: fixtures do not depend on external API calls.
 ```
 
 **Docs bead (E1-B06):**
+
 ```
 Verify: sample bead creation command for each bead type.
 Verify: naming convention demonstrated with 3+ examples.
@@ -277,6 +282,7 @@ Ensure: consistent with bd CLI capabilities.
 ```
 
 **Infra bead (E2-B10):**
+
 ```
 Verify: CI workflow runs lint, typecheck, test on push to main.
 Verify: pnpm audit runs as a CI gate.
@@ -284,6 +290,7 @@ Ensure: pipeline completes in under 5 minutes.
 ```
 
 **Review bead (E1-B12):**
+
 ```
 Verify: every cross-reference between standards docs resolves correctly.
 Verify: pass/fail recorded for each check.
@@ -467,6 +474,7 @@ feat/epic3-kernel-mounts-bz03-bz04
 ```
 
 Rules:
+
 - One branch per logical unit of work (one or more related beads).
 - Never commit directly to `main`. Always use a feature branch.
 - Branch from `main`. Merge back to `main` via PR when beads are closed.
@@ -511,6 +519,7 @@ All fixtures committed under tests/fixtures/.
 ### 10.3 Autonomous Git on Feature Branches
 
 When working on a feature branch:
+
 - Auto-commit after passing tests. Do not ask for permission.
 - Auto-push to remote.
 - Auto-create PRs when beads are closed.
@@ -706,17 +715,17 @@ bd list --status=in_progress  # Should be empty before merge
 
 ## 15. Anti-Patterns
 
-| Anti-Pattern | Correction |
-|-------------|------------|
-| Working without claiming a bead | Always `bd update <id> --claim` before writing code |
-| Closing without evidence | Always `bd close <id> -r "evidence"`. Empty reasons are rejected by convention. |
-| Using TodoWrite or markdown for tracking | All task tracking goes through `bd`. No exceptions. |
-| Manually closing epic parents | Use `bd epic close-eligible`. |
-| Creating beads without labels | Every child bead needs `epic:N` and `type:<classification>`. |
-| Skipping acceptance criteria | Every child bead needs `--acceptance`. Beads without criteria cannot be verified. |
-| Committing to main directly | Use feature branches. Merge via PR. |
-| Setting epic parents to in_progress | Epic parents stay `open` until all children close. Claim children, not parents. |
-| Using `bd edit` in agent sessions | `bd edit` opens `$EDITOR` which blocks agents. Use `bd update --field="value"` instead. |
+| Anti-Pattern                             | Correction                                                                              |
+| ---------------------------------------- | --------------------------------------------------------------------------------------- |
+| Working without claiming a bead          | Always `bd update <id> --claim` before writing code                                     |
+| Closing without evidence                 | Always `bd close <id> -r "evidence"`. Empty reasons are rejected by convention.         |
+| Using TodoWrite or markdown for tracking | All task tracking goes through `bd`. No exceptions.                                     |
+| Manually closing epic parents            | Use `bd epic close-eligible`.                                                           |
+| Creating beads without labels            | Every child bead needs `epic:N` and `type:<classification>`.                            |
+| Skipping acceptance criteria             | Every child bead needs `--acceptance`. Beads without criteria cannot be verified.       |
+| Committing to main directly              | Use feature branches. Merge via PR.                                                     |
+| Setting epic parents to in_progress      | Epic parents stay `open` until all children close. Claim children, not parents.         |
+| Using `bd edit` in agent sessions        | `bd edit` opens `$EDITOR` which blocks agents. Use `bd update --field="value"` instead. |
 
 ---
 

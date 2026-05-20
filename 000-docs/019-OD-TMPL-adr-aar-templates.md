@@ -38,14 +38,17 @@ State the decision in active voice: "We will use X" or "We will not do Y."
 ## Consequences
 
 ### Positive
+
 - Benefit one
 - Benefit two
 
 ### Negative
+
 - Tradeoff one
 - Tradeoff two
 
 ### Neutral
+
 - Side effect that is neither good nor bad
 
 ## Related ADRs
@@ -66,6 +69,7 @@ State the decision in active voice: "We will use X" or "We will not do Y."
 ICO requires a local state store for the kernel's deterministic control plane — mount registry, task state machines, promotion rules, and audit metadata. The store must work offline, require zero infrastructure, support concurrent reads, and survive process crashes without data loss.
 
 Options considered:
+
 1. **SQLite via better-sqlite3** — synchronous, zero-config, single-file, battle-tested.
 2. **LevelDB** — fast key-value, but no SQL, limited query flexibility.
 3. **Plain JSON files** — zero dependencies, but no atomicity, no concurrent safety, schema enforcement is manual.
@@ -78,17 +82,20 @@ We will use SQLite via the `better-sqlite3` Node.js binding for all deterministi
 ## Consequences
 
 ### Positive
+
 - Zero infrastructure — single file, no server process
 - ACID transactions protect state integrity across crashes
 - SQL enables flexible queries over mount registry, task state, and audit metadata
 - `better-sqlite3` is synchronous, which simplifies the deterministic control plane (no async state races)
 
 ### Negative
+
 - Single-writer constraint limits future multi-process architectures
 - Binary file is not human-readable (unlike JSON or JSONL)
 - Adds a native dependency (`better-sqlite3` requires node-gyp build)
 
 ### Neutral
+
 - JSONL remains the format for append-only audit traces (Layer 6) — SQLite handles structured state, JSONL handles sequential logs
 
 ## Related ADRs
@@ -133,10 +140,10 @@ What was the actual outcome? State facts, not opinions.
 
 ## Action Items
 
-| # | Action | Owner | Deadline |
-|---|--------|-------|----------|
-| 1 | Description of corrective action | Name | YYYY-MM-DD |
-| 2 | Description of corrective action | Name | YYYY-MM-DD |
+| #   | Action                           | Owner | Deadline   |
+| --- | -------------------------------- | ----- | ---------- |
+| 1   | Description of corrective action | Name  | YYYY-MM-DD |
+| 2   | Description of corrective action | Name  | YYYY-MM-DD |
 
 ## Lessons Learned
 
@@ -175,11 +182,11 @@ Epic 1 established the canonical design pack for ICO: master blueprint, architec
 
 ## Action Items
 
-| # | Action | Owner | Deadline |
-|---|--------|-------|----------|
-| 1 | Add a doc consistency check to the CI pipeline | Jeremy | 2026-04-13 |
-| 2 | Establish a rule: freeze blueprint before drafting execution plan | Jeremy | 2026-04-07 |
-| 3 | Run cross-reference lint on all 000-docs before Epic 2 starts | Jeremy | 2026-04-08 |
+| #   | Action                                                            | Owner  | Deadline   |
+| --- | ----------------------------------------------------------------- | ------ | ---------- |
+| 1   | Add a doc consistency check to the CI pipeline                    | Jeremy | 2026-04-13 |
+| 2   | Establish a rule: freeze blueprint before drafting execution plan | Jeremy | 2026-04-07 |
+| 3   | Run cross-reference lint on all 000-docs before Epic 2 starts     | Jeremy | 2026-04-08 |
 
 ## Lessons Learned
 

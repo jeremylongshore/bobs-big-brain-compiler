@@ -9,49 +9,49 @@
 
 ## Tech Stack
 
-| Layer | Technology | Version | Rationale |
-|-------|-----------|---------|-----------|
-| Language | TypeScript | 5.x | Type safety, Claude SDK native |
-| Runtime | Node.js | 22+ | LTS, ESM native |
-| Package Manager | pnpm | 10.x | Workspace support, fast |
-| CLI | Commander.js | 13.x | Battle-tested, conventional |
-| State DB | SQLite via better-sqlite3 | 11.x | Local-first, zero infrastructure |
-| Audit Traces | JSONL | — | Append-only, human-readable |
-| AI | @anthropic-ai/sdk | 1.x | Claude API for compilation and reasoning |
-| Orchestration | claude_agent_sdk | — | Multi-agent research workflows (Phase 3) |
-| Schema Validation | Zod | 3.x | Runtime type checking |
-| Frontmatter | gray-matter | 4.x | Parsing compiled wiki pages |
-| PDF Parsing | pdf-parse | — | Text extraction from PDFs |
-| Slides | Marp CLI | — | Markdown to presentation slides |
-| Charts | matplotlib (Python) | — | Data visualization in reports |
-| Terminal Output | chalk | 5.x | CLI formatting |
-| Testing | Vitest | 4.x | Fast, TypeScript-native |
-| Linting | ESLint + typescript-eslint | — | Code quality |
-| Build | tsup | — | Fast TypeScript bundling |
+| Layer             | Technology                 | Version | Rationale                                |
+| ----------------- | -------------------------- | ------- | ---------------------------------------- |
+| Language          | TypeScript                 | 5.x     | Type safety, Claude SDK native           |
+| Runtime           | Node.js                    | 22+     | LTS, ESM native                          |
+| Package Manager   | pnpm                       | 10.x    | Workspace support, fast                  |
+| CLI               | Commander.js               | 13.x    | Battle-tested, conventional              |
+| State DB          | SQLite via better-sqlite3  | 11.x    | Local-first, zero infrastructure         |
+| Audit Traces      | JSONL                      | —       | Append-only, human-readable              |
+| AI                | @anthropic-ai/sdk          | 1.x     | Claude API for compilation and reasoning |
+| Orchestration     | claude_agent_sdk           | —       | Multi-agent research workflows (Phase 3) |
+| Schema Validation | Zod                        | 3.x     | Runtime type checking                    |
+| Frontmatter       | gray-matter                | 4.x     | Parsing compiled wiki pages              |
+| PDF Parsing       | pdf-parse                  | —       | Text extraction from PDFs                |
+| Slides            | Marp CLI                   | —       | Markdown to presentation slides          |
+| Charts            | matplotlib (Python)        | —       | Data visualization in reports            |
+| Terminal Output   | chalk                      | 5.x     | CLI formatting                           |
+| Testing           | Vitest                     | 4.x     | Fast, TypeScript-native                  |
+| Linting           | ESLint + typescript-eslint | —       | Code quality                             |
+| Build             | tsup                       | —       | Fast TypeScript bundling                 |
 
 ## Dependencies
 
 ### Core (Phase 1)
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| commander | ^13.0 | CLI framework and argument parsing |
-| better-sqlite3 | ^11.0 | Local SQLite state database |
-| @anthropic-ai/sdk | ^1.0 | Claude API for compilation and reasoning |
-| zod | ^3.0 | Schema validation for configs and state |
-| chalk | ^5.0 | Terminal output formatting |
-| gray-matter | ^4.0 | Frontmatter parsing for wiki pages |
-| pdf-parse | ^1.0 | PDF text extraction |
+| Package           | Version | Purpose                                  |
+| ----------------- | ------- | ---------------------------------------- |
+| commander         | ^13.0   | CLI framework and argument parsing       |
+| better-sqlite3    | ^11.0   | Local SQLite state database              |
+| @anthropic-ai/sdk | ^1.0    | Claude API for compilation and reasoning |
+| zod               | ^3.0    | Schema validation for configs and state  |
+| chalk             | ^5.0    | Terminal output formatting               |
+| gray-matter       | ^4.0    | Frontmatter parsing for wiki pages       |
+| pdf-parse         | ^1.0    | PDF text extraction                      |
 
 ### Development
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| typescript | ^5.0 | TypeScript compiler |
-| tsup | ^8.0 | Build tool |
-| vitest | ^4.0 | Test runner |
-| eslint | ^10.0 | Linting |
-| typescript-eslint | ^8.0 | TypeScript lint rules |
+| Package           | Version | Purpose               |
+| ----------------- | ------- | --------------------- |
+| typescript        | ^5.0    | TypeScript compiler   |
+| tsup              | ^8.0    | Build tool            |
+| vitest            | ^4.0    | Test runner           |
+| eslint            | ^10.0   | Linting               |
+| typescript-eslint | ^8.0    | TypeScript lint rules |
 
 ## File Structure
 
@@ -215,43 +215,43 @@ CREATE TABLE recall_results (
 
 ## CLI Commands
 
-| Command | Subcommand | Arguments | Description |
-|---------|------------|-----------|-------------|
-| `ico init` | | `<name>` | Initialize a new workspace |
-| `ico ingest` | | `<path> [--type TYPE]` | Ingest source material |
-| `ico mount` | | `<path> --name NAME` | Register a corpus mount |
-| `ico compile` | `sources` | `[--source ID]` | Compile source summaries |
-| `ico compile` | `topic` | `<name>` | Compile a topic page |
-| `ico compile` | `concepts` | | Extract and compile concept pages |
-| `ico ask` | | `<question>` | Ask a question over compiled knowledge |
-| `ico research` | | `<brief>` | Create a scoped research workspace |
-| `ico render` | `report` | `--task ID \| --topic NAME` | Generate markdown report |
-| `ico render` | `slides` | `--task ID \| --topic NAME` | Generate Marp slide deck |
-| `ico lint` | `knowledge` | | Run knowledge health checks |
-| `ico recall` | `generate` | `--topic NAME` | Generate flashcards and quizzes |
-| `ico recall` | `quiz` | `[--topic NAME]` | Run a recall quiz |
-| `ico promote` | | `<path> --as TYPE` | Promote output to knowledge layer |
-| `ico status` | | | Show workspace status |
-| `ico eval` | `run` | `[--spec FILE]` | Run evaluation specs |
+| Command        | Subcommand  | Arguments                   | Description                            |
+| -------------- | ----------- | --------------------------- | -------------------------------------- |
+| `ico init`     |             | `<name>`                    | Initialize a new workspace             |
+| `ico ingest`   |             | `<path> [--type TYPE]`      | Ingest source material                 |
+| `ico mount`    |             | `<path> --name NAME`        | Register a corpus mount                |
+| `ico compile`  | `sources`   | `[--source ID]`             | Compile source summaries               |
+| `ico compile`  | `topic`     | `<name>`                    | Compile a topic page                   |
+| `ico compile`  | `concepts`  |                             | Extract and compile concept pages      |
+| `ico ask`      |             | `<question>`                | Ask a question over compiled knowledge |
+| `ico research` |             | `<brief>`                   | Create a scoped research workspace     |
+| `ico render`   | `report`    | `--task ID \| --topic NAME` | Generate markdown report               |
+| `ico render`   | `slides`    | `--task ID \| --topic NAME` | Generate Marp slide deck               |
+| `ico lint`     | `knowledge` |                             | Run knowledge health checks            |
+| `ico recall`   | `generate`  | `--topic NAME`              | Generate flashcards and quizzes        |
+| `ico recall`   | `quiz`      | `[--topic NAME]`            | Run a recall quiz                      |
+| `ico promote`  |             | `<path> --as TYPE`          | Promote output to knowledge layer      |
+| `ico status`   |             |                             | Show workspace status                  |
+| `ico eval`     | `run`       | `[--spec FILE]`             | Run evaluation specs                   |
 
 ## Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| ANTHROPIC_API_KEY | Yes (for AI features) | — | Claude API key |
-| ICO_WORKSPACE | No | `./workspace` | Custom workspace path |
-| ICO_MODEL | No | `claude-sonnet-4-6` | Default model for compilation |
-| ICO_RESEARCH_MODEL | No | `claude-opus-4-6` | Model for complex research tasks |
-| ICO_LOG_LEVEL | No | `info` | Logging verbosity |
+| Variable           | Required              | Default             | Description                      |
+| ------------------ | --------------------- | ------------------- | -------------------------------- |
+| ANTHROPIC_API_KEY  | Yes (for AI features) | —                   | Claude API key                   |
+| ICO_WORKSPACE      | No                    | `./workspace`       | Custom workspace path            |
+| ICO_MODEL          | No                    | `claude-sonnet-4-6` | Default model for compilation    |
+| ICO_RESEARCH_MODEL | No                    | `claude-opus-4-6`   | Model for complex research tasks |
+| ICO_LOG_LEVEL      | No                    | `info`              | Logging verbosity                |
 
 ## Testing Strategy
 
-| Layer | Framework | Scope |
-|-------|-----------|-------|
-| Unit | Vitest | Kernel state, compiler transforms, CLI parsing |
-| Integration | Vitest | End-to-end CLI commands against fixture workspaces |
-| Eval | Custom (ico eval) | Compilation quality, recall accuracy, provenance completeness |
-| Coverage Target | 80% | Across kernel and compiler packages |
+| Layer           | Framework         | Scope                                                         |
+| --------------- | ----------------- | ------------------------------------------------------------- |
+| Unit            | Vitest            | Kernel state, compiler transforms, CLI parsing                |
+| Integration     | Vitest            | End-to-end CLI commands against fixture workspaces            |
+| Eval            | Custom (ico eval) | Compilation quality, recall accuracy, provenance completeness |
+| Coverage Target | 80%               | Across kernel and compiler packages                           |
 
 ## Deployment
 

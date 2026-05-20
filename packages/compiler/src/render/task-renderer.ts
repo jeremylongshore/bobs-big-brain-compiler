@@ -75,9 +75,7 @@ function resolveTaskStatus(taskDir: string): { eligible: boolean; reason: string
     }
 
     const status =
-      parsed !== null &&
-      typeof parsed === 'object' &&
-      'status' in parsed
+      parsed !== null && typeof parsed === 'object' && 'status' in parsed
         ? (parsed as Record<string, unknown>)['status']
         : undefined;
 
@@ -137,10 +135,7 @@ function extractTitle(data: Record<string, unknown>, filePath: string): string {
  * @returns `ok(TaskOutput)` on success, or `err(Error)` if the task is
  *          non-existent, ineligible, or produces no output files.
  */
-export function gatherTaskOutput(
-  workspacePath: string,
-  taskId: string,
-): Result<TaskOutput, Error> {
+export function gatherTaskOutput(workspacePath: string, taskId: string): Result<TaskOutput, Error> {
   const taskDir = join(workspacePath, 'tasks', taskId);
 
   // Step 1: Task directory must exist.
@@ -165,9 +160,11 @@ export function gatherTaskOutput(
   try {
     entries = (readdirSync(outputDir) as unknown as string[]).filter((f) => f.endsWith('.md'));
   } catch (e) {
-    return err(new Error(
-      `Cannot read output directory for task "${taskId}": ${e instanceof Error ? e.message : String(e)}`,
-    ));
+    return err(
+      new Error(
+        `Cannot read output directory for task "${taskId}": ${e instanceof Error ? e.message : String(e)}`,
+      ),
+    );
   }
 
   if (entries.length === 0) {
@@ -185,18 +182,22 @@ export function gatherTaskOutput(
     try {
       raw = readFileSync(filePath, 'utf-8');
     } catch (e) {
-      return err(new Error(
-        `Cannot read output file "${relPath}": ${e instanceof Error ? e.message : String(e)}`,
-      ));
+      return err(
+        new Error(
+          `Cannot read output file "${relPath}": ${e instanceof Error ? e.message : String(e)}`,
+        ),
+      );
     }
 
     let parsed: matter.GrayMatterFile<string>;
     try {
       parsed = matter(raw);
     } catch (e) {
-      return err(new Error(
-        `Cannot parse frontmatter in "${relPath}": ${e instanceof Error ? e.message : String(e)}`,
-      ));
+      return err(
+        new Error(
+          `Cannot parse frontmatter in "${relPath}": ${e instanceof Error ? e.message : String(e)}`,
+        ),
+      );
     }
 
     const title = extractTitle(parsed.data as Record<string, unknown>, entry);

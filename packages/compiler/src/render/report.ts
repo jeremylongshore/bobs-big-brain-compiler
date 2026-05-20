@@ -99,7 +99,11 @@ function escapeXmlAttr(value: string): string {
 function buildUserPrompt(sources: ReportSource[]): string {
   const sourceBlocks = sources
     .map((s) =>
-      [`<source title="${escapeXmlAttr(s.title)}" path="${escapeXmlAttr(s.path)}">`, s.content, '</source>'].join('\n'),
+      [
+        `<source title="${escapeXmlAttr(s.title)}" path="${escapeXmlAttr(s.path)}">`,
+        s.content,
+        '</source>',
+      ].join('\n'),
     )
     .join('\n\n');
 
@@ -231,14 +235,10 @@ export async function renderReport(
   const userPrompt = buildUserPrompt(sources);
 
   // Call the Claude API.
-  const completionResult = await options.client.createCompletion(
-    SYSTEM_PROMPT,
-    userPrompt,
-    {
-      ...(options.model !== undefined && { model: options.model }),
-      ...(options.maxTokens !== undefined && { maxTokens: options.maxTokens }),
-    },
-  );
+  const completionResult = await options.client.createCompletion(SYSTEM_PROMPT, userPrompt, {
+    ...(options.model !== undefined && { model: options.model }),
+    ...(options.maxTokens !== undefined && { maxTokens: options.maxTokens }),
+  });
 
   if (!completionResult.ok) {
     return err(completionResult.error);

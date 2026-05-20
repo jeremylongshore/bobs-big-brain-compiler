@@ -196,9 +196,7 @@ export function runArchive(
  * `ico research "some brief"` routes to the create handler.
  */
 export function register(program: Command): void {
-  const research = program
-    .command('research')
-    .description('Research task management');
+  const research = program.command('research').description('Research task management');
 
   // Subcommand: archive
   research

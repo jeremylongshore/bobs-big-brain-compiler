@@ -77,7 +77,7 @@ function readLastLine(filePath: string): string | null {
   }
 
   // Split on newlines, drop empty trailing entries
-  const lines = content.split('\n').filter(l => l.trim() !== '');
+  const lines = content.split('\n').filter((l) => l.trim() !== '');
   if (lines.length === 0) return null;
 
   return lines[lines.length - 1] ?? null;
@@ -262,9 +262,7 @@ export function readTraces(
       ${limitClause}
     `.trim();
 
-    const rows = db
-      .prepare<(string | number)[], TraceRecord>(sql)
-      .all(...params);
+    const rows = db.prepare<(string | number)[], TraceRecord>(sql).all(...params);
 
     return ok(rows);
   } catch (e) {

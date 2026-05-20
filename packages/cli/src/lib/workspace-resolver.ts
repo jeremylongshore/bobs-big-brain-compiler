@@ -97,9 +97,10 @@ function discoverUpward(startDir: string, maxLevels: number): string | null {
  * @returns A `Result` wrapping the resolved `WorkspaceLocation`, or an
  *          `Error` describing why resolution failed.
  */
-export function resolveWorkspace(
-  options?: { workspace?: string; cwd?: string },
-): Result<WorkspaceLocation, Error> {
+export function resolveWorkspace(options?: {
+  workspace?: string;
+  cwd?: string;
+}): Result<WorkspaceLocation, Error> {
   // 1. --workspace flag
   if (options?.workspace !== undefined && options.workspace !== '') {
     const root = resolve(options.workspace);

@@ -112,9 +112,13 @@ interface TestEnv {
  * Inserts a minimal source row so FK constraints on `compilations` are satisfied.
  */
 function insertSource(db: Database, id: string, path: string): void {
-  db.prepare(
-    `INSERT INTO sources (id, path, type, ingested_at, hash) VALUES (?, ?, ?, ?, ?)`,
-  ).run(id, path, 'markdown', new Date().toISOString(), CONTENT_HASH);
+  db.prepare(`INSERT INTO sources (id, path, type, ingested_at, hash) VALUES (?, ?, ?, ?, ?)`).run(
+    id,
+    path,
+    'markdown',
+    new Date().toISOString(),
+    CONTENT_HASH,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -212,9 +216,10 @@ describe('summarizeSource', () => {
     if (!result.ok) return;
 
     const row = env.db
-      .prepare<[string], { source_id: string; type: string; output_path: string; tokens_used: number }>(
-        `SELECT source_id, type, output_path, tokens_used FROM compilations WHERE source_id = ?`,
-      )
+      .prepare<
+        [string],
+        { source_id: string; type: string; output_path: string; tokens_used: number }
+      >(`SELECT source_id, type, output_path, tokens_used FROM compilations WHERE source_id = ?`)
       .get(SOURCE_ID);
 
     expect(row).not.toBeNull();
@@ -247,9 +252,7 @@ describe('summarizeSource', () => {
     if (!derivResult.ok) return;
 
     // At least one provenance record should exist for compile.summarize.
-    const summarizeRecords = derivResult.value.filter(
-      r => r.operation === 'compile.summarize',
-    );
+    const summarizeRecords = derivResult.value.filter((r) => r.operation === 'compile.summarize');
     expect(summarizeRecords.length).toBeGreaterThanOrEqual(1);
     expect(summarizeRecords[0]!.outputPath).toBe('wiki/sources/my-research-paper.md');
     expect(summarizeRecords[0]!.outputType).toBe('summary');
@@ -278,7 +281,7 @@ describe('summarizeSource', () => {
     expect(tracesResult.ok).toBe(true);
     if (!tracesResult.ok) return;
 
-    const summarizeTraces = tracesResult.value.filter(t => t.event_type === 'compile.summarize');
+    const summarizeTraces = tracesResult.value.filter((t) => t.event_type === 'compile.summarize');
     expect(summarizeTraces.length).toBeGreaterThanOrEqual(1);
   });
 

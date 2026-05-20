@@ -441,4 +441,3 @@ describe('runRender — render API failure', () => {
     process.exitCode = originalExitCode as number | undefined;
   });
 });
-

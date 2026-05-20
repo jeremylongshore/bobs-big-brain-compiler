@@ -133,11 +133,11 @@ describe('generateWiki', () => {
   });
 
   it('rejects negative counts', () => {
-    expect(() =>
-      generateWiki({ workspacePath: wsPath, conceptCount: -1, topicCount: 0 }),
-    ).toThrow(/conceptCount/);
-    expect(() =>
-      generateWiki({ workspacePath: wsPath, conceptCount: 0, topicCount: -1 }),
-    ).toThrow(/topicCount/);
+    expect(() => generateWiki({ workspacePath: wsPath, conceptCount: -1, topicCount: 0 })).toThrow(
+      /conceptCount/,
+    );
+    expect(() => generateWiki({ workspacePath: wsPath, conceptCount: 0, topicCount: -1 })).toThrow(
+      /topicCount/,
+    );
   });
 });

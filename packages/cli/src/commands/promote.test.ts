@@ -167,11 +167,7 @@ describe('runPromote — --dry-run', () => {
     });
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-    runPromote(
-      'outputs/reports/my-report.md',
-      { as: 'topic', dryRun: true },
-      {},
-    );
+    runPromote('outputs/reports/my-report.md', { as: 'topic', dryRun: true }, {});
 
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
@@ -197,11 +193,7 @@ describe('runPromote — --dry-run', () => {
     const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-    runPromote(
-      'outputs/reports/my-report.md',
-      { as: 'concept', dryRun: true },
-      {},
-    );
+    runPromote('outputs/reports/my-report.md', { as: 'concept', dryRun: true }, {});
 
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
@@ -280,15 +272,11 @@ describe('runPromote — successful promotion', () => {
 
     expect(process.exitCode).toBe(0);
     expect(kernelModule.promoteArtifact).toHaveBeenCalledOnce();
-    expect(kernelModule.promoteArtifact).toHaveBeenCalledWith(
-      expect.anything(),
-      tmpBase,
-      {
-        sourcePath: 'outputs/reports/my-report.md',
-        targetType: 'topic',
-        confirm: true,
-      },
-    );
+    expect(kernelModule.promoteArtifact).toHaveBeenCalledWith(expect.anything(), tmpBase, {
+      sourcePath: 'outputs/reports/my-report.md',
+      targetType: 'topic',
+      confirm: true,
+    });
 
     const output = stdoutMessages.join('');
     expect(output).toContain('Promoted:');

@@ -6,11 +6,7 @@ export {
   type IngestPipelineOptions,
   type IngestPipelineResult,
 } from './ingest-pipeline.js';
-export {
-  validateCompiledPage,
-  validateFrontmatter,
-  type ValidationResult,
-} from './validation.js';
+export { validateCompiledPage, validateFrontmatter, type ValidationResult } from './validation.js';
 export {
   detectStalePages,
   markStale,
@@ -46,46 +42,22 @@ export {
   type SummarizeOptions,
   type SummarizeResult,
 } from './passes/summarize.js';
-export {
-  extractConcepts,
-  type ExtractOptions,
-  type ExtractResult,
-} from './passes/extract.js';
+export { extractConcepts, type ExtractOptions, type ExtractResult } from './passes/extract.js';
 export {
   synthesizeTopics,
   type SynthesizeOptions,
   type SynthesizeResult,
 } from './passes/synthesize.js';
-export {
-  addBacklinks,
-  type LinkOptions,
-  type LinkResult,
-} from './passes/link.js';
+export { addBacklinks, type LinkOptions, type LinkResult } from './passes/link.js';
 export {
   detectContradictions,
   type ContradictOptions,
   type ContradictResult,
 } from './passes/contradict.js';
-export {
-  identifyGaps,
-  type GapOptions,
-  type GapResult,
-} from './passes/gap.js';
-export {
-  analyzeQuestion,
-  type QuestionAnalysis,
-  type QuestionType,
-} from './ask/analyze.js';
-export {
-  generateAnswer,
-  type GeneratedAnswer,
-  type Citation,
-} from './ask/generate.js';
-export {
-  verifyCitations,
-  type VerificationResult,
-  type ProvenanceEntry,
-} from './ask/verify.js';
+export { identifyGaps, type GapOptions, type GapResult } from './passes/gap.js';
+export { analyzeQuestion, type QuestionAnalysis, type QuestionType } from './ask/analyze.js';
+export { generateAnswer, type GeneratedAnswer, type Citation } from './ask/generate.js';
+export { verifyCitations, type VerificationResult, type ProvenanceEntry } from './ask/verify.js';
 export {
   renderReport,
   slugify as slugifyReport,
@@ -123,11 +95,7 @@ export {
   type SummarizerOptions,
   type SummarizerResult,
 } from './agents/summarizer.js';
-export {
-  critiqueFindings,
-  type SkepticOptions,
-  type SkepticResult,
-} from './agents/skeptic.js';
+export { critiqueFindings, type SkepticOptions, type SkepticResult } from './agents/skeptic.js';
 export {
   integrateFindings,
   type IntegratorOptions,
@@ -165,7 +133,4 @@ export {
   type ExportAnkiOptions,
   type ExportAnkiResult,
 } from './recall/export.js';
-export {
-  runCompilationEval,
-  type CompilationEvalOptions,
-} from './evals/compilation.js';
+export { runCompilationEval, type CompilationEvalOptions } from './evals/compilation.js';

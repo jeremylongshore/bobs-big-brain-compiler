@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Database } from './state.js';
 import { closeDatabase, initDatabase } from './state.js';
 import type { TaskRecord } from './tasks.js';
-import { createTask, getTask, listTasks,transitionTask } from './tasks.js';
+import { createTask, getTask, listTasks, transitionTask } from './tasks.js';
 import { readTraces } from './traces.js';
 import { initWorkspace } from './workspace.js';
 
@@ -130,7 +130,13 @@ describe('transitionTask — invalid transitions', () => {
 
     const taskId = createResult.value.id;
     // Advance to completed
-    for (const s of ['collecting', 'synthesizing', 'critiquing', 'rendering', 'completed'] as const) {
+    for (const s of [
+      'collecting',
+      'synthesizing',
+      'critiquing',
+      'rendering',
+      'completed',
+    ] as const) {
       const r = transitionTask(db, workspacePath, taskId, s);
       expect(r.ok).toBe(true);
     }
@@ -224,7 +230,13 @@ describe('transitionTask — completed_at', () => {
     if (!cr.ok) return;
 
     const taskId = cr.value.id;
-    for (const s of ['collecting', 'synthesizing', 'critiquing', 'rendering', 'completed'] as const) {
+    for (const s of [
+      'collecting',
+      'synthesizing',
+      'critiquing',
+      'rendering',
+      'completed',
+    ] as const) {
       transitionTask(db, workspacePath, taskId, s);
     }
 
@@ -242,7 +254,14 @@ describe('transitionTask — archived_at', () => {
     if (!cr.ok) return;
 
     const taskId = cr.value.id;
-    for (const s of ['collecting', 'synthesizing', 'critiquing', 'rendering', 'completed', 'archived'] as const) {
+    for (const s of [
+      'collecting',
+      'synthesizing',
+      'critiquing',
+      'rendering',
+      'completed',
+      'archived',
+    ] as const) {
       transitionTask(db, workspacePath, taskId, s);
     }
 

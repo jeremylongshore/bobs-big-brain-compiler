@@ -60,13 +60,7 @@ function buildUserPrompt(
   pages: ReadonlyArray<{ path: string; title: string; content: string }>,
 ): string {
   const pageBlocks = pages
-    .map((p) =>
-      [
-        `<page title="${p.title}" path="${p.path}">`,
-        p.content,
-        '</page>',
-      ].join('\n'),
-    )
+    .map((p) => [`<page title="${p.title}" path="${p.path}">`, p.content, '</page>'].join('\n'))
     .join('\n\n');
 
   return [
@@ -111,10 +105,7 @@ function buildTitleIndex(
  * Citations that cannot be resolved to a known page are still included
  * with an empty `pagePath` so the verification step can flag them.
  */
-function parseCitations(
-  text: string,
-  titleIndex: Map<string, string>,
-): Citation[] {
+function parseCitations(text: string, titleIndex: Map<string, string>): Citation[] {
   const citations: Citation[] = [];
   const seen = new Set<string>();
 

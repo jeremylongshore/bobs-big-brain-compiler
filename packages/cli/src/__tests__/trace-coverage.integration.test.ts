@@ -98,9 +98,7 @@ describe('trace coverage — lint', () => {
       expect(runTraces.value).toHaveLength(1);
       expect(resultTraces.value).toHaveLength(1);
       // 011-AT-TRSC §6.19/6.20 — same session, same correlation_id.
-      expect(runTraces.value[0]!.correlation_id).toBe(
-        resultTraces.value[0]!.correlation_id,
-      );
+      expect(runTraces.value[0]!.correlation_id).toBe(resultTraces.value[0]!.correlation_id);
       expect(runTraces.value[0]!.correlation_id).not.toBeNull();
     });
   });

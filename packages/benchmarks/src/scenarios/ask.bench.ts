@@ -65,9 +65,7 @@ export interface AskScenarioOutput {
   relevantPageCount?: number;
 }
 
-export async function runAskScenario(
-  options: AskScenarioOptions = {},
-): Promise<AskScenarioOutput> {
+export async function runAskScenario(options: AskScenarioOptions = {}): Promise<AskScenarioOutput> {
   const conceptCount = options.conceptCount ?? 25;
   const topicCount = options.topicCount ?? 5;
   const iterations = options.iterations ?? 1;

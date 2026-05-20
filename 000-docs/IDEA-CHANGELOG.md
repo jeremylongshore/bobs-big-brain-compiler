@@ -10,9 +10,11 @@ Version numbers follow the blueprint version, not the software release.
 ## [Standards Freeze v1] — 2026-04-06
 
 ### Added
+
 - **Standards Freeze v1** — Epic 1 (Canonical Design Pack) complete. 14 standards documents frozen for Phase 1 (docs 008–021). All cross-references verified. CLAUDE.md updated with Standards Reference section. Any changes to frozen standards require an entry in this changelog and review of all dependent documents.
 
 ### Standards Documents Delivered
+
 - 008-AT-GLOS: Canonical Glossary and Terminology Lock
 - 009-AT-FMSC: Frontmatter Schemas for All 7 Compiled Page Types
 - 010-AT-DBSC: SQLite Schema with Full DDL and Migration Strategy
@@ -76,7 +78,7 @@ Version numbers follow the blueprint version, not the software release.
 ### Decision Notes
 
 - Context was chosen as the primary learning layer because it is the cheapest, most inspectable, and fastest to iterate. This matches how the system is already designed — `CLAUDE.md`, frontmatter schemas, and the compiled wiki are all context that shapes agent behavior without code changes.
-- The three-layer framing resolves a latent ambiguity: v2.1 said the system has traces and evals but didn't say what they were *for* beyond debugging. Now the answer is explicit — they feed learning at all three layers, in order of increasing cost and decreasing frequency.
+- The three-layer framing resolves a latent ambiguity: v2.1 said the system has traces and evals but didn't say what they were _for_ beyond debugging. Now the answer is explicit — they feed learning at all three layers, in order of increasing cost and decreasing frequency.
 - The OSS references are deliberately brief. The blueprint should not read as dependent on any of these projects. They validate the architectural direction — durable execution, persistent memory, trace infrastructure, repo-native config, explicit context files — without implying integration.
 - This section does not add new build scope to Phases 1-2. Context learning happens naturally through operator curation. Harness learning requires Phase 3+ trace accumulation before it becomes actionable.
 

@@ -8,12 +8,12 @@
 
 ## Executive Summary
 
-| Severity | Count |
-|---|---|
-| 🔴 Critical | 1 |
-| 🟡 Warning | 2 |
-| 🔵 Info | 1 |
-| **Total** | **4** |
+| Severity    | Count |
+| ----------- | ----- |
+| 🔴 Critical | 1     |
+| 🟡 Warning  | 2     |
+| 🔵 Info     | 1     |
+| **Total**   | **4** |
 
 ## Findings
 
@@ -29,7 +29,7 @@
 
 **Recurring issue:** the auto-release workflow bumps root + version.txt only, leaves workspace packages behind. Documented in `025-RL-REPT-v1.0.0-release-aar` Lessons section. Manifest at `f1a627b` was 0.22.2; cut at `52fa7a4` aligned everything at 1.0.0; auto-release at `796d309` re-drifted root → 1.0.1 while leaving the rest.
 
-**Auto-fixable:** Yes — either (a) extend the release workflow to bump `packages/*/package.json` in lock-step, or (b) accept that root's `version.txt` is process-bookkeeping for auto-release and the *published* version is whatever `packages/cli/package.json` says.
+**Auto-fixable:** Yes — either (a) extend the release workflow to bump `packages/*/package.json` in lock-step, or (b) accept that root's `version.txt` is process-bookkeeping for auto-release and the _published_ version is whatever `packages/cli/package.json` says.
 
 **Recommended fix:** Option (a) in a follow-up PR. The release workflow lives at `.github/workflows/release.yml`.
 
@@ -79,13 +79,13 @@ No issues found. License: MIT consistently across README, LICENSE, all 6 package
 
 ## Skipped Checks
 
-| Check | Reason |
-|---|---|
-| 3.1 Index vs filesystem | `000-docs/000-INDEX.md` doesn't exist (logged as Finding 7.2) |
-| 3.9 Planning vs implementation | No `planning/` dir; epics in `000-docs/epics/` all closed |
+| Check                          | Reason                                                        |
+| ------------------------------ | ------------------------------------------------------------- |
+| 3.1 Index vs filesystem        | `000-docs/000-INDEX.md` doesn't exist (logged as Finding 7.2) |
+| 3.9 Planning vs implementation | No `planning/` dir; epics in `000-docs/epics/` all closed     |
 
 ---
 
 Audit complete: **1 critical**, **2 warning**, **1 info** finding across the v1.0 documentation surface.
 
-⚠️  Critical issue (version drift) recommended for follow-up bead. Not regenerating the npm artifact — the npm release is internally consistent at 1.0.0.
+⚠️ Critical issue (version drift) recommended for follow-up bead. Not regenerating the npm artifact — the npm release is internally consistent at 1.0.0.

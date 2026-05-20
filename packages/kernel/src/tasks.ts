@@ -79,13 +79,7 @@ const VALID_TRANSITIONS: Record<string, readonly string[]> = {
  * Subdirectories to create inside each task workspace root.
  * Paths are relative to the task root (`tasks/tsk-<id>/`).
  */
-const TASK_DIRS: readonly string[] = [
-  'evidence',
-  'notes',
-  'drafts',
-  'critique',
-  'output',
-];
+const TASK_DIRS: readonly string[] = ['evidence', 'notes', 'drafts', 'critique', 'output'];
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -103,13 +97,15 @@ function nowIso(): string {
  * Returns `null` when no row exists for the given id.
  */
 function selectTask(db: Database, id: string): TaskRecord | null {
-  return db
-    .prepare<[string], TaskRecord>(
-      `SELECT id, brief, status, created_at, updated_at, completed_at, archived_at, workspace_path
+  return (
+    db
+      .prepare<[string], TaskRecord>(
+        `SELECT id, brief, status, created_at, updated_at, completed_at, archived_at, workspace_path
        FROM tasks
        WHERE id = ?`,
-    )
-    .get(id) ?? null;
+      )
+      .get(id) ?? null
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -209,13 +205,11 @@ export function transitionTask(
 
     if (allowed === undefined || !allowed.includes(targetStatus)) {
       const expected =
-        allowed === undefined || allowed.length === 0
-          ? '(terminal)'
-          : allowed.join(' | ');
+        allowed === undefined || allowed.length === 0 ? '(terminal)' : allowed.join(' | ');
       return err(
         new Error(
           `Invalid transition: '${currentStatus}' → '${targetStatus}'. ` +
-          `Expected next status: '${expected}'.`,
+            `Expected next status: '${expected}'.`,
         ),
       );
     }
@@ -257,10 +251,7 @@ export function transitionTask(
  * @param taskId - UUID of the task to retrieve.
  * @returns `ok(TaskRecord)` if found, `ok(null)` if not found, or `err(Error)`.
  */
-export function getTask(
-  db: Database,
-  taskId: string,
-): Result<TaskRecord | null, Error> {
+export function getTask(db: Database, taskId: string): Result<TaskRecord | null, Error> {
   try {
     return ok(selectTask(db, taskId));
   } catch (e) {
@@ -277,10 +268,7 @@ export function getTask(
  * @param status - When provided, only tasks with this status are returned.
  * @returns `ok(TaskRecord[])` or `err(Error)`.
  */
-export function listTasks(
-  db: Database,
-  status?: TaskStatus,
-): Result<TaskRecord[], Error> {
+export function listTasks(db: Database, status?: TaskStatus): Result<TaskRecord[], Error> {
   try {
     if (status !== undefined) {
       const rows = db

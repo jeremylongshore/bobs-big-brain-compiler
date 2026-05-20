@@ -7,13 +7,7 @@ import tseslint from 'typescript-eslint';
 export default tseslint.config(
   // --- Global ignores ---
   {
-    ignores: [
-      '**/dist/**',
-      '**/node_modules/**',
-      '**/.beads/**',
-      '**/coverage/**',
-      '**/*.d.ts',
-    ],
+    ignores: ['**/dist/**', '**/node_modules/**', '**/.beads/**', '**/coverage/**', '**/*.d.ts'],
   },
 
   // --- Base JS recommended (applies to all non-ignored files) ---

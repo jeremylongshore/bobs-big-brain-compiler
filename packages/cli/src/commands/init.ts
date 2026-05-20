@@ -128,7 +128,10 @@ export function register(program: Command): void {
     .command('init <name>')
     .description('Initialize a new ICO workspace')
     .option('-p, --path <dir>', 'Parent directory for the workspace', '.')
-    .addHelpText('after', '\nExamples:\n  $ ico init my-research\n  $ ico init project-kb --path ~/workspaces')
+    .addHelpText(
+      'after',
+      '\nExamples:\n  $ ico init my-research\n  $ ico init project-kb --path ~/workspaces',
+    )
     .action((name: string, opts: InitOptions, cmd: Command) => {
       const globalOpts = cmd.optsWithGlobals<GlobalOptions & InitOptions>();
 

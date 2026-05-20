@@ -19,11 +19,11 @@ Tests verify that the deterministic system behaves correctly. Evals verify that 
 
 ## 2. Test Layers
 
-| Layer | Framework | What It Verifies | Location |
-|-------|-----------|-------------------|----------|
-| **Unit** | Vitest | Single-module behavior: state transitions, schema validation, CLI parsing, file operations | Colocated `*.test.ts` next to source files |
-| **Integration** | Vitest | Cross-package flows: CLI command -> kernel -> filesystem, ingest -> compile pipeline | `tests/integration/` at repo root |
-| **Eval** | Custom harness (`ico eval`) | Compilation quality: summary accuracy, concept extraction precision, contradiction detection recall | `evals/` at repo root |
+| Layer           | Framework                   | What It Verifies                                                                                    | Location                                   |
+| --------------- | --------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| **Unit**        | Vitest                      | Single-module behavior: state transitions, schema validation, CLI parsing, file operations          | Colocated `*.test.ts` next to source files |
+| **Integration** | Vitest                      | Cross-package flows: CLI command -> kernel -> filesystem, ingest -> compile pipeline                | `tests/integration/` at repo root          |
+| **Eval**        | Custom harness (`ico eval`) | Compilation quality: summary accuracy, concept extraction precision, contradiction detection recall | `evals/` at repo root                      |
 
 Unit and integration tests run in CI on every push and PR. Evals run on-demand or on scheduled cadence — they require API calls and are non-deterministic by nature.
 
@@ -86,15 +86,27 @@ Use `describe` blocks named after the module. Use `it` blocks that state the exp
 // packages/kernel/src/workspace.test.ts
 describe('Workspace', () => {
   describe('init', () => {
-    it('creates all six layer directories', () => { /* ... */ });
-    it('initializes SQLite database with schema', () => { /* ... */ });
-    it('writes empty index.md to wiki root', () => { /* ... */ });
-    it('rejects workspace paths that already exist', () => { /* ... */ });
+    it('creates all six layer directories', () => {
+      /* ... */
+    });
+    it('initializes SQLite database with schema', () => {
+      /* ... */
+    });
+    it('writes empty index.md to wiki root', () => {
+      /* ... */
+    });
+    it('rejects workspace paths that already exist', () => {
+      /* ... */
+    });
   });
 
   describe('validate', () => {
-    it('returns errors for missing layer directories', () => { /* ... */ });
-    it('returns errors for missing SQLite database', () => { /* ... */ });
+    it('returns errors for missing layer directories', () => {
+      /* ... */
+    });
+    it('returns errors for missing SQLite database', () => {
+      /* ... */
+    });
   });
 });
 ```
@@ -102,19 +114,33 @@ describe('Workspace', () => {
 ```typescript
 // packages/compiler/src/summarize.test.ts
 describe('Summarize', () => {
-  it('produces valid frontmatter with required fields', () => { /* ... */ });
-  it('includes source hash in provenance metadata', () => { /* ... */ });
-  it('rejects source files exceeding token limit', () => { /* ... */ });
+  it('produces valid frontmatter with required fields', () => {
+    /* ... */
+  });
+  it('includes source hash in provenance metadata', () => {
+    /* ... */
+  });
+  it('rejects source files exceeding token limit', () => {
+    /* ... */
+  });
 });
 ```
 
 ```typescript
 // packages/cli/src/commands/ingest.test.ts
 describe('ingest command', () => {
-  it('registers source in SQLite after successful ingest', () => { /* ... */ });
-  it('copies file to workspace/raw/ preserving extension', () => { /* ... */ });
-  it('exits with code 1 for missing file path', () => { /* ... */ });
-  it('supports --non-interactive flag without prompting', () => { /* ... */ });
+  it('registers source in SQLite after successful ingest', () => {
+    /* ... */
+  });
+  it('copies file to workspace/raw/ preserving extension', () => {
+    /* ... */
+  });
+  it('exits with code 1 for missing file path', () => {
+    /* ... */
+  });
+  it('supports --non-interactive flag without prompting', () => {
+    /* ... */
+  });
 });
 ```
 
@@ -122,12 +148,12 @@ describe('ingest command', () => {
 
 ## 4. Coverage Targets
 
-| Package | Target | Rationale |
-|---------|--------|-----------|
-| `packages/types` | **100%** | Zod schemas are the contract layer. Every schema must have a passing-input test and a failing-input test. No exceptions. |
-| `packages/kernel` | **90%** | Kernel owns deterministic state: workspace layout, SQLite operations, mount registry, lifecycle state machine, provenance tracking. Bugs here corrupt data. |
-| `packages/compiler` | **80%** | Compiler has deterministic scaffolding (frontmatter generation, file writes, provenance links) that must be tested. The probabilistic core (LLM calls) is stubbed in unit tests and validated by evals. |
-| `packages/cli` | **70%** | CLI is a thin routing layer. Test argument parsing, flag validation, error formatting, and `--non-interactive` behavior. Do not test the kernel or compiler through the CLI in unit tests — that is what integration tests are for. |
+| Package             | Target   | Rationale                                                                                                                                                                                                                           |
+| ------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/types`    | **100%** | Zod schemas are the contract layer. Every schema must have a passing-input test and a failing-input test. No exceptions.                                                                                                            |
+| `packages/kernel`   | **90%**  | Kernel owns deterministic state: workspace layout, SQLite operations, mount registry, lifecycle state machine, provenance tracking. Bugs here corrupt data.                                                                         |
+| `packages/compiler` | **80%**  | Compiler has deterministic scaffolding (frontmatter generation, file writes, provenance links) that must be tested. The probabilistic core (LLM calls) is stubbed in unit tests and validated by evals.                             |
+| `packages/cli`      | **70%**  | CLI is a thin routing layer. Test argument parsing, flag validation, error formatting, and `--non-interactive` behavior. Do not test the kernel or compiler through the CLI in unit tests — that is what integration tests are for. |
 
 Coverage is enforced in CI via Vitest coverage thresholds in `vitest.config.ts`:
 
@@ -248,7 +274,7 @@ type: source-summary
 source_id: sample-article
 source_path: raw/sample-article.md
 source_hash: sha256:abc123...
-compiled_at: "2026-01-15T10:00:00Z"
+compiled_at: '2026-01-15T10:00:00Z'
 model: claude-sonnet-4-6
 tags: [knowledge-management, compilation]
 ---
@@ -262,7 +288,7 @@ type: concept
 title: Knowledge Compilation
 sources: [sample-article, sample-paper]
 backlinks: [semantic-filesystem, knowledge-systems]
-compiled_at: "2026-01-15T10:05:00Z"
+compiled_at: '2026-01-15T10:05:00Z'
 model: claude-sonnet-4-6
 ---
 ```
@@ -293,6 +319,7 @@ Integration tests exercise the full pipeline across package boundaries. Each tes
 **Flow:** CLI `ingest` command -> kernel registers source in SQLite -> compiler `summarize` pass -> writes source summary to wiki -> kernel updates compilation state -> provenance record created in audit.
 
 **Assertions:**
+
 - Source row exists in SQLite `sources` table with correct hash
 - Source summary file exists at `workspace/wiki/sources/<id>.md`
 - Summary frontmatter includes `source_hash` matching the ingested file
@@ -366,23 +393,23 @@ Unicode handling is a cross-cutting concern. Every package that touches file pat
 
 ### 7.1 Filename test cases
 
-| Case | Fixture File | Tests |
-|------|-------------|-------|
-| **ASCII baseline** | `sample-article.md` | Sanity check — all operations work on plain ASCII |
-| **Spaces** | `spaces in name.md` | Path quoting, SQLite storage, provenance links |
-| **Diacritics** | `diacritics-cafe.md` | Latin extended characters: cafe, resume, naive |
-| **CJK** | `cjk-知識.md` | Chinese/Japanese/Korean characters in filenames |
-| **Emoji** | `emoji-🧠-brain.md` | Multi-byte emoji in filenames |
-| **RTL markers** | (generated in test) | Right-to-left override characters — must not corrupt paths |
-| **NFC/NFD normalization** | (generated in test) | Same visual character, different byte sequences — must be handled consistently |
+| Case                      | Fixture File         | Tests                                                                          |
+| ------------------------- | -------------------- | ------------------------------------------------------------------------------ |
+| **ASCII baseline**        | `sample-article.md`  | Sanity check — all operations work on plain ASCII                              |
+| **Spaces**                | `spaces in name.md`  | Path quoting, SQLite storage, provenance links                                 |
+| **Diacritics**            | `diacritics-cafe.md` | Latin extended characters: cafe, resume, naive                                 |
+| **CJK**                   | `cjk-知識.md`        | Chinese/Japanese/Korean characters in filenames                                |
+| **Emoji**                 | `emoji-🧠-brain.md`  | Multi-byte emoji in filenames                                                  |
+| **RTL markers**           | (generated in test)  | Right-to-left override characters — must not corrupt paths                     |
+| **NFC/NFD normalization** | (generated in test)  | Same visual character, different byte sequences — must be handled consistently |
 
 ### 7.2 Content test cases
 
-| Case | What It Tests |
-|------|--------------|
-| Mixed-script content (Latin + CJK + Arabic) | Compiler produces valid summaries without corruption |
-| Source with emoji in headings | Frontmatter extraction handles multi-byte heading text |
-| Right-to-left paragraph blocks | Compiled output preserves directionality markers |
+| Case                                        | What It Tests                                                |
+| ------------------------------------------- | ------------------------------------------------------------ |
+| Mixed-script content (Latin + CJK + Arabic) | Compiler produces valid summaries without corruption         |
+| Source with emoji in headings               | Frontmatter extraction handles multi-byte heading text       |
+| Right-to-left paragraph blocks              | Compiled output preserves directionality markers             |
 | Content with zero-width joiners/non-joiners | Character boundaries handled correctly in concept extraction |
 
 ### 7.3 Where unicode tests run
@@ -482,19 +509,19 @@ Is the expected output deterministic?
 
 ### 9.1 Classification examples
 
-| What You Are Verifying | Classification | Rationale |
-|------------------------|---------------|-----------|
-| SQLite state transitions after ingest | **Vitest unit** | Deterministic: same input always produces same rows |
-| Zod schema rejects invalid frontmatter | **Vitest unit** | Deterministic: schema validation is pure logic |
-| CLI exits with code 1 on missing argument | **Vitest unit** | Deterministic: argument parsing is pure logic |
-| Compiled summary includes source_hash in frontmatter | **Vitest unit** | Structure check: the hash field must exist regardless of model output |
-| Provenance chain links source to compiled page | **Vitest integration** | Deterministic: file system and SQLite state after a pipeline run |
-| Task state machine rejects invalid transition | **Vitest unit** | Deterministic: state machine is pure logic |
-| Summary captures the three key claims from a source | **Eval** | Quality judgment: requires assessing semantic content of model output |
-| Concept extraction identifies at least 5 concepts from a source set | **Eval** | Quality judgment: concept count and relevance depend on model behavior |
-| Contradiction detection finds the known conflict between two sources | **Eval** | Quality judgment: detecting contradictions requires semantic understanding |
-| Topic synthesis page is coherent and cites all relevant sources | **Eval** | Quality judgment: coherence is not deterministically verifiable |
-| Non-interactive mode produces same output as interactive confirmation | **Vitest integration** | Deterministic: flag behavior is pure logic, not model-dependent |
+| What You Are Verifying                                                | Classification         | Rationale                                                                  |
+| --------------------------------------------------------------------- | ---------------------- | -------------------------------------------------------------------------- |
+| SQLite state transitions after ingest                                 | **Vitest unit**        | Deterministic: same input always produces same rows                        |
+| Zod schema rejects invalid frontmatter                                | **Vitest unit**        | Deterministic: schema validation is pure logic                             |
+| CLI exits with code 1 on missing argument                             | **Vitest unit**        | Deterministic: argument parsing is pure logic                              |
+| Compiled summary includes source_hash in frontmatter                  | **Vitest unit**        | Structure check: the hash field must exist regardless of model output      |
+| Provenance chain links source to compiled page                        | **Vitest integration** | Deterministic: file system and SQLite state after a pipeline run           |
+| Task state machine rejects invalid transition                         | **Vitest unit**        | Deterministic: state machine is pure logic                                 |
+| Summary captures the three key claims from a source                   | **Eval**               | Quality judgment: requires assessing semantic content of model output      |
+| Concept extraction identifies at least 5 concepts from a source set   | **Eval**               | Quality judgment: concept count and relevance depend on model behavior     |
+| Contradiction detection finds the known conflict between two sources  | **Eval**               | Quality judgment: detecting contradictions requires semantic understanding |
+| Topic synthesis page is coherent and cites all relevant sources       | **Eval**               | Quality judgment: coherence is not deterministically verifiable            |
+| Non-interactive mode produces same output as interactive confirmation | **Vitest integration** | Deterministic: flag behavior is pure logic, not model-dependent            |
 
 ### 9.2 Gray area rule
 
@@ -515,14 +542,14 @@ Every CLI command that prompts the user for input must support a `--non-interact
 
 ### 10.2 Commands requiring --non-interactive support
 
-| Command | Interactive Behavior | Non-Interactive Behavior |
-|---------|---------------------|-------------------------|
-| `ico ingest <path>` | Prompts to confirm source type detection | Uses detected type, skips confirmation |
-| `ico compile sources` | Prompts to confirm recompilation of stale sources | Recompiles all stale sources without prompting |
-| `ico promote <path> --as <type>` | Prompts to confirm promotion | Promotes without confirmation |
-| `ico recall quiz` | Interactive quiz session | Exits with error: "Quiz requires interactive mode" |
-| `ico research <brief>` | Prompts for scope confirmation | Uses brief as-is, skips confirmation |
-| `ico init <name>` | Prompts to confirm workspace location | Uses current directory, skips confirmation |
+| Command                          | Interactive Behavior                              | Non-Interactive Behavior                           |
+| -------------------------------- | ------------------------------------------------- | -------------------------------------------------- |
+| `ico ingest <path>`              | Prompts to confirm source type detection          | Uses detected type, skips confirmation             |
+| `ico compile sources`            | Prompts to confirm recompilation of stale sources | Recompiles all stale sources without prompting     |
+| `ico promote <path> --as <type>` | Prompts to confirm promotion                      | Promotes without confirmation                      |
+| `ico recall quiz`                | Interactive quiz session                          | Exits with error: "Quiz requires interactive mode" |
+| `ico research <brief>`           | Prompts for scope confirmation                    | Uses brief as-is, skips confirmation               |
+| `ico init <name>`                | Prompts to confirm workspace location             | Uses current directory, skips confirmation         |
 
 ### 10.3 Testing non-interactive mode
 
@@ -573,7 +600,7 @@ export default defineEval({
   expected: 'tests/fixtures/workspace/evals/summarize/expected-summary.md',
   rubric: 'tests/fixtures/workspace/evals/summarize/rubric.json',
   scoring: {
-    method: 'rubric',       // 'rubric' | 'exact' | 'contains' | 'llm-judge'
+    method: 'rubric', // 'rubric' | 'exact' | 'contains' | 'llm-judge'
     min_score: 0.8,
   },
 });
@@ -585,10 +612,30 @@ export default defineEval({
 {
   "fields": [
     { "name": "has_title", "weight": 0.1, "check": "frontmatter_exists", "field": "title" },
-    { "name": "has_source_hash", "weight": 0.1, "check": "frontmatter_exists", "field": "source_hash" },
-    { "name": "key_claims_present", "weight": 0.4, "check": "contains_all", "values": ["claim A", "claim B", "claim C"] },
-    { "name": "coherence", "weight": 0.2, "check": "llm_judge", "prompt": "Rate the coherence of this summary from 0 to 1." },
-    { "name": "conciseness", "weight": 0.2, "check": "llm_judge", "prompt": "Rate conciseness: is the summary under 300 words without losing key claims?" }
+    {
+      "name": "has_source_hash",
+      "weight": 0.1,
+      "check": "frontmatter_exists",
+      "field": "source_hash"
+    },
+    {
+      "name": "key_claims_present",
+      "weight": 0.4,
+      "check": "contains_all",
+      "values": ["claim A", "claim B", "claim C"]
+    },
+    {
+      "name": "coherence",
+      "weight": 0.2,
+      "check": "llm_judge",
+      "prompt": "Rate the coherence of this summary from 0 to 1."
+    },
+    {
+      "name": "conciseness",
+      "weight": 0.2,
+      "check": "llm_judge",
+      "prompt": "Rate conciseness: is the summary under 300 words without losing key claims?"
+    }
   ],
   "min_score": 0.8
 }
@@ -610,12 +657,9 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    include: [
-      'packages/*/src/**/*.test.ts',
-      'tests/integration/**/*.test.ts',
-    ],
+    include: ['packages/*/src/**/*.test.ts', 'tests/integration/**/*.test.ts'],
     exclude: [
-      'evals/**',  // Evals are not Vitest tests
+      'evals/**', // Evals are not Vitest tests
     ],
     coverage: {
       provider: 'v8',
@@ -677,7 +721,9 @@ export class MockModelClient implements ModelClient {
     for (const [key, value] of this.responses) {
       if (prompt.includes(key)) return value;
     }
-    throw new Error(`MockModelClient: no response configured for prompt containing: ${prompt.slice(0, 100)}`);
+    throw new Error(
+      `MockModelClient: no response configured for prompt containing: ${prompt.slice(0, 100)}`,
+    );
   }
 }
 ```
@@ -718,13 +764,13 @@ pnpm run eval:summarize # single eval spec
 
 ### 14.2 CI matrix
 
-| Check | Runs On | Blocks Merge |
-|-------|---------|-------------|
-| `pnpm test --coverage` | Every push, every PR | Yes |
-| Coverage threshold check | Every push, every PR | Yes |
-| `pnpm lint` | Every push, every PR | Yes |
-| `pnpm typecheck` | Every push, every PR | Yes |
-| `ico eval run` | Nightly schedule, manual dispatch | No (advisory) |
+| Check                    | Runs On                           | Blocks Merge  |
+| ------------------------ | --------------------------------- | ------------- |
+| `pnpm test --coverage`   | Every push, every PR              | Yes           |
+| Coverage threshold check | Every push, every PR              | Yes           |
+| `pnpm lint`              | Every push, every PR              | Yes           |
+| `pnpm typecheck`         | Every push, every PR              | Yes           |
+| `ico eval run`           | Nightly schedule, manual dispatch | No (advisory) |
 
 ---
 

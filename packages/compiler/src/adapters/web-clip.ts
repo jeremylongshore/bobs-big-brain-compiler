@@ -15,10 +15,10 @@ import { type IngestResult } from './types.js';
 // ---------------------------------------------------------------------------
 
 const require = createRequire(import.meta.url);
- 
+
 // `export =` CommonJS module: `require` returns the constructor directly.
 // Cast via `unknown` to avoid the namespace member error from the @types declaration.
- 
+
 const TurndownService = require('turndown') as unknown as new (
   options?: import('turndown').Options,
 ) => import('turndown');
@@ -142,20 +142,13 @@ export function ingestWebClip(filePath: string): Result<IngestResult, Error> {
 
   const title = extractTag(html, 'title');
 
-  const sourceUrl =
-    extractCanonical(html) ??
-    extractMeta(html, 'property', 'og:url') ??
-    undefined;
+  const sourceUrl = extractCanonical(html) ?? extractMeta(html, 'property', 'og:url') ?? undefined;
 
   const author =
-    extractMeta(html, 'name', 'author') ??
-    extractMeta(html, 'property', 'article:author') ??
-    null;
+    extractMeta(html, 'name', 'author') ?? extractMeta(html, 'property', 'article:author') ?? null;
 
   const date =
-    extractMeta(html, 'property', 'article:published_time') ??
-    extractTimeDate(html) ??
-    null;
+    extractMeta(html, 'property', 'article:published_time') ?? extractTimeDate(html) ?? null;
 
   // --- Content conversion ---------------------------------------------------
 

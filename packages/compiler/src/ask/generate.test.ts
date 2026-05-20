@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { err,ok } from '@ico/types';
+import { err, ok } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
 import { generateAnswer } from './generate.js';
@@ -21,13 +21,15 @@ import { generateAnswer } from './generate.js';
 function mockClient(response: string): ClaudeClient {
   return {
     createCompletion() {
-      return Promise.resolve(ok({
-        content: response,
-        inputTokens: 500,
-        outputTokens: 200,
-        model: 'claude-sonnet-4-6',
-        stopReason: 'end_turn',
-      }));
+      return Promise.resolve(
+        ok({
+          content: response,
+          inputTokens: 500,
+          outputTokens: 200,
+          model: 'claude-sonnet-4-6',
+          stopReason: 'end_turn',
+        }),
+      );
     },
   };
 }
@@ -56,7 +58,8 @@ const PAGES = [
   {
     path: 'topics/transformers.md',
     title: 'Transformer Architecture',
-    content: '## Overview\n\nTransformers use self-attention layers stacked with feed-forward layers.',
+    content:
+      '## Overview\n\nTransformers use self-attention layers stacked with feed-forward layers.',
   },
 ];
 
@@ -104,8 +107,7 @@ describe('generateAnswer — successful generation', () => {
 
 describe('generateAnswer — citation parsing', () => {
   it('parses a single citation from the response', async () => {
-    const response =
-      'Self-attention enables token interaction. [source: Self-Attention Mechanism]';
+    const response = 'Self-attention enables token interaction. [source: Self-Attention Mechanism]';
 
     const result = await generateAnswer(mockClient(response), 'What is self-attention?', PAGES);
 
@@ -116,8 +118,7 @@ describe('generateAnswer — citation parsing', () => {
   });
 
   it('resolves the page path for a known citation title', async () => {
-    const response =
-      'Transformers are powerful. [source: Transformer Architecture]';
+    const response = 'Transformers are powerful. [source: Transformer Architecture]';
 
     const result = await generateAnswer(mockClient(response), 'Tell me about Transformers', PAGES);
 
@@ -127,8 +128,7 @@ describe('generateAnswer — citation parsing', () => {
   });
 
   it('leaves pagePath empty for an unknown citation title (hallucination)', async () => {
-    const response =
-      'Some claim. [source: Nonexistent Page]';
+    const response = 'Some claim. [source: Nonexistent Page]';
 
     const result = await generateAnswer(mockClient(response), 'Some question', PAGES);
 

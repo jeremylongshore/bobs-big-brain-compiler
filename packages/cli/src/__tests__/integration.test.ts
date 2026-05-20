@@ -46,10 +46,7 @@ interface RunResult {
  * @param args  - Arguments to pass after `node dist/index.js`.
  * @param opts  - Optional overrides for cwd and environment variables.
  */
-function run(
-  args: string[],
-  opts?: { cwd?: string; env?: Record<string, string> },
-): RunResult {
+function run(args: string[], opts?: { cwd?: string; env?: Record<string, string> }): RunResult {
   try {
     const stdout = execFileSync('node', [CLI_PATH, ...args], {
       cwd: opts?.cwd,
@@ -110,7 +107,6 @@ function createTestFile(filename = 'note.md', content = '# Test Note\n\nSome con
 // ---------------------------------------------------------------------------
 
 describe('ico CLI integration', { timeout: 30_000 }, () => {
-
   // -------------------------------------------------------------------------
   // 1. Full workflow: init → mount → ingest → status
   // -------------------------------------------------------------------------
@@ -123,9 +119,7 @@ describe('ico CLI integration', { timeout: 30_000 }, () => {
     mkdirSync(papersDir, { recursive: true });
 
     // Mount add
-    const mountResult = run(
-      ['mount', 'add', 'papers', papersDir, '--workspace', wsRoot],
-    );
+    const mountResult = run(['mount', 'add', 'papers', papersDir, '--workspace', wsRoot]);
     expect(mountResult.exitCode).toBe(0);
     expect(mountResult.stdout).toContain('papers');
 

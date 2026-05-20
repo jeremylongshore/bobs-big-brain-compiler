@@ -161,9 +161,7 @@ describe('critiqueFindings — happy path', () => {
 
     expect(result.value.newStatus).toBe('critiquing');
     expect(result.value.tokensUsed).toBe(500);
-    expect(result.value.critiquePath).toBe(
-      join(task.workspacePath, 'critique', 'critique.md'),
-    );
+    expect(result.value.critiquePath).toBe(join(task.workspacePath, 'critique', 'critique.md'));
 
     const abs = resolve(env.wsRoot, result.value.critiquePath);
     expect(existsSync(abs)).toBe(true);

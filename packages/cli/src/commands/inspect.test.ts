@@ -16,15 +16,9 @@ import { join } from 'node:path';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  closeDatabase,
-  type Database,
-  initDatabase,
-  initWorkspace,
-  writeTrace,
-} from '@ico/kernel';
+import { closeDatabase, type Database, initDatabase, initWorkspace, writeTrace } from '@ico/kernel';
 
-import { buildTraceRows,parseAuditLog } from './inspect.js';
+import { buildTraceRows, parseAuditLog } from './inspect.js';
 import { register } from './inspect.js';
 
 // ---------------------------------------------------------------------------
@@ -49,11 +43,7 @@ function stripAnsi(str: string): string {
  * `workspacePath` is injected as the `--workspace` global option so commands
  * resolve the correct workspace without affecting the process cwd.
  */
-function runInspect(
-  workspacePath: string,
-  args: string[],
-  jsonMode = false,
-): RunResult {
+function runInspect(workspacePath: string, args: string[], jsonMode = false): RunResult {
   let stdout = '';
   let stderr = '';
   let exitCode: number | null = null;
@@ -67,8 +57,12 @@ function runInspect(
     .option('--json', 'Output as JSON')
     .exitOverride()
     .configureOutput({
-      writeOut: (str) => { stdout += str; },
-      writeErr: (str) => { stderr += str; },
+      writeOut: (str) => {
+        stdout += str;
+      },
+      writeErr: (str) => {
+        stderr += str;
+      },
     });
 
   program.setOptionValue('workspace', workspacePath);
@@ -238,7 +232,13 @@ describe('ico inspect command', () => {
     });
 
     it('shows trace events in table format', () => {
-      writeTrace(db, workspaceRoot, 'source.ingest', { path: 'a.pdf' }, { summary: 'Ingested a.pdf' });
+      writeTrace(
+        db,
+        workspaceRoot,
+        'source.ingest',
+        { path: 'a.pdf' },
+        { summary: 'Ingested a.pdf' },
+      );
       writeTrace(db, workspaceRoot, 'task.create', { taskId: 'x' }, { summary: 'Task created' });
 
       const result = runInspect(workspaceRoot, ['traces']);
@@ -254,7 +254,13 @@ describe('ico inspect command', () => {
     });
 
     it('filters by --type', () => {
-      writeTrace(db, workspaceRoot, 'source.ingest', { path: 'a.pdf' }, { summary: 'Ingested a.pdf' });
+      writeTrace(
+        db,
+        workspaceRoot,
+        'source.ingest',
+        { path: 'a.pdf' },
+        { summary: 'Ingested a.pdf' },
+      );
       writeTrace(db, workspaceRoot, 'task.create', { taskId: 'x' }, { summary: 'Task created' });
 
       const result = runInspect(workspaceRoot, ['traces', '--type', 'source.ingest']);
@@ -268,7 +274,13 @@ describe('ico inspect command', () => {
     });
 
     it('outputs a valid JSON array with --json', () => {
-      writeTrace(db, workspaceRoot, 'source.ingest', { path: 'b.pdf' }, { summary: 'Ingested b.pdf' });
+      writeTrace(
+        db,
+        workspaceRoot,
+        'source.ingest',
+        { path: 'b.pdf' },
+        { summary: 'Ingested b.pdf' },
+      );
 
       const result = runInspect(workspaceRoot, ['traces'], /* jsonMode */ true);
       expect(result.exitCode).toBeNull();

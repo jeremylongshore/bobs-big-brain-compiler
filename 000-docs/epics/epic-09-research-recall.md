@@ -15,6 +15,7 @@
 ## Scope
 
 ### Included
+
 - Research task creation with directory structure and brief
 - Four agent roles: Collector, Summarizer, Skeptic, Integrator
 - Research orchestrator sequencing all agents
@@ -26,6 +27,7 @@
 - Integration test suite
 
 ### Excluded
+
 - Remote collaboration (future scope)
 - External tool integration (browsing, code execution — future)
 - Adaptive spaced repetition scheduling (future — only basic retention tracking)
@@ -35,61 +37,73 @@
 ## Beads
 
 ### E9-B01: Research Task Creation
+
 - **Depends on:** E3-B07, E4-B01
 - **Produces:** `packages/cli/src/commands/research.ts`. `ico research <brief>` creates task workspace: ID (task-YYYYMMDD-NNN), directory structure (evidence/, notes/, drafts/, critique/, output/), SQLite record, brief.md, trace event, audit log.
 - **Verification:** Creates directory structure. SQLite record with status 'created'. brief.md exists. Trace event written.
 
 ### E9-B02: Collector Agent
+
 - **Depends on:** E9-B01, E7-B01, E3-B07
 - **Produces:** `packages/compiler/src/agents/collector.ts`. collectEvidence() searches compiled knowledge for relevant pages → copies excerpts to tasks/<id>/evidence/ as individual files with source citations → transitions to 'collecting'.
 - **Verification:** Brief + compiled wiki → relevant evidence files. Each file cites source. Task status → 'collecting'. Trace events recorded.
 
 ### E9-B03: Summarizer Agent
+
 - **Depends on:** E9-B02, E6-B01
 - **Produces:** `packages/compiler/src/agents/summarizer.ts`. summarizeEvidence() reads evidence/ → synthesizes into working notes in notes/ → transitions to 'synthesizing'.
 - **Verification:** Evidence files → coherent working notes with citations. Non-redundant. Task → 'synthesizing'.
 
 ### E9-B04: Skeptic Agent
+
 - **Depends on:** E9-B03, E6-B01
 - **Produces:** `packages/compiler/src/agents/skeptic.ts`. critiqueFindings() reads notes/ → identifies weak evidence, unsupported claims, missing perspectives, logical gaps → writes to critique/ → transitions to 'critiquing'.
 - **Verification:** Working notes → critique with at least one concern. References specific claims. Task → 'critiquing'.
 
 ### E9-B05: Integrator Agent
+
 - **Depends on:** E9-B04, E6-B01
 - **Produces:** `packages/compiler/src/agents/integrator.ts`. integrateFindings() reads notes + critique → synthesizes final answer addressing critique → writes to output/ → transitions to 'rendering'.
 - **Verification:** Incorporates critique feedback. Output addresses skeptic's concerns. Task → 'rendering'.
 
 ### E9-B06: Research Orchestrator
+
 - **Depends on:** E9-B01 through E9-B05
 - **Produces:** `packages/compiler/src/agents/orchestrator.ts`. executeResearch() sequences: Collector → Summarizer → Skeptic → Integrator. Supports --step mode that pauses between agents for operator review (audit M16). Enforces token budget via ICO_MAX_RESEARCH_TOKENS env var with hard limit; displays estimated cost before starting and aborts gracefully if budget exceeded (audit M4). Displays running token count at each phase transition. Does NOT copy directly to workspace/outputs/ — instead triggers E8 render pipeline for the L3→L4 transition (audit M8). Error recovery: if an agent fails, task transitions to a recoverable state (e.g., 'failed_collecting'), not stuck forever; operator can retry from that phase (audit M9).
 - **Verification:** Full cycle: created → collecting → synthesizing → critiquing → rendering → completed. Output rendered through E8 pipeline. All agent outputs exist. Trace events for each transition. --step mode pauses correctly. Budget exceeded → graceful abort. Agent failure → recoverable state, not stuck.
 
 ### E9-B07: Research Task Archival
+
 - **Depends on:** E9-B06, E3-B07
 - **Produces:** `packages/kernel/src/archive.ts`, CLI subcommand. archiveTask() transitions completed → archived. Directory preserved but marked. `ico research archive <taskId>`. Archived tasks preserve the full directory (evidence/, notes/, drafts/, critique/, output/) for audit purposes — no files are deleted.
 - **Verification:** Archived task → status 'archived'. Not in active status counts. Full directory exists intact but flagged. Non-completed → rejected.
 
 ### E9-B08: Recall Card Generator
+
 - **Depends on:** E6-B01, E7-B01, E4-B01
 - **Produces:** `packages/compiler/src/recall/generate.ts`. `ico recall generate --topic <name>`. Reads compiled knowledge → generates flashcards + quiz questions → saves to recall/cards/ and recall/quizzes/. Cards reference source pages. Provenance tracking: each card records which compiled pages it was generated from and generation timestamp, enabling staleness detection when source pages are recompiled (audit M7).
 - **Verification:** Cards generated with questions, answers, source references. Frontmatter includes topic, generated_at, source_pages (with page IDs). Recompiling a source page → cards from that page detected as stale.
 
 ### E9-B09: Quiz Runner
+
 - **Depends on:** E9-B08, E6-B01
 - **Produces:** `packages/cli/src/commands/recall.ts`. `ico recall quiz [--topic <name>]`. Interactive: presents questions, accepts answers, AI-scores short answers, records results in recall_results table. Final score and weak areas. Supports --non-interactive / --answers-file <path> option for CI testing (audit M13): reads answers from a JSON file to exercise the full quiz flow in automated tests without human input.
 - **Verification:** Questions display, answers accepted, scoring works. Results in SQLite. Final score shown. --answers-file with JSON fixture → full quiz completes non-interactively with correct scoring.
 
 ### E9-B10: Retention Scoring and Weak-Area Tracking
+
 - **Depends on:** E9-B09, E3-B02
 - **Produces:** `packages/kernel/src/retention.ts`. updateRetention(), getWeakAreas(), getRetentionReport(). `ico recall weak` shows lowest-scoring concepts. Weak concepts prioritized in future generation.
 - **Verification:** Wrong answers → lower retention scores. `ico recall weak` shows lowest. Overall stats reported.
 
 ### E9-B11: Recall Export (Anki Format)
+
 - **Depends on:** E9-B08
 - **Produces:** `packages/compiler/src/recall/export.ts`. `ico recall export --format anki`. Tab-separated text: front, back, tags (topic, source). Anki-importable.
 - **Verification:** Valid tab-separated file. Cards have front, back, tags. Importable into Anki.
 
 ### E9-B12: Research and Recall Integration Test Suite
+
 - **Depends on:** E9-B01 through E9-B11
 - **Produces:** Integration tests: (1) full research pipeline, (2) recall card generation quality, (3) quiz scoring and retention tracking.
 - **Exit gate:** All prior integration tests remain green (audit H11).

@@ -3,16 +3,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { Database } from 'better-sqlite3';
-import { afterEach,beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  getMount,
-  getMountByName,
-  listMounts,
-  registerMount,
-  removeMount,
-} from './mounts.js';
-import { closeDatabase,initDatabase } from './state.js';
+import { getMount, getMountByName, listMounts, registerMount, removeMount } from './mounts.js';
+import { closeDatabase, initDatabase } from './state.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -46,7 +40,11 @@ describe('mount registry', () => {
   afterEach(() => {
     closeDatabase(db);
     // Best-effort cleanup of the temp directory.
-    try { rmdirSync(tempDir); } catch { /* ignore */ }
+    try {
+      rmdirSync(tempDir);
+    } catch {
+      /* ignore */
+    }
   });
 
   // -------------------------------------------------------------------------
@@ -103,13 +101,21 @@ describe('mount registry', () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
-      const names = result.value.map(m => m.name);
+      const names = result.value.map((m) => m.name);
       expect(names).toContain('alpha');
       expect(names).toContain('beta');
       expect(result.value.length).toBe(2);
     } finally {
-      try { rmdirSync(dirA); } catch { /* ignore */ }
-      try { rmdirSync(dirB); } catch { /* ignore */ }
+      try {
+        rmdirSync(dirA);
+      } catch {
+        /* ignore */
+      }
+      try {
+        rmdirSync(dirB);
+      } catch {
+        /* ignore */
+      }
     }
   });
 
@@ -189,7 +195,7 @@ describe('mount registry', () => {
     const list = listMounts(db);
     expect(list.ok).toBe(true);
     if (!list.ok) return;
-    expect(list.value.find(m => m.id === reg.value.id)).toBeUndefined();
+    expect(list.value.find((m) => m.id === reg.value.id)).toBeUndefined();
   });
 
   it('returns false when removing a nonexistent id', () => {

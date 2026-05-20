@@ -5,14 +5,7 @@
  * pure-filesystem.
  */
 
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -261,7 +254,17 @@ describe('exportRecallAnki — error paths', () => {
     mkdirSync(cardsDir, { recursive: true });
     writeFileSync(
       join(cardsDir, 'broken.md'),
-      ['---', 'type: recall-card', 'topic: "t"', 'concept: "c"', 'source_pages: []', '---', '', 'No headings here.', ''].join('\n'),
+      [
+        '---',
+        'type: recall-card',
+        'topic: "t"',
+        'concept: "c"',
+        'source_pages: []',
+        '---',
+        '',
+        'No headings here.',
+        '',
+      ].join('\n'),
       'utf-8',
     );
     const r = exportRecallAnki(env.wsRoot);

@@ -63,10 +63,50 @@ describe('countSources', () => {
 
   it('tallies each type correctly', () => {
     const sources = [
-      { type: 'pdf' as const, id: 'a', path: 'a', title: null, author: null, ingested_at: '', word_count: null, hash: 'x', metadata: null },
-      { type: 'pdf' as const, id: 'b', path: 'b', title: null, author: null, ingested_at: '', word_count: null, hash: 'y', metadata: null },
-      { type: 'markdown' as const, id: 'c', path: 'c', title: null, author: null, ingested_at: '', word_count: null, hash: 'z', metadata: null },
-      { type: 'html' as const, id: 'd', path: 'd', title: null, author: null, ingested_at: '', word_count: null, hash: 'w', metadata: null },
+      {
+        type: 'pdf' as const,
+        id: 'a',
+        path: 'a',
+        title: null,
+        author: null,
+        ingested_at: '',
+        word_count: null,
+        hash: 'x',
+        metadata: null,
+      },
+      {
+        type: 'pdf' as const,
+        id: 'b',
+        path: 'b',
+        title: null,
+        author: null,
+        ingested_at: '',
+        word_count: null,
+        hash: 'y',
+        metadata: null,
+      },
+      {
+        type: 'markdown' as const,
+        id: 'c',
+        path: 'c',
+        title: null,
+        author: null,
+        ingested_at: '',
+        word_count: null,
+        hash: 'z',
+        metadata: null,
+      },
+      {
+        type: 'html' as const,
+        id: 'd',
+        path: 'd',
+        title: null,
+        author: null,
+        ingested_at: '',
+        word_count: null,
+        hash: 'w',
+        metadata: null,
+      },
     ];
     const result = countSources(sources);
     expect(result.total).toBe(4);
@@ -285,7 +325,15 @@ describe('collectStatusData', () => {
     expect(sources).toHaveProperty('text');
 
     const tasks = json['tasks'] as Record<string, unknown>;
-    for (const key of ['created', 'collecting', 'synthesizing', 'critiquing', 'rendering', 'completed', 'archived']) {
+    for (const key of [
+      'created',
+      'collecting',
+      'synthesizing',
+      'critiquing',
+      'rendering',
+      'completed',
+      'archived',
+    ]) {
       expect(tasks).toHaveProperty(key);
     }
   });

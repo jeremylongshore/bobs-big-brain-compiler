@@ -8,24 +8,13 @@
  */
 
 import { createHash } from 'node:crypto';
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  promoteArtifact,
-  PromotionError,
-  VALID_PROMOTION_TYPES,
-} from './promotion.js';
+import { promoteArtifact, PromotionError, VALID_PROMOTION_TYPES } from './promotion.js';
 import type { Database } from './state.js';
 import { closeDatabase, initDatabase } from './state.js';
 import { readTraces } from './traces.js';
@@ -146,10 +135,7 @@ describe('promoteArtifact — successful promotion', () => {
   });
 
   it('slugifies the title correctly for the target filename', () => {
-    writeFile(
-      artifactPath('special.md'),
-      validArtifactContent('Hello World & TypeScript!'),
-    );
+    writeFile(artifactPath('special.md'), validArtifactContent('Hello World & TypeScript!'));
 
     const result = promoteArtifact(db, workspacePath, {
       sourcePath: 'outputs/reports/special.md',
@@ -258,10 +244,7 @@ describe('promoteArtifact — missing frontmatter', () => {
   });
 
   it('rejects a file with frontmatter but no title field', () => {
-    writeFile(
-      artifactPath('no-title.md'),
-      '---\ntype: topic\nauthor: Alice\n---\n\n# Body\n',
-    );
+    writeFile(artifactPath('no-title.md'), '---\ntype: topic\nauthor: Alice\n---\n\n# Body\n');
 
     const result = promoteArtifact(db, workspacePath, {
       sourcePath: 'outputs/reports/no-title.md',
@@ -275,10 +258,7 @@ describe('promoteArtifact — missing frontmatter', () => {
   });
 
   it('rejects a file with an empty title field', () => {
-    writeFile(
-      artifactPath('empty-title.md'),
-      '---\ntitle: "   "\ntype: topic\n---\n\n# Body\n',
-    );
+    writeFile(artifactPath('empty-title.md'), '---\ntitle: "   "\ntype: topic\n---\n\n# Body\n');
 
     const result = promoteArtifact(db, workspacePath, {
       sourcePath: 'outputs/reports/empty-title.md',
@@ -371,14 +351,7 @@ describe('promoteArtifact — anti-pattern: task draft', () => {
     // Even though tasks/ is not under outputs/, the path check for outputs/ runs
     // first. We need a path that passes the outputs/ check but also has tasks/
     // and drafts/ in it. We simulate this with a deeply nested outputs path.
-    const draftPath = resolve(
-      workspacePath,
-      'outputs',
-      'tasks',
-      'abc123',
-      'drafts',
-      'my-draft.md',
-    );
+    const draftPath = resolve(workspacePath, 'outputs', 'tasks', 'abc123', 'drafts', 'my-draft.md');
     writeFile(draftPath, validArtifactContent('Draft Report'));
 
     const result = promoteArtifact(db, workspacePath, {
@@ -525,14 +498,19 @@ describe('promoteArtifact — database record', () => {
     if (!result.ok) return;
 
     const row = db
-      .prepare<[string], {
-        id: string;
-        source_path: string;
-        target_path: string;
-        target_type: string;
-        promoted_by: string;
-        source_hash: string | null;
-      }>('SELECT id, source_path, target_path, target_type, promoted_by, source_hash FROM promotions WHERE id = ?')
+      .prepare<
+        [string],
+        {
+          id: string;
+          source_path: string;
+          target_path: string;
+          target_type: string;
+          promoted_by: string;
+          source_hash: string | null;
+        }
+      >(
+        'SELECT id, source_path, target_path, target_type, promoted_by, source_hash FROM promotions WHERE id = ?',
+      )
       .get(result.value.promotionId);
 
     expect(row).toBeDefined();

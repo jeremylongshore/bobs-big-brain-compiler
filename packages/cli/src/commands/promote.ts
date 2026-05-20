@@ -113,7 +113,11 @@ function computeTargetPreview(
 
   // Extract the stem (filename without extension) as a rough slug preview.
   const abs = resolve(workspacePath, sourcePath);
-  const stem = abs.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'artifact';
+  const stem =
+    abs
+      .split('/')
+      .pop()
+      ?.replace(/\.[^.]+$/, '') ?? 'artifact';
   const slug = stem
     .toLowerCase()
     .replace(/[\s_]+/g, '-')
@@ -148,9 +152,8 @@ export function runPromote(
 
   if (targetTypeRaw === undefined || targetTypeRaw.trim() === '') {
     process.stderr.write(
-      formatError(
-        `--as <type> is required. Valid types: ${VALID_PROMOTION_TYPES.join(', ')}`,
-      ) + '\n',
+      formatError(`--as <type> is required. Valid types: ${VALID_PROMOTION_TYPES.join(', ')}`) +
+        '\n',
     );
     process.exitCode = 2;
     return;
@@ -172,9 +175,7 @@ export function runPromote(
   // 2. Resolve workspace
   // -------------------------------------------------------------------------
   const wsOverride = opts.workspace ?? globalOpts.workspace;
-  const wsResult = resolveWorkspace(
-    wsOverride !== undefined ? { workspace: wsOverride } : {},
-  );
+  const wsResult = resolveWorkspace(wsOverride !== undefined ? { workspace: wsOverride } : {});
 
   if (!wsResult.ok) {
     process.stderr.write(formatError(wsResult.error.message) + '\n');
@@ -202,9 +203,7 @@ export function runPromote(
     );
     process.stdout.write('\n');
     process.stdout.write(
-      dim(
-        `Run without --dry-run and with --yes to execute the promotion.`,
-      ) + '\n',
+      dim(`Run without --dry-run and with --yes to execute the promotion.`) + '\n',
     );
     process.stdout.write('\n');
     return;
@@ -239,9 +238,7 @@ export function runPromote(
   // -------------------------------------------------------------------------
   const dbResult = initDatabase(dbPath);
   if (!dbResult.ok) {
-    process.stderr.write(
-      formatError(`Database error: ${dbResult.error.message}`) + '\n',
-    );
+    process.stderr.write(formatError(`Database error: ${dbResult.error.message}`) + '\n');
     process.exitCode = 1;
     return;
   }
@@ -266,14 +263,10 @@ export function runPromote(
         exitCode = EXIT_CODE_MAP[promotionErr.code] ?? 1;
       }
 
-      process.stderr.write(
-        formatError(promotionErr.message) + '\n',
-      );
+      process.stderr.write(formatError(promotionErr.message) + '\n');
 
       if (promotionErr instanceof PromotionError) {
-        process.stderr.write(
-          dim(`  Error code: ${promotionErr.code}`) + '\n',
-        );
+        process.stderr.write(dim(`  Error code: ${promotionErr.code}`) + '\n');
       }
 
       process.exitCode = exitCode;

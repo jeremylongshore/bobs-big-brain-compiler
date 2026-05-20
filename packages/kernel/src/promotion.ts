@@ -9,14 +9,7 @@
  */
 
 import { createHash, randomUUID } from 'node:crypto';
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  statSync,
-  unlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
 import type { Database } from 'better-sqlite3';
@@ -37,17 +30,17 @@ import { writeTrace } from './traces.js';
  * actionable messages to the user.
  */
 export type PromotionErrorCode =
-  | 'INELIGIBLE_PATH'    // source is not under workspace/outputs/
-  | 'FILE_NOT_FOUND'     // source file does not exist on disk
-  | 'EMPTY_FILE'         // source file has zero bytes
-  | 'MISSING_FRONTMATTER'// source file has no YAML frontmatter or no `title` field
-  | 'INVALID_TYPE'       // targetType is not a valid PromotionType
-  | 'DRAFT_REJECTED'     // anti-pattern: path is a task draft
-  | 'EVIDENCE_REJECTED'  // anti-pattern: path is task evidence
-  | 'NOT_CONFIRMED'      // confirm flag is false
-  | 'TARGET_EXISTS'      // a file already exists at the computed target path
-  | 'COPY_FAILED'        // copyFileSync or post-copy write failed
-  | 'AUDIT_WRITE_FAILED';// DB insert, trace write, or audit-log append failed
+  | 'INELIGIBLE_PATH' // source is not under workspace/outputs/
+  | 'FILE_NOT_FOUND' // source file does not exist on disk
+  | 'EMPTY_FILE' // source file has zero bytes
+  | 'MISSING_FRONTMATTER' // source file has no YAML frontmatter or no `title` field
+  | 'INVALID_TYPE' // targetType is not a valid PromotionType
+  | 'DRAFT_REJECTED' // anti-pattern: path is a task draft
+  | 'EVIDENCE_REJECTED' // anti-pattern: path is task evidence
+  | 'NOT_CONFIRMED' // confirm flag is false
+  | 'TARGET_EXISTS' // a file already exists at the computed target path
+  | 'COPY_FAILED' // copyFileSync or post-copy write failed
+  | 'AUDIT_WRITE_FAILED'; // DB insert, trace write, or audit-log append failed
 
 /**
  * Typed error raised by the promotion engine.
@@ -132,10 +125,10 @@ function hashFile(absolutePath: string): string {
 function slugifyTitle(title: string): string {
   return title
     .toLowerCase()
-    .replace(/[\s_]+/g, '-')        // spaces and underscores → hyphens
-    .replace(/[^a-z0-9-]/g, '-')   // everything else → hyphens
-    .replace(/-{2,}/g, '-')         // collapse consecutive hyphens
-    .replace(/^-+|-+$/g, '')        // strip leading/trailing hyphens
+    .replace(/[\s_]+/g, '-') // spaces and underscores → hyphens
+    .replace(/[^a-z0-9-]/g, '-') // everything else → hyphens
+    .replace(/-{2,}/g, '-') // collapse consecutive hyphens
+    .replace(/^-+|-+$/g, '') // strip leading/trailing hyphens
     .slice(0, 80);
 }
 
@@ -200,10 +193,12 @@ export function promoteArtifact(
   // The resolved path must begin with the outputs root (with a separator to
   // prevent prefix attacks like "outputs-other/file.md").
   if (!absoluteSource.startsWith(outputsRoot + '/') && absoluteSource !== outputsRoot) {
-    return err(new PromotionError(
-      'INELIGIBLE_PATH',
-      `Source path is not under workspace/outputs/: ${relativeSource}`,
-    ));
+    return err(
+      new PromotionError(
+        'INELIGIBLE_PATH',
+        `Source path is not under workspace/outputs/: ${relativeSource}`,
+      ),
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -214,17 +209,18 @@ export function promoteArtifact(
   const normalised = absoluteSource.replace(/\\/g, '/');
 
   if (normalised.includes('/tasks/') && normalised.includes('/drafts/')) {
-    return err(new PromotionError(
-      'DRAFT_REJECTED',
-      `Refusing to promote a task draft: ${relativeSource}`,
-    ));
+    return err(
+      new PromotionError('DRAFT_REJECTED', `Refusing to promote a task draft: ${relativeSource}`),
+    );
   }
 
   if (normalised.includes('/tasks/') && normalised.includes('/evidence/')) {
-    return err(new PromotionError(
-      'EVIDENCE_REJECTED',
-      `Refusing to promote task evidence: ${relativeSource}`,
-    ));
+    return err(
+      new PromotionError(
+        'EVIDENCE_REJECTED',
+        `Refusing to promote task evidence: ${relativeSource}`,
+      ),
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -232,10 +228,7 @@ export function promoteArtifact(
   // -------------------------------------------------------------------------
 
   if (!existsSync(absoluteSource)) {
-    return err(new PromotionError(
-      'FILE_NOT_FOUND',
-      `Source file not found: ${relativeSource}`,
-    ));
+    return err(new PromotionError('FILE_NOT_FOUND', `Source file not found: ${relativeSource}`));
   }
 
   // -------------------------------------------------------------------------
@@ -246,17 +239,11 @@ export function promoteArtifact(
   try {
     fileSize = statSync(absoluteSource).size;
   } catch {
-    return err(new PromotionError(
-      'FILE_NOT_FOUND',
-      `Cannot stat source file: ${relativeSource}`,
-    ));
+    return err(new PromotionError('FILE_NOT_FOUND', `Cannot stat source file: ${relativeSource}`));
   }
 
   if (fileSize === 0) {
-    return err(new PromotionError(
-      'EMPTY_FILE',
-      `Source file is empty: ${relativeSource}`,
-    ));
+    return err(new PromotionError('EMPTY_FILE', `Source file is empty: ${relativeSource}`));
   }
 
   // -------------------------------------------------------------------------
@@ -267,28 +254,26 @@ export function promoteArtifact(
   try {
     fileContent = readFileSync(absoluteSource, 'utf-8');
   } catch {
-    return err(new PromotionError(
-      'FILE_NOT_FOUND',
-      `Cannot read source file: ${relativeSource}`,
-    ));
+    return err(new PromotionError('FILE_NOT_FOUND', `Cannot read source file: ${relativeSource}`));
   }
 
   let parsedFrontmatter: matter.GrayMatterFile<string>;
   try {
     parsedFrontmatter = matter(fileContent);
   } catch {
-    return err(new PromotionError(
-      'MISSING_FRONTMATTER',
-      `Cannot parse frontmatter in: ${relativeSource}`,
-    ));
+    return err(
+      new PromotionError('MISSING_FRONTMATTER', `Cannot parse frontmatter in: ${relativeSource}`),
+    );
   }
 
   const title = parsedFrontmatter.data['title'] as string | undefined;
   if (typeof title !== 'string' || title.trim() === '') {
-    return err(new PromotionError(
-      'MISSING_FRONTMATTER',
-      `Source file has no valid "title" in frontmatter: ${relativeSource}`,
-    ));
+    return err(
+      new PromotionError(
+        'MISSING_FRONTMATTER',
+        `Source file has no valid "title" in frontmatter: ${relativeSource}`,
+      ),
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -296,10 +281,12 @@ export function promoteArtifact(
   // -------------------------------------------------------------------------
 
   if (!(VALID_PROMOTION_TYPES as readonly string[]).includes(input.targetType)) {
-    return err(new PromotionError(
-      'INVALID_TYPE',
-      `Invalid targetType "${String(input.targetType)}". Must be one of: ${VALID_PROMOTION_TYPES.join(', ')}`,
-    ));
+    return err(
+      new PromotionError(
+        'INVALID_TYPE',
+        `Invalid targetType "${String(input.targetType)}". Must be one of: ${VALID_PROMOTION_TYPES.join(', ')}`,
+      ),
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -308,10 +295,12 @@ export function promoteArtifact(
   // -------------------------------------------------------------------------
 
   if (!input.confirm) {
-    return err(new PromotionError(
-      'NOT_CONFIRMED',
-      'Promotion requires explicit confirmation (confirm: true)',
-    ));
+    return err(
+      new PromotionError(
+        'NOT_CONFIRMED',
+        'Promotion requires explicit confirmation (confirm: true)',
+      ),
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -324,10 +313,9 @@ export function promoteArtifact(
   const absoluteTarget = resolve(workspacePath, targetRelative);
 
   if (existsSync(absoluteTarget)) {
-    return err(new PromotionError(
-      'TARGET_EXISTS',
-      `Target path already exists: ${targetRelative}`,
-    ));
+    return err(
+      new PromotionError('TARGET_EXISTS', `Target path already exists: ${targetRelative}`),
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -342,20 +330,16 @@ export function promoteArtifact(
   try {
     sourceHash = hashFile(absoluteSource);
   } catch {
-    return err(new PromotionError(
-      'COPY_FAILED',
-      `Cannot compute hash for source: ${relativeSource}`,
-    ));
+    return err(
+      new PromotionError('COPY_FAILED', `Cannot compute hash for source: ${relativeSource}`),
+    );
   }
 
   // Ensure the target directory exists.
   try {
     mkdirSync(resolve(workspacePath, targetDir), { recursive: true });
   } catch {
-    return err(new PromotionError(
-      'COPY_FAILED',
-      `Cannot create target directory: ${targetDir}`,
-    ));
+    return err(new PromotionError('COPY_FAILED', `Cannot create target directory: ${targetDir}`));
   }
 
   // Build promoted content in memory (single write — no copy + re-read cycle).
@@ -369,10 +353,9 @@ export function promoteArtifact(
     const updatedContent = matter.stringify(parsedFrontmatter.content, parsedFrontmatter.data);
     writeFileSync(absoluteTarget, updatedContent, 'utf-8');
   } catch {
-    return err(new PromotionError(
-      'COPY_FAILED',
-      `Failed to write promoted file to ${targetRelative}`,
-    ));
+    return err(
+      new PromotionError('COPY_FAILED', `Failed to write promoted file to ${targetRelative}`),
+    );
   }
 
   // Also preserve the original (copy-not-move invariant). The source was
@@ -381,7 +364,6 @@ export function promoteArtifact(
   // Write the DB record, trace, audit file, and log.md. Any failure after
   // the file write triggers rollback (delete the target AND the DB row).
   try {
-
     // 4b. Insert into the promotions table.
     db.prepare<[string, string, string, string, string, string, string | null], void>(
       `INSERT INTO promotions (id, source_path, target_path, target_type, promoted_at, promoted_by, source_hash)
@@ -459,10 +441,12 @@ export function promoteArtifact(
     }
 
     const underlying = e instanceof Error ? e : new Error(String(e));
-    return err(new PromotionError(
-      'AUDIT_WRITE_FAILED',
-      `Promotion audit phase failed (rolled back): ${underlying.message}`,
-    ));
+    return err(
+      new PromotionError(
+        'AUDIT_WRITE_FAILED',
+        `Promotion audit phase failed (rolled back): ${underlying.message}`,
+      ),
+    );
   }
 
   return ok({

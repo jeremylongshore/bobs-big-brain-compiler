@@ -22,7 +22,14 @@
  * @module recall/export
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
 import { err, ok, type Result } from '@ico/types';
@@ -207,9 +214,7 @@ export function exportRecallAnki(
   const cardsDir = resolve(workspacePath, 'recall', 'cards');
   if (!existsSync(cardsDir)) {
     return err(
-      new Error(
-        `Cards directory not found at ${cardsDir}. Run \`ico recall generate\` first.`,
-      ),
+      new Error(`Cards directory not found at ${cardsDir}. Run \`ico recall generate\` first.`),
     );
   }
 
@@ -225,9 +230,7 @@ export function exportRecallAnki(
 
   if (filenames.length === 0) {
     return err(
-      new Error(
-        `No card files found under ${cardsDir}. Run \`ico recall generate\` first.`,
-      ),
+      new Error(`No card files found under ${cardsDir}. Run \`ico recall generate\` first.`),
     );
   }
 
@@ -239,9 +242,7 @@ export function exportRecallAnki(
       raw = readFileSync(absPath, 'utf-8');
     } catch (e) {
       return err(
-        new Error(
-          `Failed to read card ${name}: ${e instanceof Error ? e.message : String(e)}`,
-        ),
+        new Error(`Failed to read card ${name}: ${e instanceof Error ? e.message : String(e)}`),
       );
     }
 
@@ -294,11 +295,7 @@ export function exportRecallAnki(
     const wsAbs = resolve(workspacePath);
     const wsPrefix = wsAbs.endsWith('/') ? wsAbs : `${wsAbs}/`;
     if (outAbs !== wsAbs && !outAbs.startsWith(wsPrefix)) {
-      return err(
-        new Error(
-          `Output path must be inside the workspace: ${options.outPath}`,
-        ),
-      );
+      return err(new Error(`Output path must be inside the workspace: ${options.outPath}`));
     }
     try {
       const outDir = dirname(outAbs);

@@ -261,7 +261,7 @@ export async function executeResearch(
       return err(
         new Error(
           `Task ${taskId} is in failure state '${task.status}'. ` +
-          `Pass { retry: true } to roll back and re-run the failed stage.`,
+            `Pass { retry: true } to roll back and re-run the failed stage.`,
         ),
       );
     }
@@ -364,24 +364,10 @@ export async function executeResearch(
     // Dispatch the stage. Each stage:
     //   - leaves the task status unchanged on failure (its own precondition)
     //   - writes forward on success (the stage owns its transition)
-    const stageResult = await runStage(
-      nextStage,
-      db,
-      workspacePath,
-      taskId,
-      options,
-    );
+    const stageResult = await runStage(nextStage, db, workspacePath, taskId, options);
 
     if (!stageResult.ok) {
-      recordAbort(
-        db,
-        workspacePath,
-        taskId,
-        nextStage,
-        task.status,
-        stageResult.error,
-        tokensUsed,
-      );
+      recordAbort(db, workspacePath, taskId, nextStage, task.status, stageResult.error, tokensUsed);
       return err(stageResult.error);
     }
 
@@ -439,7 +425,7 @@ export async function executeResearch(
       return err(
         new Error(
           `Research budget exceeded after stage '${nextStage}': ` +
-          `used ${tokensUsed} tokens, budget ${budget}.`,
+            `used ${tokensUsed} tokens, budget ${budget}.`,
         ),
       );
     }
@@ -506,44 +492,23 @@ async function runStage(
       return ok({ tokensUsed: 0 });
     }
     case 'summarize': {
-      const summarizerOpts = options.models?.summarizer !== undefined
-        ? { model: options.models.summarizer }
-        : {};
-      const r = await summarizeEvidence(
-        db,
-        workspacePath,
-        taskId,
-        options.client,
-        summarizerOpts,
-      );
+      const summarizerOpts =
+        options.models?.summarizer !== undefined ? { model: options.models.summarizer } : {};
+      const r = await summarizeEvidence(db, workspacePath, taskId, options.client, summarizerOpts);
       if (!r.ok) return err(r.error);
       return ok({ tokensUsed: r.value.tokensUsed });
     }
     case 'critique': {
-      const skepticOpts = options.models?.skeptic !== undefined
-        ? { model: options.models.skeptic }
-        : {};
-      const r = await critiqueFindings(
-        db,
-        workspacePath,
-        taskId,
-        options.client,
-        skepticOpts,
-      );
+      const skepticOpts =
+        options.models?.skeptic !== undefined ? { model: options.models.skeptic } : {};
+      const r = await critiqueFindings(db, workspacePath, taskId, options.client, skepticOpts);
       if (!r.ok) return err(r.error);
       return ok({ tokensUsed: r.value.tokensUsed });
     }
     case 'integrate': {
-      const integratorOpts = options.models?.integrator !== undefined
-        ? { model: options.models.integrator }
-        : {};
-      const r = await integrateFindings(
-        db,
-        workspacePath,
-        taskId,
-        options.client,
-        integratorOpts,
-      );
+      const integratorOpts =
+        options.models?.integrator !== undefined ? { model: options.models.integrator } : {};
+      const r = await integrateFindings(db, workspacePath, taskId, options.client, integratorOpts);
       if (!r.ok) return err(r.error);
       return ok({
         tokensUsed: r.value.tokensUsed,
@@ -650,4 +615,3 @@ function recordAbort(
     `Task ${taskId} aborted in stage '${stage}': ${cause.message}`,
   );
 }
-

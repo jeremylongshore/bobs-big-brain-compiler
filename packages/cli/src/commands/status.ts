@@ -20,12 +20,7 @@ import {
 } from '@ico/kernel';
 import type { Source } from '@ico/types';
 
-import {
-  dim,
-  formatHeader,
-  formatJSON,
-  formatTable,
-} from '../lib/output.js';
+import { dim, formatHeader, formatJSON, formatTable } from '../lib/output.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -107,9 +102,7 @@ export function countSources(sources: Source[]): SourceCounts {
 
 /** Builds a zero-initialised task-count record then tallies each task row. */
 export function countTasks(tasks: Array<{ status: string }>): TaskCounts {
-  const counts = Object.fromEntries(
-    TASK_STATUSES.map((s) => [s, 0]),
-  ) as TaskCounts;
+  const counts = Object.fromEntries(TASK_STATUSES.map((s) => [s, 0])) as TaskCounts;
   for (const task of tasks) {
     const s = task.status as TaskStatusKey;
     if (s in counts) {
@@ -242,7 +235,7 @@ export function renderSourcesTable(sources: Source[]): string {
     return lines.join('\n');
   }
 
-  const rows = sources.map(s => [
+  const rows = sources.map((s) => [
     s.type,
     s.title ?? '(untitled)',
     s.hash.slice(0, 8),
@@ -267,7 +260,10 @@ export function register(program: Command): void {
     .command('status')
     .description('Show workspace status')
     .option('--sources', 'Show detailed sources table')
-    .addHelpText('after', '\nExamples:\n  $ ico status\n  $ ico status --json\n  $ ico status --sources')
+    .addHelpText(
+      'after',
+      '\nExamples:\n  $ ico status\n  $ ico status --json\n  $ ico status --sources',
+    )
     .action((opts: { sources?: boolean }) => {
       const globalOpts = program.opts<{ workspace?: string; json?: boolean }>();
       const dbPath = resolveWorkspaceDb(globalOpts);

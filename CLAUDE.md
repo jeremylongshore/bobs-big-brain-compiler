@@ -31,13 +31,13 @@ pnpm test:coverage                                      # Coverage report
 
 ### Packages
 
-| Package | Status | Description |
-|---------|--------|-------------|
-| `packages/types/` | Complete | Shared TypeScript interfaces, Result<T,E>, Zod schemas, frontmatter schemas |
-| `packages/kernel/` | Complete | Workspace init, SQLite state, mounts, sources, provenance, traces, tasks, wiki index, audit log, FTS5 search, promotion engine, unpromote, recall results (B09), retention scoring (B10) |
+| Package              | Status                       | Description                                                                                                                                                                                                                                                                                                                                                        |
+| -------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/types/`    | Complete                     | Shared TypeScript interfaces, Result<T,E>, Zod schemas, frontmatter schemas                                                                                                                                                                                                                                                                                        |
+| `packages/kernel/`   | Complete                     | Workspace init, SQLite state, mounts, sources, provenance, traces, tasks, wiki index, audit log, FTS5 search, promotion engine, unpromote, recall results (B09), retention scoring (B10)                                                                                                                                                                           |
 | `packages/compiler/` | Complete + 5 agents + recall | 6 compiler passes, Claude API client, ingest adapters (PDF/MD/web-clip), ask pipeline, report & slide renderers, token tracking, staleness detection. **agents/**: collector, summarizer, skeptic, integrator, orchestrator (Epic 9 stages 1–5). **recall/**: `generateRecall` (E9-B08) and `runQuiz` (E9-B09) operate over `recall/cards/` and `recall/quizzes/`. |
-| `packages/cli/` | Complete | 14 commands (init, mount, ingest, compile, ask, render, lint, promote, unpromote, status, inspect, eval, research, `recall generate`/`recall quiz`/`recall weak`/`recall export`) |
-| `evals/` | Bootstrapped (E10-B01) | YAML eval specs (`*.eval.yaml`). Two handlers: `retrieval` (recall@k) + `smoke` (workspace invariants). B02/B03 add compilation + citation handlers. |
+| `packages/cli/`      | Complete                     | 14 commands (init, mount, ingest, compile, ask, render, lint, promote, unpromote, status, inspect, eval, research, `recall generate`/`recall quiz`/`recall weak`/`recall export`)                                                                                                                                                                                  |
+| `evals/`             | Bootstrapped (E10-B01)       | YAML eval specs (`*.eval.yaml`). Two handlers: `retrieval` (recall@k) + `smoke` (workspace invariants). B02/B03 add compilation + citation handlers.                                                                                                                                                                                                               |
 
 ## Session Startup
 
@@ -53,37 +53,37 @@ When starting a new session on this repo:
 
 All standards are frozen for Phase 1. Changes require an `IDEA-CHANGELOG.md` entry.
 
-| Doc | Standards Document | Governs |
-|-----|-------------------|---------|
-| 008 | [Glossary](000-docs/008-AT-GLOS-glossary.md) | Canonical terminology for all docs, code, and prompts |
-| 009 | [Frontmatter Schemas](000-docs/009-AT-FMSC-frontmatter-schemas.md) | YAML frontmatter for all 7 compiled page types |
-| 010 | [Database Schema](000-docs/010-AT-DBSC-database-schema.md) | SQLite DDL, migration strategy, concurrency policy |
-| 011 | [Trace Schema](000-docs/011-AT-TRSC-trace-schema.md) | JSONL event envelope, event types, integrity chain |
-| 012 | [Workspace Policy](000-docs/012-AT-WPOL-workspace-policy.md) | Directory layout, naming, gitignore, symlink rules |
-| 013 | [Coding Standards](000-docs/013-AT-CODE-coding-standards.md) | TypeScript conventions, tsconfig, Result types, SQL safety |
-| 014 | [Bead Conventions](000-docs/014-OD-BEAD-bead-conventions.md) | Bead workflow, naming, labels, definition of done |
-| 015 | [Testing Strategy](000-docs/015-AT-TEST-testing-strategy.md) | Test layers, fixtures, coverage targets, eval decision tree |
-| 016 | [CI/CD Pipeline Spec](000-docs/016-OD-CICD-pipeline-spec.md) | CI job definitions, build order, release workflow |
-| 017 | [Prompt Templates](000-docs/017-AT-PRMP-prompt-templates.md) | Claude API prompt structure for all 6 compiler passes |
-| 018 | [Promotion Rules](000-docs/018-AT-PROM-promotion-spec.md) | L4→L2 promotion logic, eligibility, audit trail |
-| 019 | [ADR/AAR Templates](000-docs/019-OD-TMPL-adr-aar-templates.md) | Architecture Decision Record and After-Action Review formats |
-| 020 | [Diagram Prompts](000-docs/020-AT-DIAG-diagram-prompts.md) | Mermaid diagram prompts for 6 architectural views |
-| 021 | [Security & Scope](000-docs/021-AT-SECV-security-and-scope.md) | Injection defense, redaction, path safety, v1 deferrals |
+| Doc | Standards Document                                                 | Governs                                                      |
+| --- | ------------------------------------------------------------------ | ------------------------------------------------------------ |
+| 008 | [Glossary](000-docs/008-AT-GLOS-glossary.md)                       | Canonical terminology for all docs, code, and prompts        |
+| 009 | [Frontmatter Schemas](000-docs/009-AT-FMSC-frontmatter-schemas.md) | YAML frontmatter for all 7 compiled page types               |
+| 010 | [Database Schema](000-docs/010-AT-DBSC-database-schema.md)         | SQLite DDL, migration strategy, concurrency policy           |
+| 011 | [Trace Schema](000-docs/011-AT-TRSC-trace-schema.md)               | JSONL event envelope, event types, integrity chain           |
+| 012 | [Workspace Policy](000-docs/012-AT-WPOL-workspace-policy.md)       | Directory layout, naming, gitignore, symlink rules           |
+| 013 | [Coding Standards](000-docs/013-AT-CODE-coding-standards.md)       | TypeScript conventions, tsconfig, Result types, SQL safety   |
+| 014 | [Bead Conventions](000-docs/014-OD-BEAD-bead-conventions.md)       | Bead workflow, naming, labels, definition of done            |
+| 015 | [Testing Strategy](000-docs/015-AT-TEST-testing-strategy.md)       | Test layers, fixtures, coverage targets, eval decision tree  |
+| 016 | [CI/CD Pipeline Spec](000-docs/016-OD-CICD-pipeline-spec.md)       | CI job definitions, build order, release workflow            |
+| 017 | [Prompt Templates](000-docs/017-AT-PRMP-prompt-templates.md)       | Claude API prompt structure for all 6 compiler passes        |
+| 018 | [Promotion Rules](000-docs/018-AT-PROM-promotion-spec.md)          | L4→L2 promotion logic, eligibility, audit trail              |
+| 019 | [ADR/AAR Templates](000-docs/019-OD-TMPL-adr-aar-templates.md)     | Architecture Decision Record and After-Action Review formats |
+| 020 | [Diagram Prompts](000-docs/020-AT-DIAG-diagram-prompts.md)         | Mermaid diagram prompts for 6 architectural views            |
+| 021 | [Security & Scope](000-docs/021-AT-SECV-security-and-scope.md)     | Injection defense, redaction, path safety, v1 deferrals      |
 
 ## Tech Stack
 
-| Purpose | Package | Notes |
-|---------|---------|-------|
-| CLI | Commander.js | Entry point at `packages/cli/src/index.ts` |
-| State DB | better-sqlite3 | Local SQLite for deterministic state |
-| AI | @anthropic-ai/sdk | Claude API for compilation/reasoning. The four Epic 9 agents (collector/summarizer/skeptic/integrator) are built directly on the `ClaudeClient` interface in `compiler/src/api/claude-client.ts` — no separate agent SDK. The earlier plan to use `claude_agent_sdk` was dropped: hand-rolling on `ClaudeClient` kept agents Result-typed, deterministically testable with `vi.fn()` mocks, and consistent with existing compiler passes. Reuse this pattern for E9-B06 (Orchestrator). |
-| Validation | Zod | Runtime schema checking |
-| Frontmatter | gray-matter | Parsing compiled wiki pages |
-| PDF | pdf-parse | PDF text extraction in ingest adapter |
-| HTML→MD | turndown | Web-clip adapter |
-| Testing | Vitest | Test runner |
-| Build | tsup | TypeScript bundling, ESM-only output |
-| Linting | ESLint 10 + typescript-eslint | Code quality, simple-import-sort |
+| Purpose     | Package                       | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CLI         | Commander.js                  | Entry point at `packages/cli/src/index.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| State DB    | better-sqlite3                | Local SQLite for deterministic state                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| AI          | @anthropic-ai/sdk             | Claude API for compilation/reasoning. The four Epic 9 agents (collector/summarizer/skeptic/integrator) are built directly on the `ClaudeClient` interface in `compiler/src/api/claude-client.ts` — no separate agent SDK. The earlier plan to use `claude_agent_sdk` was dropped: hand-rolling on `ClaudeClient` kept agents Result-typed, deterministically testable with `vi.fn()` mocks, and consistent with existing compiler passes. Reuse this pattern for E9-B06 (Orchestrator). |
+| Validation  | Zod                           | Runtime schema checking                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Frontmatter | gray-matter                   | Parsing compiled wiki pages                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| PDF         | pdf-parse                     | PDF text extraction in ingest adapter                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| HTML→MD     | turndown                      | Web-clip adapter                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Testing     | Vitest                        | Test runner                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Build       | tsup                          | TypeScript bundling, ESM-only output                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Linting     | ESLint 10 + typescript-eslint | Code quality, simple-import-sort                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 **ESM-only**: All packages use `"type": "module"` with `verbatimModuleSyntax: true`. No CommonJS.
 
@@ -93,14 +93,14 @@ Core loop: `ingest → compile → reason → render → refine`
 
 ### Six Layers
 
-| Layer | Storage Path | Mutability |
-|-------|-------------|------------|
-| 1. Raw Corpus — source inputs | `workspace/raw/` | Append-only |
-| 2. Semantic Knowledge — compiled markdown | `workspace/wiki/` | Recompilable |
-| 3. Episodic Tasks — research workspaces | `workspace/tasks/<id>/` | Per-task lifecycle |
-| 4. Artifacts — reports, slides, charts | `workspace/outputs/` | Promotable to L2 |
-| 5. Recall — flashcards, spaced repetition | `workspace/recall/` | Adaptive |
-| 6. Audit & Policy — traces, provenance | `workspace/audit/` | Append-only |
+| Layer                                     | Storage Path            | Mutability         |
+| ----------------------------------------- | ----------------------- | ------------------ |
+| 1. Raw Corpus — source inputs             | `workspace/raw/`        | Append-only        |
+| 2. Semantic Knowledge — compiled markdown | `workspace/wiki/`       | Recompilable       |
+| 3. Episodic Tasks — research workspaces   | `workspace/tasks/<id>/` | Per-task lifecycle |
+| 4. Artifacts — reports, slides, charts    | `workspace/outputs/`    | Promotable to L2   |
+| 5. Recall — flashcards, spaced repetition | `workspace/recall/`     | Adaptive           |
+| 6. Audit & Policy — traces, provenance    | `workspace/audit/`      | Append-only        |
 
 ### Deterministic vs Probabilistic Boundary
 
@@ -124,15 +124,16 @@ This is the most important architectural constraint. The model proposes; the det
 
 For `ico research`, the system creates a scoped episodic task workspace and runs five agents via `executeResearch()` in `agents/orchestrator.ts`:
 
-| Stage | Agent | Module | Reads | Writes | Transition |
-|-------|-------|--------|-------|--------|-----------|
-| 1 | Collector | `agents/collector.ts` (pure deterministic — FTS5, no Claude) | `brief.md` + compiled wiki | `evidence/NN-<slug>.md` (per match) | `created → collecting` |
-| 2 | Summarizer | `agents/summarizer.ts` (Claude) | brief + `evidence/` | `notes/synthesis.md` (one consolidated file) | `collecting → synthesizing` |
-| 3 | Skeptic | `agents/skeptic.ts` (Claude, adversarial) | brief + `notes/synthesis.md` | `critique/critique.md` (4 fixed sections: Weak Evidence / Unsupported Claims / Missing Perspectives / Logical Gaps) | `synthesizing → critiquing` |
-| 4 | Integrator | `agents/integrator.ts` (Claude) | brief + notes + critique | `output/final.md` (must address every critique concern) | `critiquing → rendering` |
-| 5 | Orchestrator | `agents/orchestrator.ts` (render handoff) | `output/final.md` via `gatherTaskOutput` | `outputs/reports/<slug>.md` via `renderReport` | `rendering → completed` |
+| Stage | Agent        | Module                                                       | Reads                                    | Writes                                                                                                              | Transition                  |
+| ----- | ------------ | ------------------------------------------------------------ | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| 1     | Collector    | `agents/collector.ts` (pure deterministic — FTS5, no Claude) | `brief.md` + compiled wiki               | `evidence/NN-<slug>.md` (per match)                                                                                 | `created → collecting`      |
+| 2     | Summarizer   | `agents/summarizer.ts` (Claude)                              | brief + `evidence/`                      | `notes/synthesis.md` (one consolidated file)                                                                        | `collecting → synthesizing` |
+| 3     | Skeptic      | `agents/skeptic.ts` (Claude, adversarial)                    | brief + `notes/synthesis.md`             | `critique/critique.md` (4 fixed sections: Weak Evidence / Unsupported Claims / Missing Perspectives / Logical Gaps) | `synthesizing → critiquing` |
+| 4     | Integrator   | `agents/integrator.ts` (Claude)                              | brief + notes + critique                 | `output/final.md` (must address every critique concern)                                                             | `critiquing → rendering`    |
+| 5     | Orchestrator | `agents/orchestrator.ts` (render handoff)                    | `output/final.md` via `gatherTaskOutput` | `outputs/reports/<slug>.md` via `renderReport`                                                                      | `rendering → completed`     |
 
 **Orchestrator features** (E9-B06):
+
 - Resume-aware: derives starting stage from task's current status. Re-invoke on a partial task to pick up where it left off.
 - `step: true` with optional `confirmStep` hook pauses between stages for operator review.
 - Token budget via `ICO_MAX_RESEARCH_TOKENS` env var (default 200k). Budget exceeded → abort trace, task stays in post-stage status, later run with more headroom resumes.
@@ -143,6 +144,7 @@ For `ico research`, the system creates a scoped episodic task workspace and runs
 **Archival** (E9-B07): `archiveTask()` in `kernel/src/archive.ts` transitions `completed → archived`. Directory preserved, not deleted. CLI: `ico research archive <taskId>`.
 
 **Agent module conventions** (lock these in for future agents — consistency matters more than micro-optimizations):
+
 - Inject `ClaudeClient` rather than constructing internally — tests mock it without touching the SDK.
 - All file writes are atomic via `.tmp` + `renameSync`.
 - All inputs (brief/notes/critique/evidence) wrapped in XML-delimited tags inside the user prompt.
@@ -192,14 +194,14 @@ Day-to-day operator playbook for a working installation.
 
 ### Inspecting the workspace
 
-| Question | Command |
-|---|---|
-| What did I do today? | `tail -20 workspace/audit/log.md` (chronological, human-readable) |
-| Find every `ask` event | `grep '"event_type":"ask.start"' workspace/audit/traces/*.jsonl \| jq .` |
+| Question               | Command                                                                                                                            |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| What did I do today?   | `tail -20 workspace/audit/log.md` (chronological, human-readable)                                                                  |
+| Find every `ask` event | `grep '"event_type":"ask.start"' workspace/audit/traces/*.jsonl \| jq .`                                                           |
 | All events in one task | Resolve `correlation_id` from a `task.created` event, then `jq 'select(.correlation_id == "<id>")' workspace/audit/traces/*.jsonl` |
-| Workspace health | `ico lint` (schema, staleness, uncompiled, orphan checks) |
-| Counts at a glance | `ico status --workspace .` |
-| Trace coverage smoke | `ico eval run --spec evals/smoke/audit-chain-intact.eval.yaml` |
+| Workspace health       | `ico lint` (schema, staleness, uncompiled, orphan checks)                                                                          |
+| Counts at a glance     | `ico status --workspace .`                                                                                                         |
+| Trace coverage smoke   | `ico eval run --spec evals/smoke/audit-chain-intact.eval.yaml`                                                                     |
 
 ### Trace-based context refinement (audit M8)
 
@@ -225,28 +227,28 @@ ico recall export --format anki --out anki-deck.txt    # offline study
 
 ### Common environment variables
 
-| Var | Default | Purpose |
-|---|---|---|
-| `ANTHROPIC_API_KEY` | — | Claude API auth. Loaded from `.ico/config.json` or env. |
-| `ICO_MODEL` | `claude-sonnet-4-6` | Default model for compilation, ask, recall generation |
-| `MAX_TOKENS_PER_OPERATION` | `4096` | Per-call response cap |
-| `ICO_API_TIMEOUT` | `120000` | Claude API timeout in ms |
-| `ICO_MAX_RESEARCH_TOKENS` | `200000` | Hard budget for a single `ico research` task |
+| Var                        | Default             | Purpose                                                 |
+| -------------------------- | ------------------- | ------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`        | —                   | Claude API auth. Loaded from `.ico/config.json` or env. |
+| `ICO_MODEL`                | `claude-sonnet-4-6` | Default model for compilation, ask, recall generation   |
+| `MAX_TOKENS_PER_OPERATION` | `4096`              | Per-call response cap                                   |
+| `ICO_API_TIMEOUT`          | `120000`            | Claude API timeout in ms                                |
+| `ICO_MAX_RESEARCH_TOKENS`  | `200000`            | Hard budget for a single `ico research` task            |
 
 ## Troubleshooting
 
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| `ico ask` says "No compiled knowledge found" | Workspace hasn't been compiled yet | `ico compile all` |
-| `Disk full — no space left` | Out of disk during atomic write | Free space; atomic writes (`.tmp + rename`) ensure no half-written files leak |
-| `Workspace database is locked` | Another `ico` process is using the same workspace | Wait, or `lsof` the `state.db` to find the holder |
-| `Claude API authentication_error` | Bad / missing `ANTHROPIC_API_KEY` | Set the env var or update `.ico/config.json` |
-| `Claude API rate_limit_error` | Burst exceeded plan limit | Retry after a few minutes; reduce concurrency |
-| `Claude API overloaded_error` | Anthropic capacity issue | Retry; not a workspace problem |
-| Quiz file not found | B08 hasn't run for this topic | `ico recall generate --topic "<same name>"` first |
-| Lint reports orphan pages | Wiki page has no incoming `[[wikilinks]]` | Add references from a topic page or delete the orphan |
-| `audit-chain-intact` eval fails | Trace JSONL was edited by hand | Trace files are append-only — restore from backup; do not edit traces directly |
-| SIGINT mid-`ico compile` | Operator interrupted | Workspace is consistent (atomic writes); just re-run the compile pass |
+| Symptom                                      | Likely cause                                      | Fix                                                                            |
+| -------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `ico ask` says "No compiled knowledge found" | Workspace hasn't been compiled yet                | `ico compile all`                                                              |
+| `Disk full — no space left`                  | Out of disk during atomic write                   | Free space; atomic writes (`.tmp + rename`) ensure no half-written files leak  |
+| `Workspace database is locked`               | Another `ico` process is using the same workspace | Wait, or `lsof` the `state.db` to find the holder                              |
+| `Claude API authentication_error`            | Bad / missing `ANTHROPIC_API_KEY`                 | Set the env var or update `.ico/config.json`                                   |
+| `Claude API rate_limit_error`                | Burst exceeded plan limit                         | Retry after a few minutes; reduce concurrency                                  |
+| `Claude API overloaded_error`                | Anthropic capacity issue                          | Retry; not a workspace problem                                                 |
+| Quiz file not found                          | B08 hasn't run for this topic                     | `ico recall generate --topic "<same name>"` first                              |
+| Lint reports orphan pages                    | Wiki page has no incoming `[[wikilinks]]`         | Add references from a topic page or delete the orphan                          |
+| `audit-chain-intact` eval fails              | Trace JSONL was edited by hand                    | Trace files are append-only — restore from backup; do not edit traces directly |
+| SIGINT mid-`ico compile`                     | Operator interrupted                              | Workspace is consistent (atomic writes); just re-run the compile pass          |
 
 If a stack trace ever escapes a known failure mode, the top-level handler is doing its job — file an issue with the `[ico]`-prefixed message so the friendly-error mapper can be extended.
 

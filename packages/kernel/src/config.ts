@@ -10,11 +10,7 @@ export interface IcoConfig {
   readonly apiKey: string;
 }
 
-const SECRET_PATTERNS = [
-  /^sk-ant-/,
-  /^sk-/,
-  /^Bearer\s/,
-];
+const SECRET_PATTERNS = [/^sk-ant-/, /^sk-/, /^Bearer\s/];
 
 const SECRET_FIELD_NAMES = new Set([
   'apikey',
@@ -36,11 +32,11 @@ export function redactSecrets(obj: Record<string, unknown>): Record<string, unkn
   for (const [key, value] of Object.entries(obj)) {
     if (SECRET_FIELD_NAMES.has(key)) {
       result[key] = '[REDACTED]';
-    } else if (typeof value === 'string' && SECRET_PATTERNS.some(p => p.test(value))) {
+    } else if (typeof value === 'string' && SECRET_PATTERNS.some((p) => p.test(value))) {
       result[key] = '[REDACTED]';
     } else if (Array.isArray(value)) {
       result[key] = (value as unknown[]).map((item): unknown => {
-        if (typeof item === 'string' && SECRET_PATTERNS.some(p => p.test(item))) {
+        if (typeof item === 'string' && SECRET_PATTERNS.some((p) => p.test(item))) {
           return '[REDACTED]';
         }
         if (typeof item === 'object' && item !== null) {
@@ -101,7 +97,7 @@ export function loadConfig(cwd: string = process.cwd()): IcoConfig {
   if (apiKey === '') {
     throw new Error(
       'ANTHROPIC_API_KEY is required. Set it in your environment or .env file.\n' +
-      'See .env.example for configuration options.'
+        'See .env.example for configuration options.',
     );
   }
 

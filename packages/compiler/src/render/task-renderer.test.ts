@@ -203,10 +203,7 @@ describe('gatherTaskOutput — error cases', () => {
     const taskId = 'tsk-rendering';
     const taskDir = join(wsPath, 'tasks', taskId);
 
-    writeFile(
-      join(taskDir, 'status.json'),
-      JSON.stringify({ status: 'rendering' }),
-    );
+    writeFile(join(taskDir, 'status.json'), JSON.stringify({ status: 'rendering' }));
 
     const result = gatherTaskOutput(wsPath, taskId);
 

@@ -125,10 +125,7 @@ function isPromoted(db: Database, relativePath: string): boolean {
  * @returns `ok(ArtifactInfo[])` on success, or `err(Error)` if the workspace
  *          path cannot be accessed.
  */
-export function listArtifacts(
-  db: Database,
-  workspacePath: string,
-): Result<ArtifactInfo[], Error> {
+export function listArtifacts(db: Database, workspacePath: string): Result<ArtifactInfo[], Error> {
   const outputsRoot = join(workspacePath, 'outputs');
 
   // Collect all .md files across both subdirectories.
@@ -138,9 +135,11 @@ export function listArtifacts(
       collectMarkdownFiles(join(outputsRoot, subDir)),
     );
   } catch (e) {
-    return err(new Error(
-      `Failed to scan artifact directories: ${e instanceof Error ? e.message : String(e)}`,
-    ));
+    return err(
+      new Error(
+        `Failed to scan artifact directories: ${e instanceof Error ? e.message : String(e)}`,
+      ),
+    );
   }
 
   const artifacts: ArtifactInfo[] = [];
@@ -166,7 +165,9 @@ export function listArtifacts(
     try {
       parsed = matter(raw);
     } catch {
-      process.stderr.write(`[artifacts] Cannot parse frontmatter in "${relativePath}", skipping.\n`);
+      process.stderr.write(
+        `[artifacts] Cannot parse frontmatter in "${relativePath}", skipping.\n`,
+      );
       continue;
     }
 

@@ -1,5 +1,5 @@
 ---
-title: "MCP Workspace Server Design — @ico/mcp-workspace"
+title: 'MCP Workspace Server Design — @ico/mcp-workspace'
 date: 2026-04-09
 status: draft
 author: Jeremy Longshore
@@ -67,7 +67,7 @@ Resources are read-only views into workspace state. Each resource has a URI temp
 
 ### `workspace://tasks/{id}/status`
 
-**Description:** Computed cognitive status for a task (_proc/status.md equivalent).
+**Description:** Computed cognitive status for a task (\_proc/status.md equivalent).
 
 **Implementation:** `computeTaskStatus(db, wsRoot, id)` -> `renderTaskStatusMarkdown(view)`.
 

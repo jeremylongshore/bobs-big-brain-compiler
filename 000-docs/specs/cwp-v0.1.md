@@ -73,19 +73,18 @@ Every task workspace MUST contain a `brief.md` at its root. This file describes 
 
 ```yaml
 ---
-task_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-created_at: "2026-04-09T14:32:00Z"
-status: "created"
+task_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
+created_at: '2026-04-09T14:32:00Z'
+status: 'created'
 ---
-
 What are the tradeoffs between RAG and fine-tuning for domain-specific QA?
 ```
 
-| Field | Required | Type | Description |
-|-------|----------|------|-------------|
-| `task_id` | Yes | string (UUID) | Unique identifier for this task |
-| `created_at` | Yes | string (ISO 8601) | When the task was created |
-| `status` | Yes | string | Initial lifecycle state |
+| Field        | Required | Type              | Description                     |
+| ------------ | -------- | ----------------- | ------------------------------- |
+| `task_id`    | Yes      | string (UUID)     | Unique identifier for this task |
+| `created_at` | Yes      | string (ISO 8601) | When the task was created       |
+| `status`     | Yes      | string            | Initial lifecycle state         |
 
 The body of `brief.md` is the human-readable task description or research question.
 
@@ -97,11 +96,11 @@ See Section 5 (Computed Views). This file does not exist in the reference implem
 
 Files in `wiki/` carry YAML frontmatter with a `type` discriminator field. The reference implementation defines seven page types: `source-summary`, `concept`, `topic`, `entity`, `contradiction`, `open-question`, and `semantic-index`. Each type has its own schema. At minimum, all compiled pages SHOULD include:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `type` | string | Page type discriminator |
-| `id` | string (UUID) | Unique identifier |
-| `title` | string | Human-readable title |
+| Field         | Type              | Description                 |
+| ------------- | ----------------- | --------------------------- |
+| `type`        | string            | Page type discriminator     |
+| `id`          | string (UUID)     | Unique identifier           |
+| `title`       | string            | Human-readable title        |
 | `compiled_at` | string (ISO 8601) | When this page was compiled |
 
 Full schemas for all seven types are defined in the reference implementation's frontmatter spec (009-AT-FMSC).
@@ -110,20 +109,20 @@ Full schemas for all seven types are defined in the reference implementation's f
 
 ## 3. Governance Model
 
-CWP separates *who writes what* to prevent agent systems from corrupting their own control state. This is the most important convention in the protocol.
+CWP separates _who writes what_ to prevent agent systems from corrupting their own control state. This is the most important convention in the protocol.
 
-| Directory | Writer | Enforcement |
-|-----------|--------|-------------|
-| `raw/` | Ingest pipeline only | Code convention. Files set to `0444` after write. |
-| `wiki/` | Compiler only | Code convention. Overwrites only on recompilation. |
-| `tasks/*/evidence/` | Collector agents | Code convention. |
-| `tasks/*/notes/` | Summarizer agents | Code convention. |
-| `tasks/*/drafts/` | Integrator agents | Code convention. |
-| `tasks/*/critique/` | Skeptic agents | Code convention. |
-| `tasks/*/output/` | Builder agents | Code convention. |
-| `outputs/` | Render pipeline | Code convention. |
-| `audit/` | Kernel (deterministic control plane) only | Code convention. Files set to `0444` after write. |
-| `.cwp/state.db` | Kernel only | Code convention. SQLite WAL mode with file lock. |
+| Directory           | Writer                                    | Enforcement                                        |
+| ------------------- | ----------------------------------------- | -------------------------------------------------- |
+| `raw/`              | Ingest pipeline only                      | Code convention. Files set to `0444` after write.  |
+| `wiki/`             | Compiler only                             | Code convention. Overwrites only on recompilation. |
+| `tasks/*/evidence/` | Collector agents                          | Code convention.                                   |
+| `tasks/*/notes/`    | Summarizer agents                         | Code convention.                                   |
+| `tasks/*/drafts/`   | Integrator agents                         | Code convention.                                   |
+| `tasks/*/critique/` | Skeptic agents                            | Code convention.                                   |
+| `tasks/*/output/`   | Builder agents                            | Code convention.                                   |
+| `outputs/`          | Render pipeline                           | Code convention.                                   |
+| `audit/`            | Kernel (deterministic control plane) only | Code convention. Files set to `0444` after write.  |
+| `.cwp/state.db`     | Kernel only                               | Code convention. SQLite WAL mode with file lock.   |
 
 **Honesty note.** Enforcement is entirely by code convention in the reference implementation, not by OS-level ACLs or capability systems. The file permission bits (`0444`) provide a safety net against accidental overwrites but are not a security boundary. Any process with user-level access can bypass them.
 
@@ -165,25 +164,24 @@ A computed view showing the current phase and progress of a task.
 
 ```yaml
 ---
-task_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-phase: "synthesizing"
+task_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
+phase: 'synthesizing'
 evidence_count: 4
 draft_count: 1
-updated_at: "2026-04-09T16:00:00Z"
+updated_at: '2026-04-09T16:00:00Z'
 ---
-
 Phase: synthesizing (3 of 7)
 Evidence files: 4
 Draft files: 1
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `task_id` | string (UUID) | Task identifier |
-| `phase` | string | Current lifecycle phase from the task state machine |
-| `evidence_count` | integer | Number of files in `evidence/` |
-| `draft_count` | integer | Number of files in `drafts/` |
-| `updated_at` | string (ISO 8601) | When this view was last computed |
+| Field            | Type              | Description                                         |
+| ---------------- | ----------------- | --------------------------------------------------- |
+| `task_id`        | string (UUID)     | Task identifier                                     |
+| `phase`          | string            | Current lifecycle phase from the task state machine |
+| `evidence_count` | integer           | Number of files in `evidence/`                      |
+| `draft_count`    | integer           | Number of files in `drafts/`                        |
+| `updated_at`     | string (ISO 8601) | When this view was last computed                    |
 
 **Key constraint.** `_proc/` files are always computed, never agent-written. They are regenerated on demand and may be deleted without data loss. They exist to make task state inspectable without querying SQLite directly.
 

@@ -1,5 +1,5 @@
 ---
-title: "The Filesystem Is the Agent Protocol"
+title: 'The Filesystem Is the Agent Protocol'
 date: 2026-04-09
 author: Jeremy Longshore
 tags:
@@ -16,7 +16,7 @@ In 1969, Ken Thompson made a decision that shaped all of computing: everything i
 
 In 2026, AI agents are making the opposite decision. Every framework invents its own state management. Cognitive state lives in context windows that evaporate on timeout. Memory is an afterthought bolted onto a chat loop. Coordination between agents means custom message-passing protocols that nobody outside the framework can inspect.
 
-We standardized tool access. MCP gave agents a uniform way to call functions --- the equivalent of syscalls. But nobody standardized where agents *work*. There is no `/home` for an agent. No working directory. No convention for how an agent's evidence, drafts, notes, and conclusions should be laid out on disk so that another agent (or a human) can walk into the workspace and understand what happened.
+We standardized tool access. MCP gave agents a uniform way to call functions --- the equivalent of syscalls. But nobody standardized where agents _work_. There is no `/home` for an agent. No working directory. No convention for how an agent's evidence, drafts, notes, and conclusions should be laid out on disk so that another agent (or a human) can walk into the workspace and understand what happened.
 
 This essay argues that the missing piece is not another orchestration framework. It is a structured, durable, audited workspace --- a filesystem convention that treats the context window as a volatile cache and the filesystem as the primary workspace. This is not an original observation. Multiple research efforts have converged on the same insight from different directions. What follows is what we learned building one such system, including the parts we got wrong.
 
@@ -24,7 +24,7 @@ This essay argues that the missing piece is not another orchestration framework.
 
 The arc of computing infrastructure bends toward addressability. Each major advance took something that was previously opaque and gave it a name you could point to.
 
-**Assemblers** replaced raw machine code addresses with symbolic labels. Instead of jumping to byte offset 0x4A2F, you wrote `JMP loop_start`. The program's structure became readable and modifiable. The key insight wasn't the syntax --- it was that the jump target had a *name* that survived editing.
+**Assemblers** replaced raw machine code addresses with symbolic labels. Instead of jumping to byte offset 0x4A2F, you wrote `JMP loop_start`. The program's structure became readable and modifiable. The key insight wasn't the syntax --- it was that the jump target had a _name_ that survived editing.
 
 **Compilers** added durable intermediate representations. A C compiler doesn't just translate source to binary --- it produces object files, symbol tables, and link maps. These intermediate artifacts are inspectable. When something goes wrong, you can examine the `.o` file, read the symbol table, check the linker output. The compilation pipeline makes its work visible at every stage.
 
@@ -49,7 +49,7 @@ Consider what happens when you ask an agent to research a complex topic across m
 - **LangGraph** stores state in a checkpointer. The state shape is defined per-graph. There is no convention for where evidence goes versus where conclusions go.
 - **CrewAI** passes results between agents via task objects. The intermediate state is in-memory. If you want to inspect what the "researcher" agent found, you need to hook into the framework.
 - **AutoGen** uses conversation history as the coordination mechanism. Everything is a chat message. There is no distinction between evidence, working notes, and final output.
-- **Claude's tool_use** returns results into the context window. The context window *is* the working memory. When it fills up, you start over.
+- **Claude's tool_use** returns results into the context window. The context window _is_ the working memory. When it fills up, you start over.
 
 None of these are wrong for their use cases. But they all share a property: the agent's cognitive workspace is opaque to everything outside the framework. You can't `ls` what an agent found. You can't `diff` two research sessions. You can't `grep` across agent outputs without framework-specific tooling.
 
@@ -69,25 +69,25 @@ What none of these systems do (as far as I've found) is compute live views from 
 
 The current default paradigm for AI agent development:
 
-| Concern | Current Approach |
-|---------|-----------------|
-| Working memory | Context window |
-| Persistence | Optional, framework-specific |
-| Coordination | Message passing between agents |
-| Introspection | Logging (if you're lucky) |
-| Auditability | Not a priority |
+| Concern        | Current Approach               |
+| -------------- | ------------------------------ |
+| Working memory | Context window                 |
+| Persistence    | Optional, framework-specific   |
+| Coordination   | Message passing between agents |
+| Introspection  | Logging (if you're lucky)      |
+| Auditability   | Not a priority                 |
 
 The proposed inversion:
 
-| Concern | Workspace Approach |
-|---------|-------------------|
-| Working memory | Files on disk |
-| Persistence | Filesystem (it is always there) |
-| Coordination | Reading and writing files |
-| Introspection | `ls`, `cat`, `grep` |
-| Auditability | Append-only trace files |
+| Concern        | Workspace Approach              |
+| -------------- | ------------------------------- |
+| Working memory | Files on disk                   |
+| Persistence    | Filesystem (it is always there) |
+| Coordination   | Reading and writing files       |
+| Introspection  | `ls`, `cat`, `grep`             |
+| Auditability   | Append-only trace files         |
 
-This is not as clean as the table makes it look. I need to be honest about the actual implementation: **SQLite is the real coordination substrate, not the filesystem.** The sources table, compilations table, tasks table, and promotions table are what maintain consistent state. The filesystem stores the *content* of that state --- the markdown files, the raw PDFs, the JSONL traces. The database answers "what has been compiled and what is stale?" The filesystem answers "what does the compiled output actually say?"
+This is not as clean as the table makes it look. I need to be honest about the actual implementation: **SQLite is the real coordination substrate, not the filesystem.** The sources table, compilations table, tasks table, and promotions table are what maintain consistent state. The filesystem stores the _content_ of that state --- the markdown files, the raw PDFs, the JSONL traces. The database answers "what has been compiled and what is stale?" The filesystem answers "what does the compiled output actually say?"
 
 So the more accurate claim is: agents need a durable, structured workspace with both a state database and a content filesystem, and the content should be in human-readable formats (markdown, JSONL) that can be inspected without special tooling.
 
@@ -164,7 +164,7 @@ The specific claim we are willing to defend is narrow: agents that compile knowl
 
 We should have tested this claim rigorously before building eight epics of implementation. The evaluation framework is Epic 10 in our plan. It should have been Epic 2. The core experiment is straightforward: take a set of research questions, run them with raw-docs-in-context (the baseline) and with compiled-wiki-in-context (the treatment), and measure answer quality, factual accuracy, and source attribution. If compiled knowledge doesn't meaningfully beat raw documents stuffed into a context window, then the compilation layer doesn't deserve to exist. We have not run this experiment yet. That is a significant gap, and we are aware of it.
 
-In the meantime, here is what we observe anecdotally: when agents work in a structured workspace, the *human* experience improves even if the agent performance is unchanged. You can see what the agent did. You can read the evidence it gathered. You can check the sources it cited. You can disagree with its conclusions and point to the specific draft where it went wrong. The workspace makes the agent's cognition *addressable*, and addressability enables accountability.
+In the meantime, here is what we observe anecdotally: when agents work in a structured workspace, the _human_ experience improves even if the agent performance is unchanged. You can see what the agent did. You can read the evidence it gathered. You can check the sources it cited. You can disagree with its conclusions and point to the specific draft where it went wrong. The workspace makes the agent's cognition _addressable_, and addressability enables accountability.
 
 This brings us back to where we started. Assemblers made code addresses readable. Compilers made intermediate representations inspectable. Unix made devices and processes addressable through files. The pattern is consistent: when you give something an address, you can reason about it, compose it, and improve it.
 
@@ -176,9 +176,9 @@ The filesystem is already there. It has been there since 1969. We just need to u
 
 ## References
 
-- Sumers, T. R., Yao, S., Narasimhan, K., & Griffiths, T. L. (2023). "Cognitive Architectures for Language Agents." *arXiv:2309.02427*.
-- Park, J. S., O'Brien, J. C., Cai, C. J., et al. (2023). "Generative Agents: Interactive Simulacra of Human Behavior." *UIST 2023*.
-- Hu, Z., et al. (2025). "MemOS: An Operating System for LLM Memory Management." *arXiv preprint*.
+- Sumers, T. R., Yao, S., Narasimhan, K., & Griffiths, T. L. (2023). "Cognitive Architectures for Language Agents." _arXiv:2309.02427_.
+- Park, J. S., O'Brien, J. C., Cai, C. J., et al. (2023). "Generative Agents: Interactive Simulacra of Human Behavior." _UIST 2023_.
+- Hu, Z., et al. (2025). "MemOS: An Operating System for LLM Memory Management." _arXiv preprint_.
 - AgentFS. GitHub. Virtual filesystem for AI agent persistent storage.
 - Git Context Controller. Using git repositories as multi-agent coordination substrate.
 - Letta (formerly MemGPT). Tiered memory management for LLM agents.

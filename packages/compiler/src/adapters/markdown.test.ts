@@ -137,9 +137,7 @@ describe('ingestMarkdown', () => {
     // Words: Test, Document, This, is, the, body, of, the, document., It, has, multiple, words, for, counting, purposes.
     // That is 16 tokens split on whitespace.
     const body = result.value.content;
-    const expectedCount = body
-      .split(/\s+/)
-      .filter((w) => w.length > 0).length;
+    const expectedCount = body.split(/\s+/).filter((w) => w.length > 0).length;
 
     expect(result.value.metadata.wordCount).toBe(expectedCount);
     expect(result.value.metadata.wordCount).toBeGreaterThan(0);

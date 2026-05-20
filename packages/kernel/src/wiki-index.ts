@@ -1,10 +1,4 @@
-import {
-  existsSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 
 import { err, ok, type Result } from '@ico/types';
@@ -91,9 +85,7 @@ export function rebuildWikiIndex(workspacePath: string): Result<number, Error> {
       const entries: IndexEntry[] = [];
 
       if (existsSync(dirPath)) {
-        const files = readdirSync(dirPath).filter(
-          (f) => f.endsWith('.md') && f !== '.gitkeep',
-        );
+        const files = readdirSync(dirPath).filter((f) => f.endsWith('.md') && f !== '.gitkeep');
 
         for (const filename of files) {
           const filePath = resolve(dirPath, filename);

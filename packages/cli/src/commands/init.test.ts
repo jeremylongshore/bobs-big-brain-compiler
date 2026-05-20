@@ -19,10 +19,7 @@ import { type GlobalOptions, type InitOptions, runInit } from './init.js';
 // ---------------------------------------------------------------------------
 
 function tmpBase(): string {
-  return join(
-    tmpdir(),
-    `ico-init-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  );
+  return join(tmpdir(), `ico-init-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 }
 
 // ---------------------------------------------------------------------------

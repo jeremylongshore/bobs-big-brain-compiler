@@ -7,13 +7,13 @@ Performance benchmarks for `intentional-cognition-os` (E10-B06).
 The five operator-visible commands, against the v1 budgets declared in
 epic-10:
 
-| Command | Target (moderate corpus) | Status |
-|---|---|---|
-| `ico ingest <file>` | < 2 s per source | ✅ shipped |
-| `ico lint` | < 30 s | ✅ shipped |
-| `ico compile <topic>` | < 30 s per topic | ✅ shipped (Claude-gated, opt-in) |
-| `ico ask <question>` | < 10 s per query | ✅ shipped (Claude-gated, opt-in) |
-| `ico render report <topic>` | < 5 s per report | ✅ shipped (Claude-gated, opt-in) |
+| Command                     | Target (moderate corpus) | Status                            |
+| --------------------------- | ------------------------ | --------------------------------- |
+| `ico ingest <file>`         | < 2 s per source         | ✅ shipped                        |
+| `ico lint`                  | < 30 s                   | ✅ shipped                        |
+| `ico compile <topic>`       | < 30 s per topic         | ✅ shipped (Claude-gated, opt-in) |
+| `ico ask <question>`        | < 10 s per query         | ✅ shipped (Claude-gated, opt-in) |
+| `ico render report <topic>` | < 5 s per report         | ✅ shipped (Claude-gated, opt-in) |
 
 "Moderate corpus" = **50 sources, ~500 words each, ≈30 compiled wiki pages**
 (25 concepts + 5 topics for the lint scenario).
@@ -36,9 +36,9 @@ distinguish "didn't run today" from "regressed to zero".
 
 ### Large-corpus run + 3× degradation gate
 
-Per epic-10's verification clause: *"Large corpus (500+ sources)
+Per epic-10's verification clause: _"Large corpus (500+ sources)
 completes without failure or degradation beyond 3× moderate-corpus
-baseline."*
+baseline."_
 
 Opt in with `ICO_BENCH_LARGE_CORPUS=1`:
 

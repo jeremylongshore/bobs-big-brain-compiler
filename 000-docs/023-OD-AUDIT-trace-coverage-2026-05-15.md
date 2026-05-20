@@ -4,7 +4,7 @@ doc_id: 023-OD-AUDIT-trace-coverage-2026-05-15
 status: complete
 created: 2026-05-15
 related_beads:
-  - intentional-cognition-os-2rd.4  # E10-B04
+  - intentional-cognition-os-2rd.4 # E10-B04
 related_specs:
   - 011-AT-TRSC-trace-schema
 ---
@@ -29,26 +29,26 @@ For every CLI command, this audit checks:
 
 ### Coverage matrix
 
-| Command | Trace event(s) | Audit log | Correlation | Notes |
-|---|---|---|---|---|
-| `ico init` | — | `workspace.init` | n/a | One-shot bootstrap; `workspace.init` isn't in §6 yet — left as audit-log entry. **Acceptable** for now. |
-| `ico mount add\|remove` | — | — | n/a | Mutates a kernel table but emits nothing. **Gap** — should at least append to audit log. Tracked for B05+. |
-| `ico ingest` | `ingest` (per file) | yes (per file) | per-file | Conforms. |
-| `ico compile` | `compilation.start`, `compilation.complete` (per pass) | yes | per pass | Six passes each emit a pair. Conforms. |
-| `ico ask` | `ask.start`, `ask.complete` | yes | start/complete share id | Conforms. |
-| `ico research <brief>` | `task.created` + per-stage traces from agents | yes | per-task | Orchestrator emits `orchestrator.{start,stage_start,stage_complete,abort,complete}` plus per-agent traces. Conforms. |
-| `ico research archive <id>` | `task.archived` | yes | per-task | Conforms. |
-| `ico render` | `render.start`, `render.complete` | yes | start/complete share id | Conforms. |
-| `ico promote` | `promotion` | yes | per-promotion | Conforms. |
-| `ico unpromote` | `unpromote` | yes | per-unpromotion | Conforms. (Note: `unpromote` isn't enumerated in §6; treated as the inverse of `promotion`. Spec gap, not a code gap.) |
-| `ico lint` | **`lint.run`, `lint.result`** | yes | start/result share id | **Fixed in this bead** — was previously a stub. |
-| `ico recall generate` | `recall.generate` | yes | per-generation | Conforms. |
-| `ico recall quiz` | `recall.quiz`, `recall.result` (per question) | yes | session-id as correlation | Conforms — addressed via the gemini-review fix on PR #52. |
-| `ico recall weak` | — | — | n/a | Read-only aggregate over `recall_results`. **No trace required** — read-only by design. |
-| `ico recall export` | — | — | n/a | Read-only over `recall/cards/`. **No trace required** — pure data transform with no mutation. |
-| `ico eval run` | `eval.run`, `eval.result` (per spec) | — | per-spec | Conforms. Batch-level correlation deferred (see "Future work"). |
-| `ico status` | — | — | n/a | Read-only summary. **No trace required**. |
-| `ico inspect` | — | — | n/a | Read-only inspector. **No trace required**. |
+| Command                     | Trace event(s)                                         | Audit log        | Correlation               | Notes                                                                                                                  |
+| --------------------------- | ------------------------------------------------------ | ---------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `ico init`                  | —                                                      | `workspace.init` | n/a                       | One-shot bootstrap; `workspace.init` isn't in §6 yet — left as audit-log entry. **Acceptable** for now.                |
+| `ico mount add\|remove`     | —                                                      | —                | n/a                       | Mutates a kernel table but emits nothing. **Gap** — should at least append to audit log. Tracked for B05+.             |
+| `ico ingest`                | `ingest` (per file)                                    | yes (per file)   | per-file                  | Conforms.                                                                                                              |
+| `ico compile`               | `compilation.start`, `compilation.complete` (per pass) | yes              | per pass                  | Six passes each emit a pair. Conforms.                                                                                 |
+| `ico ask`                   | `ask.start`, `ask.complete`                            | yes              | start/complete share id   | Conforms.                                                                                                              |
+| `ico research <brief>`      | `task.created` + per-stage traces from agents          | yes              | per-task                  | Orchestrator emits `orchestrator.{start,stage_start,stage_complete,abort,complete}` plus per-agent traces. Conforms.   |
+| `ico research archive <id>` | `task.archived`                                        | yes              | per-task                  | Conforms.                                                                                                              |
+| `ico render`                | `render.start`, `render.complete`                      | yes              | start/complete share id   | Conforms.                                                                                                              |
+| `ico promote`               | `promotion`                                            | yes              | per-promotion             | Conforms.                                                                                                              |
+| `ico unpromote`             | `unpromote`                                            | yes              | per-unpromotion           | Conforms. (Note: `unpromote` isn't enumerated in §6; treated as the inverse of `promotion`. Spec gap, not a code gap.) |
+| `ico lint`                  | **`lint.run`, `lint.result`**                          | yes              | start/result share id     | **Fixed in this bead** — was previously a stub.                                                                        |
+| `ico recall generate`       | `recall.generate`                                      | yes              | per-generation            | Conforms.                                                                                                              |
+| `ico recall quiz`           | `recall.quiz`, `recall.result` (per question)          | yes              | session-id as correlation | Conforms — addressed via the gemini-review fix on PR #52.                                                              |
+| `ico recall weak`           | —                                                      | —                | n/a                       | Read-only aggregate over `recall_results`. **No trace required** — read-only by design.                                |
+| `ico recall export`         | —                                                      | —                | n/a                       | Read-only over `recall/cards/`. **No trace required** — pure data transform with no mutation.                          |
+| `ico eval run`              | `eval.run`, `eval.result` (per spec)                   | —                | per-spec                  | Conforms. Batch-level correlation deferred (see "Future work").                                                        |
+| `ico status`                | —                                                      | —                | n/a                       | Read-only summary. **No trace required**.                                                                              |
+| `ico inspect`               | —                                                      | —                | n/a                       | Read-only inspector. **No trace required**.                                                                            |
 
 ### Confirmed-good event types
 

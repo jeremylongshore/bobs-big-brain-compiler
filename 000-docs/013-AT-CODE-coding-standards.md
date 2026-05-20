@@ -1,4 +1,5 @@
 # TypeScript Coding Standards and Package Conventions
+
 > One way to write it. Zero ambiguity.
 
 **Author:** Jeremy Longshore — Intent Solutions
@@ -85,16 +86,16 @@ Each package has its own `tsconfig.json` that extends the root and overrides onl
 
 ### 2.3 Key flag rationale
 
-| Flag | Why it is on |
-|---|---|
-| `module: "NodeNext"` | Matches Node.js 22 ESM resolution exactly |
-| `moduleResolution: "NodeNext"` | Requires explicit `.js` extensions in imports — no magic |
-| `verbatimModuleSyntax` | Enforces `import type` for type-only imports; eliminates runtime import surprises |
-| `exactOptionalPropertyTypes` | `{ x?: string }` does not allow `x: undefined` — distinguishes absent from explicit undefined |
-| `noUncheckedIndexedAccess` | Array and record index access returns `T \| undefined` — forces correct null handling |
-| `useUnknownInCatchVariables` | Caught values are `unknown`, not `any` — requires explicit narrowing |
-| `isolatedModules` | Each file is independently transpilable; required for tsup compatibility |
-| `skipLibCheck: false` | Type errors in dependencies are visible; do not mask third-party problems |
+| Flag                           | Why it is on                                                                                  |
+| ------------------------------ | --------------------------------------------------------------------------------------------- |
+| `module: "NodeNext"`           | Matches Node.js 22 ESM resolution exactly                                                     |
+| `moduleResolution: "NodeNext"` | Requires explicit `.js` extensions in imports — no magic                                      |
+| `verbatimModuleSyntax`         | Enforces `import type` for type-only imports; eliminates runtime import surprises             |
+| `exactOptionalPropertyTypes`   | `{ x?: string }` does not allow `x: undefined` — distinguishes absent from explicit undefined |
+| `noUncheckedIndexedAccess`     | Array and record index access returns `T \| undefined` — forces correct null handling         |
+| `useUnknownInCatchVariables`   | Caught values are `unknown`, not `any` — requires explicit narrowing                          |
+| `isolatedModules`              | Each file is independently transpilable; required for tsup compatibility                      |
+| `skipLibCheck: false`          | Type errors in dependencies are visible; do not mask third-party problems                     |
 
 ---
 
@@ -105,6 +106,7 @@ Each package has its own `tsconfig.json` that extends the root and overrides onl
 Every package sets `"type": "module"` in `package.json`. CommonJS is not used anywhere in this codebase.
 
 **Do:**
+
 ```typescript
 // src/kernel/workspace.ts
 import { readFile } from 'node:fs/promises';
@@ -113,6 +115,7 @@ import { initDb } from './state.js';
 ```
 
 **Do not:**
+
 ```typescript
 // CJS syntax is banned
 const fs = require('fs');
@@ -128,15 +131,17 @@ module.exports = { createWorkspace };
 - No barrel re-export files (`index.ts` that re-exports everything). Import from the specific module.
 
 **Do:**
+
 ```typescript
 import type { SourceRecord } from '../types/source.js';
 import { createHash } from 'node:crypto';
 ```
 
 **Do not:**
+
 ```typescript
 import { SourceRecord } from '../types/index.js'; // barrel file
-import crypto from 'crypto';                       // missing node: prefix
+import crypto from 'crypto'; // missing node: prefix
 ```
 
 ### 3.3 Import ordering
@@ -160,9 +165,7 @@ Library code (kernel, compiler, types) never throws. All fallible operations ret
 
 ```typescript
 // packages/types/src/result.ts
-export type Result<T, E extends Error = Error> =
-  | { ok: true; value: T }
-  | { ok: false; error: E };
+export type Result<T, E extends Error = Error> = { ok: true; value: T } | { ok: false; error: E };
 
 export function ok<T>(value: T): Result<T, never> {
   return { ok: true, value };
@@ -176,6 +179,7 @@ export function err<E extends Error>(error: E): Result<never, E> {
 ### 4.2 Using Result
 
 **Do:**
+
 ```typescript
 import { ok, err, type Result } from '@ico/types';
 
@@ -191,6 +195,7 @@ async function ingestSource(path: string): Promise<Result<SourceRecord>> {
 ```
 
 **Do not:**
+
 ```typescript
 // Never throw in library code
 async function ingestSource(path: string): Promise<SourceRecord> {
@@ -223,6 +228,7 @@ export async function runIngest(path: string): Promise<void> {
 `useUnknownInCatchVariables` is on. All catch clauses receive `unknown`. Narrow before use.
 
 **Do:**
+
 ```typescript
 try {
   await riskyOperation();
@@ -233,10 +239,12 @@ try {
 ```
 
 **Do not:**
+
 ```typescript
 try {
   await riskyOperation();
-} catch (e: any) { // any is banned in catch
+} catch (e: any) {
+  // any is banned in catch
   return err(new Error(e.message));
 }
 ```
@@ -245,21 +253,22 @@ try {
 
 ## 5. Naming Conventions
 
-| Category | Convention | Example |
-|---|---|---|
-| File names | kebab-case | `source-record.ts`, `compile-pass.ts` |
-| Directories | kebab-case | `packages/kernel/`, `open-questions/` |
-| Types, interfaces, classes | PascalCase | `SourceRecord`, `CompilerPass`, `WorkspaceConfig` |
-| Enums | PascalCase (enum), SCREAMING_SNAKE (members) | `TaskStatus.IN_PROGRESS` |
-| Functions, methods | camelCase | `ingestSource()`, `buildRecord()` |
-| Variables, parameters | camelCase | `sourceId`, `outputPath` |
-| Constants (module-level, never reassigned) | SCREAMING_SNAKE_CASE | `DEFAULT_MODEL`, `MAX_RETRIES` |
-| Zod schemas | camelCase with `Schema` suffix | `sourceRecordSchema`, `workspaceConfigSchema` |
-| Test files | same name as source + `.test.ts` | `state.test.ts` |
+| Category                                   | Convention                                   | Example                                           |
+| ------------------------------------------ | -------------------------------------------- | ------------------------------------------------- |
+| File names                                 | kebab-case                                   | `source-record.ts`, `compile-pass.ts`             |
+| Directories                                | kebab-case                                   | `packages/kernel/`, `open-questions/`             |
+| Types, interfaces, classes                 | PascalCase                                   | `SourceRecord`, `CompilerPass`, `WorkspaceConfig` |
+| Enums                                      | PascalCase (enum), SCREAMING_SNAKE (members) | `TaskStatus.IN_PROGRESS`                          |
+| Functions, methods                         | camelCase                                    | `ingestSource()`, `buildRecord()`                 |
+| Variables, parameters                      | camelCase                                    | `sourceId`, `outputPath`                          |
+| Constants (module-level, never reassigned) | SCREAMING_SNAKE_CASE                         | `DEFAULT_MODEL`, `MAX_RETRIES`                    |
+| Zod schemas                                | camelCase with `Schema` suffix               | `sourceRecordSchema`, `workspaceConfigSchema`     |
+| Test files                                 | same name as source + `.test.ts`             | `state.test.ts`                                   |
 
 ### 5.1 File naming examples
 
 **Do:**
+
 ```
 packages/kernel/src/source-registry.ts
 packages/compiler/src/summarize-pass.ts
@@ -267,6 +276,7 @@ packages/types/src/compilation-result.ts
 ```
 
 **Do not:**
+
 ```
 packages/kernel/src/SourceRegistry.ts   // PascalCase file name
 packages/compiler/src/summarizePass.ts  // camelCase file name
@@ -290,9 +300,7 @@ interface SourceRecord {
 type CompilationStatus = 'pending' | 'running' | 'done' | 'failed';
 
 // Use type — Result is a discriminated union
-type Result<T, E extends Error = Error> =
-  | { ok: true; value: T }
-  | { ok: false; error: E };
+type Result<T, E extends Error = Error> = { ok: true; value: T } | { ok: false; error: E };
 ```
 
 ---
@@ -303,12 +311,12 @@ type Result<T, E extends Error = Error> =
 
 Use `ICO_LOG_LEVEL` environment variable. Valid values: `debug`, `info`, `warn`, `error`. Default: `info`.
 
-| Level | When to use |
-|---|---|
-| `debug` | Internal state transitions, SQL queries, API call parameters |
-| `info` | Meaningful operations: ingest, compile, promote, task lifecycle |
-| `warn` | Recoverable issues: stale pages, missing optional fields, retries |
-| `error` | Operation failures that return a `Result<never, E>` |
+| Level   | When to use                                                       |
+| ------- | ----------------------------------------------------------------- |
+| `debug` | Internal state transitions, SQL queries, API call parameters      |
+| `info`  | Meaningful operations: ingest, compile, promote, task lifecycle   |
+| `warn`  | Recoverable issues: stale pages, missing optional fields, retries |
+| `error` | Operation failures that return a `Result<never, E>`               |
 
 ### 6.2 Structured log format
 
@@ -318,8 +326,8 @@ All log entries are JSON objects written to stderr. Do not use `console.log` for
 // packages/kernel/src/logger.ts
 export interface LogEntry {
   level: 'debug' | 'info' | 'warn' | 'error';
-  ts: string;           // ISO 8601
-  component: string;    // e.g., 'kernel.state', 'compiler.summarize'
+  ts: string; // ISO 8601
+  component: string; // e.g., 'kernel.state', 'compiler.summarize'
   msg: string;
   data?: Record<string, unknown>;
 }
@@ -330,6 +338,7 @@ export function log(entry: LogEntry): void {
 ```
 
 **Do:**
+
 ```typescript
 log({
   level: 'info',
@@ -341,6 +350,7 @@ log({
 ```
 
 **Do not:**
+
 ```typescript
 console.log(`Ingested ${record.path} with key ${apiKey}`); // unstructured, unredacted
 ```
@@ -368,12 +378,16 @@ Every log entry and every JSONL audit trace that records `data` of type `Record<
  * @param obj - The data object to redact. Shallow — nested objects are not recursed.
  * @returns A new object with sensitive values replaced by "[REDACTED]".
  */
-export function redactSecrets(
-  obj: Record<string, unknown>
-): Record<string, unknown> {
+export function redactSecrets(obj: Record<string, unknown>): Record<string, unknown> {
   const SENSITIVE_KEYS = new Set([
-    'apikey', 'api_key', 'authorization', 'token',
-    'secret', 'password', 'credential', 'passwd',
+    'apikey',
+    'api_key',
+    'authorization',
+    'token',
+    'secret',
+    'password',
+    'credential',
+    'passwd',
   ]);
   const SENSITIVE_VALUE_PATTERNS = [/^sk-ant-/i, /^Bearer /i];
 
@@ -390,7 +404,7 @@ export function redactSecrets(
         }
       }
       return [key, value];
-    })
+    }),
   );
 }
 ```
@@ -398,6 +412,7 @@ export function redactSecrets(
 ### 7.3 Usage rule
 
 **Do:**
+
 ```typescript
 log({
   level: 'debug',
@@ -409,6 +424,7 @@ log({
 ```
 
 **Do not:**
+
 ```typescript
 log({
   level: 'debug',
@@ -519,7 +535,7 @@ export interface SummaryOutput {
 export class CompilerError extends Error {
   constructor(
     message: string,
-    public readonly context: Record<string, unknown>
+    public readonly context: Record<string, unknown>,
   ) {
     super(message);
     this.name = 'CompilerError';
@@ -530,7 +546,7 @@ export async function summarizeSource(
   client: Anthropic,
   sourceId: string,
   content: string,
-  model: string
+  model: string,
 ): Promise<Result<SummaryOutput, CompilerError>> {
   log({
     level: 'debug',
@@ -559,10 +575,10 @@ export async function summarizeSource(
   } catch (e: unknown) {
     // Convert all exceptions to Result errors — nothing escapes this boundary
     const message = e instanceof Error ? e.message : String(e);
-    const error = new CompilerError(
-      `Summarization failed for source ${sourceId}: ${message}`,
-      { sourceId, model }
-    );
+    const error = new CompilerError(`Summarization failed for source ${sourceId}: ${message}`, {
+      sourceId,
+      model,
+    });
     log({
       level: 'error',
       ts: new Date().toISOString(),
@@ -597,7 +613,7 @@ export interface CompilationRecord {
 export class KernelCompilationError extends Error {
   constructor(
     message: string,
-    public readonly cause: CompilerError
+    public readonly cause: CompilerError,
   ) {
     super(message);
     this.name = 'KernelCompilationError';
@@ -606,14 +622,14 @@ export class KernelCompilationError extends Error {
 
 export async function compileSource(
   sourceId: string,
-  content: string
+  content: string,
 ): Promise<Result<CompilationRecord, KernelCompilationError>> {
   // Compiler is probabilistic — its result is always a Result, never a throw
   const compileResult = await summarizeSource(
     anthropicClient,
     sourceId,
     content,
-    process.env['ICO_MODEL'] ?? 'claude-sonnet-4-6'
+    process.env['ICO_MODEL'] ?? 'claude-sonnet-4-6',
   );
 
   if (!compileResult.ok) {
@@ -621,8 +637,8 @@ export async function compileSource(
     return err(
       new KernelCompilationError(
         `Kernel failed to compile source ${sourceId}`,
-        compileResult.error
-      )
+        compileResult.error,
+      ),
     );
   }
 
@@ -716,7 +732,7 @@ Apply this scaffold to each of `packages/types/`, `packages/kernel/`, `packages/
 
 ```yaml
 packages:
-  - "packages/*"
+  - 'packages/*'
 ```
 
 ### 10.4 Package naming rules
@@ -726,6 +742,7 @@ packages:
 - Internal cross-package references use `"workspace:*"` as the version specifier — never a semver range.
 
 **Do:**
+
 ```json
 {
   "dependencies": {
@@ -736,6 +753,7 @@ packages:
 ```
 
 **Do not:**
+
 ```json
 {
   "dependencies": {
@@ -838,15 +856,15 @@ export default defineConfig({
 
 These rules are enforced by `.editorconfig` at the repository root. They are not negotiable and are not overridden at the package level.
 
-| Setting | Value |
-|---|---|
-| Indent style | spaces |
-| Indent size | 2 |
-| End of line | LF |
-| Charset | UTF-8 |
-| Trim trailing whitespace | true |
-| Insert final newline | true |
-| Max line length | 100 (soft) |
+| Setting                  | Value      |
+| ------------------------ | ---------- |
+| Indent style             | spaces     |
+| Indent size              | 2          |
+| End of line              | LF         |
+| Charset                  | UTF-8      |
+| Trim trailing whitespace | true       |
+| Insert final newline     | true       |
+| Max line length          | 100 (soft) |
 
 Prettier is not used. ESLint handles formatting-adjacent rules (unused vars, import order). The editorconfig handles whitespace.
 
@@ -854,18 +872,18 @@ Prettier is not used. ESLint handles formatting-adjacent rules (unused vars, imp
 
 ## 14. Quick Reference
 
-| Rule | Verdict |
-|---|---|
-| `"type": "module"` in package.json | Required |
-| Explicit `.js` extensions in relative imports | Required |
-| `import type` for type-only imports | Required |
-| `throw` in library code (`packages/kernel/`, `packages/compiler/`, `packages/types/`) | Banned |
-| `throw` in CLI command handlers (`packages/cli/`) | Allowed for fatal errors only |
-| `any` in catch clauses | Banned — use `unknown` |
-| `db.exec()` with runtime values | Banned |
-| `db.prepare(sql).run(params)` | Required for all data mutations |
-| `redactSecrets()` before logging data | Required |
-| Compiler writes to SQLite | Banned — kernel owns all state writes |
-| Compiler writes audit traces | Banned — kernel traces compilation outcomes |
-| `workspace:*` for internal package refs | Required |
-| `pnpm audit --audit-level=moderate` in CI | Required gate — blocks merge on findings |
+| Rule                                                                                  | Verdict                                     |
+| ------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `"type": "module"` in package.json                                                    | Required                                    |
+| Explicit `.js` extensions in relative imports                                         | Required                                    |
+| `import type` for type-only imports                                                   | Required                                    |
+| `throw` in library code (`packages/kernel/`, `packages/compiler/`, `packages/types/`) | Banned                                      |
+| `throw` in CLI command handlers (`packages/cli/`)                                     | Allowed for fatal errors only               |
+| `any` in catch clauses                                                                | Banned — use `unknown`                      |
+| `db.exec()` with runtime values                                                       | Banned                                      |
+| `db.prepare(sql).run(params)`                                                         | Required for all data mutations             |
+| `redactSecrets()` before logging data                                                 | Required                                    |
+| Compiler writes to SQLite                                                             | Banned — kernel owns all state writes       |
+| Compiler writes audit traces                                                          | Banned — kernel traces compilation outcomes |
+| `workspace:*` for internal package refs                                               | Required                                    |
+| `pnpm audit --audit-level=moderate` in CI                                             | Required gate — blocks merge on findings    |

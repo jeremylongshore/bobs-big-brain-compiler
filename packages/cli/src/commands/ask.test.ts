@@ -103,7 +103,15 @@ function mockAnalysis(opts: {
   });
 }
 
-function mockBoost(pages: ReadonlyArray<{ path: string; title: string; type: string; rank: number; snippet: string }>): void {
+function mockBoost(
+  pages: ReadonlyArray<{
+    path: string;
+    title: string;
+    type: string;
+    rank: number;
+    snippet: string;
+  }>,
+): void {
   vi.mocked(kernelModule.findRelevantPages).mockReturnValue({ ok: true, value: [...pages] });
 }
 

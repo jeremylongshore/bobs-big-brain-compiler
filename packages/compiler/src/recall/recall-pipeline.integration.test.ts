@@ -99,7 +99,9 @@ function reindex(): void {
 }
 
 /** Mock Claude client that pops queued responses in order. */
-function queuedClient(responses: ReadonlyArray<unknown>): ClaudeClient & { spy: ReturnType<typeof vi.fn> } {
+function queuedClient(
+  responses: ReadonlyArray<unknown>,
+): ClaudeClient & { spy: ReturnType<typeof vi.fn> } {
   const spy = vi.fn();
   for (const r of responses) {
     const content = typeof r === 'string' ? r : JSON.stringify(r);
@@ -194,7 +196,9 @@ describe('recall pipeline — end-to-end (E9-B12)', () => {
       .filter((f) => f.endsWith('.md'))
       .sort();
     expect(cardFiles).toEqual(['quadratic-scaling.md', 'self-attention-mechanism.md']);
-    expect(existsSync(resolve(env.wsRoot, 'recall', 'quizzes', 'transformer-attention.md'))).toBe(true);
+    expect(existsSync(resolve(env.wsRoot, 'recall', 'quizzes', 'transformer-attention.md'))).toBe(
+      true,
+    );
 
     // -----------------------------------------------------------------------
     // 3. runQuiz — three answers, two correct + one wrong. Mock scorer

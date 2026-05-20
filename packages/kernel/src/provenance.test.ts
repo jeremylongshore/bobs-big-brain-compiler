@@ -80,7 +80,7 @@ describe('recordProvenance — JSONL file creation', () => {
 
     // File must contain exactly one JSON line matching the returned record
     const content = readFileSync(filePath, 'utf-8');
-    const lines = content.split('\n').filter(l => l.trim() !== '');
+    const lines = content.split('\n').filter((l) => l.trim() !== '');
     expect(lines).toHaveLength(1);
 
     const parsed = JSON.parse(lines[0]!) as ProvenanceRecord;
@@ -121,7 +121,7 @@ describe('recordProvenance — JSONL file creation', () => {
     const filePath = join(workspacePath, 'audit', 'provenance', `${sourceId}.jsonl`);
     const lines = readFileSync(filePath, 'utf-8')
       .split('\n')
-      .filter(l => l.trim() !== '');
+      .filter((l) => l.trim() !== '');
     expect(lines).toHaveLength(2);
   });
 });
@@ -210,7 +210,7 @@ describe('getProvenance — forward lookup', () => {
     if (!result.ok) return;
 
     expect(result.value).toHaveLength(2);
-    const sourceIds = result.value.map(r => r.sourceId);
+    const sourceIds = result.value.map((r) => r.sourceId);
     expect(sourceIds).toContain(sourceA);
     expect(sourceIds).toContain(sourceB);
     for (const record of result.value) {
@@ -230,7 +230,7 @@ describe('getProvenance — forward lookup', () => {
       operation: 'compile.synthesize',
     });
     // Tiny pause so timestamps differ reliably.
-    await new Promise(resolve => setTimeout(resolve, 5));
+    await new Promise((resolve) => setTimeout(resolve, 5));
     recordProvenance(db, workspacePath, {
       sourceId: sourceB,
       outputPath: output,
@@ -290,7 +290,7 @@ describe('getDerivations — reverse lookup', () => {
     if (!result.ok) return;
 
     expect(result.value).toHaveLength(2);
-    const outputPaths = result.value.map(r => r.outputPath);
+    const outputPaths = result.value.map((r) => r.outputPath);
     expect(outputPaths).toContain('wiki/sources/main-summary.md');
     expect(outputPaths).toContain('wiki/concepts/key-idea.md');
     for (const record of result.value) {
@@ -307,7 +307,7 @@ describe('getDerivations — reverse lookup', () => {
       outputType: 'summary',
       operation: 'compile.summarize',
     });
-    await new Promise(resolve => setTimeout(resolve, 5));
+    await new Promise((resolve) => setTimeout(resolve, 5));
     recordProvenance(db, workspacePath, {
       sourceId,
       outputPath: 'wiki/concepts/second.md',
@@ -381,7 +381,7 @@ describe('chain scenario — source A → summary + topic, source B → summary'
     expect(derivationsA.ok).toBe(true);
     if (!derivationsA.ok) return;
     expect(derivationsA.value).toHaveLength(2);
-    const pathsA = derivationsA.value.map(r => r.outputPath);
+    const pathsA = derivationsA.value.map((r) => r.outputPath);
     expect(pathsA).toContain(summaryA);
     expect(pathsA).toContain(topicAB);
 
@@ -390,7 +390,7 @@ describe('chain scenario — source A → summary + topic, source B → summary'
     expect(derivationsB.ok).toBe(true);
     if (!derivationsB.ok) return;
     expect(derivationsB.value).toHaveLength(2);
-    const pathsB = derivationsB.value.map(r => r.outputPath);
+    const pathsB = derivationsB.value.map((r) => r.outputPath);
     expect(pathsB).toContain(summaryB);
     expect(pathsB).toContain(topicAB);
 
@@ -413,7 +413,7 @@ describe('chain scenario — source A → summary + topic, source B → summary'
     expect(provTopic.ok).toBe(true);
     if (!provTopic.ok) return;
     expect(provTopic.value).toHaveLength(2);
-    const topicSourceIds = provTopic.value.map(r => r.sourceId);
+    const topicSourceIds = provTopic.value.map((r) => r.sourceId);
     expect(topicSourceIds).toContain(sourceA);
     expect(topicSourceIds).toContain(sourceB);
   });

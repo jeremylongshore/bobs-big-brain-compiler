@@ -81,9 +81,7 @@ interface CheckOutcome {
 
 function checkFtsNonEmpty(db: Database): Result<CheckOutcome, Error> {
   try {
-    const row = db
-      .prepare<[], { n: number }>('SELECT COUNT(*) AS n FROM pages_fts')
-      .get();
+    const row = db.prepare<[], { n: number }>('SELECT COUNT(*) AS n FROM pages_fts').get();
     const n = row?.n ?? 0;
     return ok({
       passed: n > 0,
@@ -104,9 +102,10 @@ function checkFtsNonEmpty(db: Database): Result<CheckOutcome, Error> {
 function checkNoFailedTasks(db: Database): Result<CheckOutcome, Error> {
   try {
     const rows = db
-      .prepare<[], { status: string; n: number }>(
-        `SELECT status, COUNT(*) AS n FROM tasks WHERE status LIKE 'failed_%' GROUP BY status`,
-      )
+      .prepare<
+        [],
+        { status: string; n: number }
+      >(`SELECT status, COUNT(*) AS n FROM tasks WHERE status LIKE 'failed_%' GROUP BY status`)
       .all();
     if (rows.length === 0) {
       return ok({ passed: true, details: 'no tasks in failed_* state' });
@@ -131,10 +130,7 @@ interface TraceIndexRow {
  * Pulls the trace order from the SQL index so we don't have to globbing-
  * sort filenames ourselves.
  */
-function checkAuditChainIntact(
-  db: Database,
-  workspacePath: string,
-): Result<CheckOutcome, Error> {
+function checkAuditChainIntact(db: Database, workspacePath: string): Result<CheckOutcome, Error> {
   let rows: TraceIndexRow[];
   try {
     rows = db
@@ -174,9 +170,7 @@ function checkAuditChainIntact(
       content = readFileSync(abs, 'utf-8');
     } catch (e) {
       return err(
-        new Error(
-          `Failed to read ${relPath}: ${e instanceof Error ? e.message : String(e)}`,
-        ),
+        new Error(`Failed to read ${relPath}: ${e instanceof Error ? e.message : String(e)}`),
       );
     }
     const lines = content.split('\n').filter((l) => l.length > 0);
@@ -196,7 +190,9 @@ function checkAuditChainIntact(
           details: `${relPath}:${i + 1} is not valid JSON (${e instanceof Error ? e.message : String(e)})`,
         });
       }
-      const expectedHash = createHash('sha256').update(lines[i - 1]!, 'utf-8').digest('hex');
+      const expectedHash = createHash('sha256')
+        .update(lines[i - 1]!, 'utf-8')
+        .digest('hex');
       if (envelope.prev_hash !== expectedHash) {
         return ok({
           passed: false,

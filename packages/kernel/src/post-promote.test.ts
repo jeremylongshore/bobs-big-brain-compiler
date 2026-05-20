@@ -6,13 +6,7 @@
  * fixture includes the complete directory tree required by the kernel.
  */
 
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -139,10 +133,7 @@ describe('runPostPromotionRefresh — happy path', () => {
     const { targetPath, sourcePath } = createFullyValidPromotion();
 
     // Add a second page to bump the count
-    writeFile(
-      join(workspacePath, 'wiki/topics/extra.md'),
-      '---\ntitle: Extra\n---\nContent.\n',
-    );
+    writeFile(join(workspacePath, 'wiki/topics/extra.md'), '---\ntitle: Extra\n---\nContent.\n');
 
     const result = runPostPromotionRefresh(db, workspacePath, targetPath, sourcePath);
 
@@ -356,10 +347,7 @@ describe('runPostPromotionRefresh — multiple issues', () => {
     const targetPath = 'wiki/topics/multi-issue.md';
 
     // Source missing, no promoted_from, no title, no DB record
-    writeFile(
-      join(workspacePath, targetPath),
-      '---\ntype: topic\n---\nContent.\n',
-    );
+    writeFile(join(workspacePath, targetPath), '---\ntype: topic\n---\nContent.\n');
     // No source file, no DB record
 
     const result = runPostPromotionRefresh(db, workspacePath, targetPath, sourcePath);

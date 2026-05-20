@@ -29,7 +29,7 @@ import {
   indexCompiledPages,
   initDatabase,
 } from '@ico/kernel';
-import { err,ok } from '@ico/types';
+import { err, ok } from '@ico/types';
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -59,10 +59,7 @@ interface RunResult {
  * @param args - Arguments to pass after `node dist/index.js`.
  * @param opts - Optional cwd and env overrides.
  */
-function run(
-  args: string[],
-  opts?: { cwd?: string; env?: Record<string, string> },
-): RunResult {
+function run(args: string[], opts?: { cwd?: string; env?: Record<string, string> }): RunResult {
   try {
     const stdout = execFileSync('node', [CLI_PATH, ...args], {
       cwd: opts?.cwd,
@@ -212,11 +209,7 @@ describe('ico lint — subprocess', { timeout: 30_000 }, () => {
   it('exits 1 and reports a schema violation for a malformed compiled page', () => {
     const wsRoot = cliInitWorkspace('ws');
     mkdirSync(join(wsRoot, 'wiki', 'concepts'), { recursive: true });
-    writeFileSync(
-      join(wsRoot, 'wiki', 'concepts', 'broken.md'),
-      INVALID_CONCEPT_PAGE,
-      'utf-8',
-    );
+    writeFileSync(join(wsRoot, 'wiki', 'concepts', 'broken.md'), INVALID_CONCEPT_PAGE, 'utf-8');
 
     const result = run(['lint', '--workspace', wsRoot]);
 
@@ -269,11 +262,7 @@ function setupAskWorkspace(): void {
 
   // Write the compiled wiki page used by analyzeQuestion.
   mkdirSync(join(wsPath, 'wiki', 'concepts'), { recursive: true });
-  writeFileSync(
-    join(wsPath, 'wiki', 'concepts', 'self-attention.md'),
-    WIKI_CONCEPT_PAGE,
-    'utf-8',
-  );
+  writeFileSync(join(wsPath, 'wiki', 'concepts', 'self-attention.md'), WIKI_CONCEPT_PAGE, 'utf-8');
 
   // Open an in-memory database so tests never write to disk.
   const dbResult = initDatabase(':memory:');
@@ -335,8 +324,7 @@ describe('ask pipeline — generateAnswer with mocked client', () => {
   ];
 
   it('returns an answer containing the mocked response text', async () => {
-    const response =
-      'Self-attention is a mechanism. [source: Self-Attention Mechanism]';
+    const response = 'Self-attention is a mechanism. [source: Self-Attention Mechanism]';
     const result = await generateAnswer(mockClient(response), 'What is self-attention?', pages);
 
     expect(result.ok).toBe(true);
@@ -345,9 +333,12 @@ describe('ask pipeline — generateAnswer with mocked client', () => {
   });
 
   it('returns citations parsed from the mocked response', async () => {
-    const response =
-      'Self-attention enables parallelism. [source: Self-Attention Mechanism]';
-    const result = await generateAnswer(mockClient(response), 'How does self-attention work?', pages);
+    const response = 'Self-attention enables parallelism. [source: Self-Attention Mechanism]';
+    const result = await generateAnswer(
+      mockClient(response),
+      'How does self-attention work?',
+      pages,
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;

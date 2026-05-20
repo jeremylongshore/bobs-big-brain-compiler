@@ -8,7 +8,7 @@ description: |
   query; the expected page is the canonical compiled concept page. Pass
   when the page appears in the top 5 FTS5 results.
 type: retrieval
-question: "How does self-attention work in transformers?"
+question: 'How does self-attention work in transformers?'
 expected_pages:
   - concepts/self-attention.md
 k: 5

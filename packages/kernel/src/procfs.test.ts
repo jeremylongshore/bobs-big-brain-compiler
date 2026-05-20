@@ -109,11 +109,7 @@ describe('computeTaskStatus', () => {
   });
 
   it('returns error for nonexistent task', () => {
-    const result = computeTaskStatus(
-      db,
-      workspacePath,
-      '00000000-0000-4000-8000-000000000000',
-    );
+    const result = computeTaskStatus(db, workspacePath, '00000000-0000-4000-8000-000000000000');
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.message).toMatch(/not found/i);
@@ -210,12 +206,12 @@ describe('computeMemoryMap', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const evidenceSection = result.value.find(s => s.name === 'evidence');
+    const evidenceSection = result.value.find((s) => s.name === 'evidence');
     expect(evidenceSection?.file_count).toBe(2);
     expect(evidenceSection?.files).toContain('src-1.md');
     expect(evidenceSection?.files).toContain('src-2.md');
 
-    const notesSection = result.value.find(s => s.name === 'notes');
+    const notesSection = result.value.find((s) => s.name === 'notes');
     expect(notesSection?.file_count).toBe(1);
   });
 
@@ -228,7 +224,7 @@ describe('computeMemoryMap', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const names = result.value.map(s => s.name);
+    const names = result.value.map((s) => s.name);
     expect(names).toEqual(['evidence', 'notes', 'drafts', 'critique', 'output']);
   });
 });
@@ -264,12 +260,7 @@ describe('materializeStatus', () => {
     expect(cr.ok).toBe(true);
     if (!cr.ok) return;
 
-    const result = materializeStatus(
-      db,
-      workspacePath,
-      cr.value.id,
-      cr.value.workspace_path,
-    );
+    const result = materializeStatus(db, workspacePath, cr.value.id, cr.value.workspace_path);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -292,12 +283,7 @@ describe('materializeStatus', () => {
 
     // Transition and re-materialize
     transitionTask(db, workspacePath, cr.value.id, 'collecting');
-    const result = materializeStatus(
-      db,
-      workspacePath,
-      cr.value.id,
-      cr.value.workspace_path,
-    );
+    const result = materializeStatus(db, workspacePath, cr.value.id, cr.value.workspace_path);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 

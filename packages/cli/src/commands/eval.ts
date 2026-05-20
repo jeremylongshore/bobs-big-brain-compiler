@@ -67,7 +67,10 @@ export async function runEvalCommand(
   opts: RunOpts,
   globalOpts: GlobalOptions,
 ): Promise<
-  | { ok: true; value: { batch: EvalBatchResult; loadErrors: Array<{ path: string; error: Error }> } }
+  | {
+      ok: true;
+      value: { batch: EvalBatchResult; loadErrors: Array<{ path: string; error: Error }> };
+    }
   | { ok: false; error: Error }
 > {
   const wsResolveOpts =
@@ -219,15 +222,11 @@ function printBatchReport(
   for (const r of batch.results) {
     const marker = r.passed ? formatSuccess('✓') : formatWarning('✗');
     const score = `${(r.score * 100).toFixed(0).padStart(3)}%`;
-    process.stdout.write(
-      `  ${marker}  [${score}]  ${r.spec.id.padEnd(40)}  ${dim(r.details)}\n`,
-    );
+    process.stdout.write(`  ${marker}  [${score}]  ${r.spec.id.padEnd(40)}  ${dim(r.details)}\n`);
   }
   process.stdout.write('\n');
   process.stdout.write(
-    formatInfo(
-      `  Summary: ${batch.passed}/${batch.total} passed  (${batch.durationMs} ms)`,
-    ) + '\n',
+    formatInfo(`  Summary: ${batch.passed}/${batch.total} passed  (${batch.durationMs} ms)`) + '\n',
   );
   process.stdout.write('\n');
 }

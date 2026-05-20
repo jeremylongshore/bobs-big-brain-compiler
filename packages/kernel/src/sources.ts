@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import type { Database } from 'better-sqlite3';
 
 import { err, ok, type Result } from '@ico/types';
-import { type Source,SourceSchema } from '@ico/types';
+import { type Source, SourceSchema } from '@ico/types';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -87,18 +87,27 @@ function parseRow(row: SourceRow): Result<Source, Error> {
  * @param params - Source registration parameters including the pre-computed hash.
  * @returns `ok(source)` on success or on duplicate, `err(error)` on unexpected failures.
  */
-export function registerSource(
-  db: Database,
-  params: RegisterSourceParams,
-): Result<Source, Error> {
+export function registerSource(db: Database, params: RegisterSourceParams): Result<Source, Error> {
   const id = crypto.randomUUID();
   const ingested_at = new Date().toISOString();
-  const metadataJson = params.metadata != null
-    ? JSON.stringify(params.metadata)
-    : null;
+  const metadataJson = params.metadata != null ? JSON.stringify(params.metadata) : null;
 
   try {
-    db.prepare<[string, string, string | null, string, string | null, string | null, string, number | null, string, string | null], void>(
+    db.prepare<
+      [
+        string,
+        string,
+        string | null,
+        string,
+        string | null,
+        string | null,
+        string,
+        number | null,
+        string,
+        string | null,
+      ],
+      void
+    >(
       `INSERT INTO sources
          (id, path, mount_id, type, title, author, ingested_at, word_count, hash, metadata)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -123,9 +132,7 @@ export function registerSource(
       e.message.includes('sources.path')
     ) {
       const existing = db
-        .prepare<[string, string], SourceRow>(
-          'SELECT * FROM sources WHERE path = ? AND hash = ?',
-        )
+        .prepare<[string, string], SourceRow>('SELECT * FROM sources WHERE path = ? AND hash = ?')
         .get(params.path, params.hash);
 
       if (!existing) {
@@ -136,9 +143,7 @@ export function registerSource(
     return err(e instanceof Error ? e : new Error(String(e)));
   }
 
-  const row = db
-    .prepare<[string], SourceRow>('SELECT * FROM sources WHERE id = ?')
-    .get(id);
+  const row = db.prepare<[string], SourceRow>('SELECT * FROM sources WHERE id = ?').get(id);
 
   if (!row) {
     return err(new Error('Source was inserted but could not be retrieved'));
@@ -158,9 +163,7 @@ export function registerSource(
 export function getSource(db: Database, id: string): Result<Source | null, Error> {
   let row: SourceRow | undefined;
   try {
-    row = db
-      .prepare<[string], SourceRow>('SELECT * FROM sources WHERE id = ?')
-      .get(id);
+    row = db.prepare<[string], SourceRow>('SELECT * FROM sources WHERE id = ?').get(id);
   } catch (e) {
     return err(e instanceof Error ? e : new Error(String(e)));
   }
@@ -177,24 +180,18 @@ export function getSource(db: Database, id: string): Result<Source | null, Error
  *                  returned.
  * @returns `ok(sources)` — an empty array when no sources match.
  */
-export function listSources(
-  db: Database,
-  mountId?: string,
-): Result<Source[], Error> {
+export function listSources(db: Database, mountId?: string): Result<Source[], Error> {
   let rows: SourceRow[];
   try {
     if (mountId !== undefined) {
       rows = db
-        .prepare<[string], SourceRow>(
-          'SELECT * FROM sources WHERE mount_id = ? ORDER BY ingested_at DESC',
-        )
+        .prepare<
+          [string],
+          SourceRow
+        >('SELECT * FROM sources WHERE mount_id = ? ORDER BY ingested_at DESC')
         .all(mountId);
     } else {
-      rows = db
-        .prepare<[], SourceRow>(
-          'SELECT * FROM sources ORDER BY ingested_at DESC',
-        )
-        .all();
+      rows = db.prepare<[], SourceRow>('SELECT * FROM sources ORDER BY ingested_at DESC').all();
     }
   } catch (e) {
     return err(e instanceof Error ? e : new Error(String(e)));

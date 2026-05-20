@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { Database } from 'better-sqlite3';
-import { afterEach,beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   computeFileHash,
@@ -13,7 +13,7 @@ import {
   listSources,
   registerSource,
 } from './sources.js';
-import { closeDatabase,initDatabase } from './state.js';
+import { closeDatabase, initDatabase } from './state.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -58,7 +58,11 @@ describe('source registry', () => {
 
   afterEach(() => {
     closeDatabase(db);
-    try { rmSync(tempDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    try {
+      rmSync(tempDir, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
   });
 
   // -------------------------------------------------------------------------
@@ -266,7 +270,7 @@ describe('source registry', () => {
   it('returns sources ordered by ingested_at descending', async () => {
     // Insert two records with different paths, ensuring distinct timestamps.
     registerSource(db, { path: 'first.md', type: 'markdown', hash: sha256('first') });
-    await new Promise(resolve => setTimeout(resolve, 5));
+    await new Promise((resolve) => setTimeout(resolve, 5));
     registerSource(db, { path: 'second.md', type: 'markdown', hash: sha256('second') });
 
     const result = listSources(db);

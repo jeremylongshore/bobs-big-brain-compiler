@@ -19,14 +19,14 @@ export interface TokenUsageSummary {
   totalInputTokens: number;
   totalOutputTokens: number;
   totalTokens: number;
-  estimatedCost: number;   // USD
+  estimatedCost: number; // USD
   compilationCount: number;
 }
 
 /** Per-model pricing in USD per 1M tokens. */
 export interface ModelPricing {
-  inputPerMillion: number;    // USD per 1M input tokens
-  outputPerMillion: number;   // USD per 1M output tokens
+  inputPerMillion: number; // USD per 1M input tokens
+  outputPerMillion: number; // USD per 1M output tokens
 }
 
 // ---------------------------------------------------------------------------
@@ -37,7 +37,7 @@ export interface ModelPricing {
 export const MODEL_PRICING: Record<string, ModelPricing> = {
   'claude-sonnet-4-6': { inputPerMillion: 3, outputPerMillion: 15 },
   'claude-opus-4-6': { inputPerMillion: 15, outputPerMillion: 75 },
-  'claude-haiku-4-5': { inputPerMillion: 0.80, outputPerMillion: 4 },
+  'claude-haiku-4-5': { inputPerMillion: 0.8, outputPerMillion: 4 },
 };
 
 // ---------------------------------------------------------------------------
@@ -64,13 +64,11 @@ interface TokenSummaryRow {
  * @param model        - Model identifier string.
  * @returns Estimated cost in USD.
  */
-export function calculateCost(
-  inputTokens: number,
-  outputTokens: number,
-  model: string,
-): number {
+export function calculateCost(inputTokens: number, outputTokens: number, model: string): number {
   const pricing = MODEL_PRICING[model] ?? MODEL_PRICING['claude-sonnet-4-6']!;
-  return (inputTokens * pricing.inputPerMillion + outputTokens * pricing.outputPerMillion) / 1_000_000;
+  return (
+    (inputTokens * pricing.inputPerMillion + outputTokens * pricing.outputPerMillion) / 1_000_000
+  );
 }
 
 /**
@@ -85,12 +83,14 @@ export function calculateCost(
 export function getTokenUsageSummary(db: Database): Result<TokenUsageSummary, Error> {
   try {
     const row = db
-      .prepare<[], TokenSummaryRow>(`
+      .prepare<[], TokenSummaryRow>(
+        `
         SELECT
           COUNT(*) as compilation_count,
           COALESCE(SUM(tokens_used), 0) as total_tokens
         FROM compilations
-      `)
+      `,
+      )
       .get();
 
     if (row === undefined) {
@@ -126,11 +126,7 @@ export function getTokenUsageSummary(db: Database): Result<TokenUsageSummary, Er
  * @param model        - Model identifier used for cost lookup.
  * @returns A display string summarising total tokens and estimated cost.
  */
-export function formatTokenUsage(
-  inputTokens: number,
-  outputTokens: number,
-  model: string,
-): string {
+export function formatTokenUsage(inputTokens: number, outputTokens: number, model: string): string {
   const total = inputTokens + outputTokens;
   const cost = calculateCost(inputTokens, outputTokens, model);
   return `Used ${total.toLocaleString()} tokens (~$${cost.toFixed(2)})`;

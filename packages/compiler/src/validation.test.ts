@@ -178,9 +178,7 @@ describe('validateCompiledPage', () => {
     expect(result.value.pageType).toBe('source-summary');
     expect(result.value.errors.length).toBeGreaterThan(0);
     // source_id is the missing required UUID field.
-    const hasSourceIdError = result.value.errors.some((e) =>
-      e.includes('source_id'),
-    );
+    const hasSourceIdError = result.value.errors.some((e) => e.includes('source_id'));
     expect(hasSourceIdError).toBe(true);
   });
 

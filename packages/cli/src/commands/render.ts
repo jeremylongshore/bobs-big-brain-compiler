@@ -34,12 +34,7 @@ import {
   type ReportSource,
   type SlideSource,
 } from '@ico/compiler';
-import {
-  closeDatabase,
-  initDatabase,
-  loadConfig,
-  writeTrace,
-} from '@ico/kernel';
+import { closeDatabase, initDatabase, loadConfig, writeTrace } from '@ico/kernel';
 
 import {
   bold,
@@ -196,9 +191,8 @@ export async function runRender(
   // -------------------------------------------------------------------------
   if (opts.task !== undefined) {
     process.stdout.write(
-      formatInfo(
-        'Task-based rendering will be available after Epic 9 (Multi-Agent Research).',
-      ) + '\n',
+      formatInfo('Task-based rendering will be available after Epic 9 (Multi-Agent Research).') +
+        '\n',
     );
     process.exitCode = 1;
     return;
@@ -221,9 +215,7 @@ export async function runRender(
   // 3. Resolve workspace
   // -------------------------------------------------------------------------
   const wsOverride = opts.workspace ?? globalOpts.workspace;
-  const wsResult = resolveWorkspace(
-    wsOverride !== undefined ? { workspace: wsOverride } : {},
-  );
+  const wsResult = resolveWorkspace(wsOverride !== undefined ? { workspace: wsOverride } : {});
 
   if (!wsResult.ok) {
     process.stderr.write(formatError(wsResult.error.message) + '\n');
@@ -241,9 +233,7 @@ export async function runRender(
     config = loadConfig(wsPath);
   } catch (e) {
     process.stderr.write(
-      formatError(
-        `Config error: ${e instanceof Error ? e.message : String(e)}`,
-      ) + '\n',
+      formatError(`Config error: ${e instanceof Error ? e.message : String(e)}`) + '\n',
     );
     process.exitCode = 1;
     return;
@@ -256,9 +246,7 @@ export async function runRender(
   // -------------------------------------------------------------------------
   const dbResult = initDatabase(dbPath);
   if (!dbResult.ok) {
-    process.stderr.write(
-      formatError(`Database error: ${dbResult.error.message}`) + '\n',
-    );
+    process.stderr.write(formatError(`Database error: ${dbResult.error.message}`) + '\n');
     process.exitCode = 1;
     return;
   }
@@ -273,15 +261,9 @@ export async function runRender(
     const matchedPaths = findTopicPages(wikiPath, topicName);
 
     if (matchedPaths.length === 0) {
+      process.stderr.write(formatError(`No compiled pages found for topic: "${topicName}"`) + '\n');
       process.stderr.write(
-        formatError(
-          `No compiled pages found for topic: "${topicName}"`,
-        ) + '\n',
-      );
-      process.stderr.write(
-        dim(
-          `  Tip: Run \`ico compile all\` to compile sources, or check \`ico status\`.\n`,
-        ),
+        dim(`  Tip: Run \`ico compile all\` to compile sources, or check \`ico status\`.\n`),
       );
       process.exitCode = 1;
       return;
@@ -321,9 +303,7 @@ export async function runRender(
     }
 
     if (sources.length === 0) {
-      process.stderr.write(
-        formatError('Could not read any matching page files.') + '\n',
-      );
+      process.stderr.write(formatError('Could not read any matching page files.') + '\n');
       process.exitCode = 1;
       return;
     }
@@ -352,9 +332,7 @@ export async function runRender(
       });
 
       if (!result.ok) {
-        process.stderr.write(
-          formatError(`Render failed: ${result.error.message}`) + '\n',
-        );
+        process.stderr.write(formatError(`Render failed: ${result.error.message}`) + '\n');
         process.exitCode = 1;
         return;
       }
@@ -374,9 +352,7 @@ export async function runRender(
       });
 
       if (!result.ok) {
-        process.stderr.write(
-          formatError(`Render failed: ${result.error.message}`) + '\n',
-        );
+        process.stderr.write(formatError(`Render failed: ${result.error.message}`) + '\n');
         process.exitCode = 1;
         return;
       }
@@ -413,10 +389,10 @@ export async function runRender(
     const cost = calculateCost(inputTokens, outputTokens, resultModel);
 
     process.stdout.write('\n');
-    process.stdout.write(formatHeader(`${type === 'report' ? 'Report' : 'Slide Deck'} Generated`) + '\n\n');
     process.stdout.write(
-      formatSuccess(`Saved: ${bold(outputPath)}`) + '\n',
+      formatHeader(`${type === 'report' ? 'Report' : 'Slide Deck'} Generated`) + '\n\n',
     );
+    process.stdout.write(formatSuccess(`Saved: ${bold(outputPath)}`) + '\n');
     process.stdout.write('\n');
     process.stdout.write(
       formatKeyValue([
@@ -462,11 +438,7 @@ export function register(program: Command): void {
     .option('--title <title>', 'Override the generated title')
     .option('--output <path>', 'Override the output file path')
     .option('--model <model>', 'Claude model to use')
-    .option(
-      '--max-tokens <n>',
-      'Maximum tokens in the response',
-      (v: string) => parseInt(v, 10),
-    )
+    .option('--max-tokens <n>', 'Maximum tokens in the response', (v: string) => parseInt(v, 10))
     .addHelpText(
       'after',
       [
@@ -495,11 +467,7 @@ export function register(program: Command): void {
     .option('--title <title>', 'Override the slide deck title')
     .option('--output <path>', 'Override the output file path')
     .option('--model <model>', 'Claude model to use')
-    .option(
-      '--max-tokens <n>',
-      'Maximum tokens in the response',
-      (v: string) => parseInt(v, 10),
-    )
+    .option('--max-tokens <n>', 'Maximum tokens in the response', (v: string) => parseInt(v, 10))
     .addHelpText(
       'after',
       [

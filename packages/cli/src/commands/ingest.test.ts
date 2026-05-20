@@ -165,7 +165,10 @@ describe('runIngest', () => {
 
     try {
       const rows = localDb
-        .prepare<[string], { count: number }>('SELECT COUNT(*) as count FROM sources WHERE path = ?')
+        .prepare<
+          [string],
+          { count: number }
+        >('SELECT COUNT(*) as count FROM sources WHERE path = ?')
         .get('raw/notes/doc.txt');
       expect(rows?.count).toBe(1);
     } finally {
@@ -382,11 +385,11 @@ describe('scanDirectory', () => {
   it('returns only supported file types', () => {
     writeFileSync(join(tempDir, 'note.md'), '# note');
     writeFileSync(join(tempDir, 'paper.pdf'), 'pdf content');
-    writeFileSync(join(tempDir, 'data.csv'), 'csv,data');   // unsupported
+    writeFileSync(join(tempDir, 'data.csv'), 'csv,data'); // unsupported
     writeFileSync(join(tempDir, 'code.ts'), 'const x = 1'); // unsupported
 
     const files = scanDirectory(tempDir);
-    const names = files.map(f => f.split('/').pop()!);
+    const names = files.map((f) => f.split('/').pop()!);
     expect(names).toContain('note.md');
     expect(names).toContain('paper.pdf');
     expect(names).not.toContain('data.csv');
@@ -399,7 +402,7 @@ describe('scanDirectory', () => {
     writeFileSync(join(tempDir, 'mango.md'), 'm');
 
     const files = scanDirectory(tempDir);
-    const names = files.map(f => f.split('/').pop()!);
+    const names = files.map((f) => f.split('/').pop()!);
     expect(names).toEqual([...names].sort());
   });
 
@@ -409,7 +412,7 @@ describe('scanDirectory', () => {
     writeFileSync(join(sub, 'nested.txt'), 'nested');
 
     const files = scanDirectory(tempDir);
-    const names = files.map(f => f.split('/').pop()!);
+    const names = files.map((f) => f.split('/').pop()!);
     expect(names).toContain('nested.txt');
   });
 
@@ -418,7 +421,7 @@ describe('scanDirectory', () => {
     writeFileSync(join(tempDir, 'visible.md'), 'visible');
 
     const files = scanDirectory(tempDir);
-    const names = files.map(f => f.split('/').pop()!);
+    const names = files.map((f) => f.split('/').pop()!);
     expect(names).not.toContain('.hidden.md');
     expect(names).toContain('visible.md');
   });
@@ -429,7 +432,7 @@ describe('scanDirectory', () => {
     writeFileSync(join(nm, 'package.md'), 'should be ignored');
 
     const files = scanDirectory(tempDir);
-    const names = files.map(f => f.split('/').pop()!);
+    const names = files.map((f) => f.split('/').pop()!);
     expect(names).not.toContain('package.md');
   });
 
@@ -443,7 +446,7 @@ describe('scanDirectory', () => {
     writeFileSync(join(hiddenDir, 'config.md'), 'should be ignored');
 
     const files = scanDirectory(tempDir);
-    const names = files.map(f => f.split('/').pop()!);
+    const names = files.map((f) => f.split('/').pop()!);
     expect(names).not.toContain('config.md');
   });
 });
@@ -500,7 +503,7 @@ describe('runBatchIngest', () => {
 
   it('skips unsupported file types and only ingests supported ones', () => {
     writeFileSync(join(sourceDir, 'note.md'), '# note');
-    writeFileSync(join(sourceDir, 'data.csv'), 'a,b,c');    // unsupported — not returned by scan
+    writeFileSync(join(sourceDir, 'data.csv'), 'a,b,c'); // unsupported — not returned by scan
     writeFileSync(join(sourceDir, 'code.rs'), 'fn main()'); // unsupported — not returned by scan
     writeFileSync(join(sourceDir, 'page.html'), '<p>hi</p>');
 

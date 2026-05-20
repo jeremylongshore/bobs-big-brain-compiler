@@ -31,13 +31,13 @@ The product is one loop:
 ingest → compile → reason → render → refine
 ```
 
-| Stage | What happens | Owner |
-|-------|-------------|-------|
-| **Ingest** | Collect raw sources into corpus storage. Preserve provenance. Source-by-source, human-in-the-loop by default. | Deterministic |
-| **Compile** | Transform sources into structured semantic knowledge. | Probabilistic (model proposes, system stores) |
-| **Reason** | Answer questions or conduct scoped research over compiled knowledge. | Probabilistic |
-| **Render** | Produce durable artifacts — reports, slides, charts, briefings. | Probabilistic |
-| **Refine** | Lint knowledge, test recall, promote useful outputs, improve the base. | Both |
+| Stage       | What happens                                                                                                  | Owner                                         |
+| ----------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| **Ingest**  | Collect raw sources into corpus storage. Preserve provenance. Source-by-source, human-in-the-loop by default. | Deterministic                                 |
+| **Compile** | Transform sources into structured semantic knowledge.                                                         | Probabilistic (model proposes, system stores) |
+| **Reason**  | Answer questions or conduct scoped research over compiled knowledge.                                          | Probabilistic                                 |
+| **Render**  | Produce durable artifacts — reports, slides, charts, briefings.                                               | Probabilistic                                 |
+| **Refine**  | Lint knowledge, test recall, promote useful outputs, improve the base.                                        | Both                                          |
 
 This loop is stated once. Everything else in this document is an elaboration of how each stage works, where the boundaries are, and what the system stores.
 
@@ -127,20 +127,21 @@ Every meaningful event leaves a trace: ingestion, compilation, retrieval hits, t
 
 Every piece of data in the system has exactly one classification:
 
-| Classification | Definition | Examples | Lifecycle |
-|---------------|-----------|----------|-----------|
-| **Canonical** | Source-of-truth inputs that the system never modifies | Raw corpus files (L1) | Append-only, never mutated |
-| **Compiled** | Derived from canonical sources via compilation | Wiki pages, summaries, concept pages (L2) | Recompilable from L1 |
-| **Ephemeral** | Temporary working data scoped to a task | Evidence folders, drafts, critiques (L3) | Archived or pruned after task completion |
-| **Durable** | Rendered outputs intended for reuse | Reports, slides, briefings (L4) | Permanent unless user deletes |
-| **Adaptive** | Generated from compiled knowledge, modified by feedback | Flashcards, quiz results, retention data (L5) | Updated based on recall performance |
-| **Audit** | System events and policy decisions | Traces, provenance, promotions (L6) | Append-only, never mutated |
+| Classification | Definition                                              | Examples                                      | Lifecycle                                |
+| -------------- | ------------------------------------------------------- | --------------------------------------------- | ---------------------------------------- |
+| **Canonical**  | Source-of-truth inputs that the system never modifies   | Raw corpus files (L1)                         | Append-only, never mutated               |
+| **Compiled**   | Derived from canonical sources via compilation          | Wiki pages, summaries, concept pages (L2)     | Recompilable from L1                     |
+| **Ephemeral**  | Temporary working data scoped to a task                 | Evidence folders, drafts, critiques (L3)      | Archived or pruned after task completion |
+| **Durable**    | Rendered outputs intended for reuse                     | Reports, slides, briefings (L4)               | Permanent unless user deletes            |
+| **Adaptive**   | Generated from compiled knowledge, modified by feedback | Flashcards, quiz results, retention data (L5) | Updated based on recall performance      |
+| **Audit**      | System events and policy decisions                      | Traces, provenance, promotions (L6)           | Append-only, never mutated               |
 
 ### 5.3 Deterministic vs probabilistic boundary
 
 This is the most important architectural constraint.
 
 **Deterministic side** (system-owned logic):
+
 - File storage and workspace layout
 - Mount registry
 - Task state machine (created → active → completed → archived)
@@ -152,6 +153,7 @@ This is the most important architectural constraint.
 - Lifecycle transitions
 
 **Probabilistic side** (model-driven logic):
+
 - Summarization
 - Concept extraction
 - Topic synthesis
@@ -168,13 +170,13 @@ The agent does not operate freestyle. Its behavior is governed by a schema contr
 
 **Components of the schema contract:**
 
-| Component | Location | Governs |
-|-----------|----------|---------|
-| `CLAUDE.md` | Repo root | Agent behavior, conventions, architectural constraints |
-| Frontmatter conventions | All compiled wiki pages | Required fields, type classification, provenance references |
-| File policies | Workspace layout rules | Where each data type lives, naming, allowed operations per directory |
-| Lifecycle rules | Kernel + promotion rules | Valid state transitions, staleness definitions, archival criteria |
-| Compilation schemas | Compiler pass definitions | Required output structure for each pass (summary, concept, topic, etc.) |
+| Component               | Location                  | Governs                                                                 |
+| ----------------------- | ------------------------- | ----------------------------------------------------------------------- |
+| `CLAUDE.md`             | Repo root                 | Agent behavior, conventions, architectural constraints                  |
+| Frontmatter conventions | All compiled wiki pages   | Required fields, type classification, provenance references             |
+| File policies           | Workspace layout rules    | Where each data type lives, naming, allowed operations per directory    |
+| Lifecycle rules         | Kernel + promotion rules  | Valid state transitions, staleness definitions, archival criteria       |
+| Compilation schemas     | Compiler pass definitions | Required output structure for each pass (summary, concept, topic, etc.) |
 
 **Contract rules:**
 
@@ -200,11 +202,11 @@ These are plain markdown files. They complement the structured audit traces (JSO
 
 Intentional Cognition OS improves over time at three distinct layers. Each layer has different cost, inspectability, and velocity characteristics.
 
-| Layer | What it is | What changes | When |
-|-------|-----------|-------------|------|
-| **Context** | Configurable knowledge and instructions outside the harness — `CLAUDE.md`, agent rules, skills, compiled wiki, topic instructions, user memory, recall history | Updated per-session or per-corpus by the operator or by governed system behavior | Now (Phases 1-4) |
-| **Harness** | The runtime around the model — CLI, kernel, compiler passes, task orchestration, provenance system, promotion rules, audit, default behavior | Improved offline using traces and evals, shipped as code changes under review | Later (Phase 3+, as traces accumulate) |
-| **Model** | Foundation model weights (Claude, etc.) | Fine-tuned or swapped only when justified by stable evidence from harness and context layers | Much later, if ever |
+| Layer       | What it is                                                                                                                                                     | What changes                                                                                 | When                                   |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------- |
+| **Context** | Configurable knowledge and instructions outside the harness — `CLAUDE.md`, agent rules, skills, compiled wiki, topic instructions, user memory, recall history | Updated per-session or per-corpus by the operator or by governed system behavior             | Now (Phases 1-4)                       |
+| **Harness** | The runtime around the model — CLI, kernel, compiler passes, task orchestration, provenance system, promotion rules, audit, default behavior                   | Improved offline using traces and evals, shipped as code changes under review                | Later (Phase 3+, as traces accumulate) |
+| **Model**   | Foundation model weights (Claude, etc.)                                                                                                                        | Fine-tuned or swapped only when justified by stable evidence from harness and context layers | Much later, if ever                    |
 
 **Project stance.** Early versions of the product learn primarily through context. The operator curates `CLAUDE.md`, refines compilation schemas, builds the wiki, adjusts agent instructions, and accumulates recall data. This is deliberate — context is the cheapest, most inspectable, and fastest-to-iterate learning surface. Harness improvements come later, driven by patterns visible in traces and eval results. Model adaptation is explicitly deferred until the context and harness layers are stable enough to produce reliable training signal.
 
@@ -235,29 +237,30 @@ The compiler is the core differentiator. It transforms raw corpus into structure
 
 ### 6.1 Compilation passes
 
-| Pass | Input | Output | Description |
-|------|-------|--------|-------------|
-| **Summarize** | Raw source file | Source summary page | Extracts key claims, methods, conclusions, metadata |
-| **Extract** | Source summaries | Concept pages | Identifies discrete concepts, defines them, cites sources |
-| **Synthesize** | Multiple source summaries + concepts | Topic pages | Cross-source synthesis on a named topic |
-| **Link** | All compiled pages | Backlink annotations | Adds bidirectional references between related pages |
-| **Contradict** | Source summaries + topic pages | Contradiction notes | Flags claims that conflict across sources |
-| **Gap** | All compiled knowledge | Open-question files | Identifies referenced-but-undefined concepts, missing evidence |
+| Pass           | Input                                | Output               | Description                                                    |
+| -------------- | ------------------------------------ | -------------------- | -------------------------------------------------------------- |
+| **Summarize**  | Raw source file                      | Source summary page  | Extracts key claims, methods, conclusions, metadata            |
+| **Extract**    | Source summaries                     | Concept pages        | Identifies discrete concepts, defines them, cites sources      |
+| **Synthesize** | Multiple source summaries + concepts | Topic pages          | Cross-source synthesis on a named topic                        |
+| **Link**       | All compiled pages                   | Backlink annotations | Adds bidirectional references between related pages            |
+| **Contradict** | Source summaries + topic pages       | Contradiction notes  | Flags claims that conflict across sources                      |
+| **Gap**        | All compiled knowledge               | Open-question files  | Identifies referenced-but-undefined concepts, missing evidence |
 
 ### 6.2 Compilation triggers
 
-| Trigger | What happens |
-|---------|-------------|
-| `ico compile sources` | Runs Summarize pass on all uncompiled sources |
-| `ico compile topic <name>` | Runs Synthesize + Link for a named topic |
-| `ico compile concepts` | Runs Extract + Link across all summaries |
-| `ico compile all` | Runs all passes in order |
+| Trigger                           | What happens                                       |
+| --------------------------------- | -------------------------------------------------- |
+| `ico compile sources`             | Runs Summarize pass on all uncompiled sources      |
+| `ico compile topic <name>`        | Runs Synthesize + Link for a named topic           |
+| `ico compile concepts`            | Runs Extract + Link across all summaries           |
+| `ico compile all`                 | Runs all passes in order                           |
 | Source re-ingested (hash changed) | Marks existing summary stale, queues recompilation |
-| `ico lint knowledge` | Runs Contradict + Gap passes, reports findings |
+| `ico lint knowledge`              | Runs Contradict + Gap passes, reports findings     |
 
 ### 6.3 Staleness model
 
 A compiled page is **stale** when:
+
 - Any source it was derived from has been re-ingested with a different content hash
 - A new source has been added that matches the page's topic or concepts
 - A dependent page (backlinked) has been recompiled since this page was last compiled
@@ -300,17 +303,18 @@ created → collecting → synthesizing → critiquing → rendering → complet
 
 ### 8.2 Agent roles
 
-| Role | Responsibility |
-|------|---------------|
-| **Collector** | Gathers relevant evidence from L2 into `tasks/<id>/evidence/` |
-| **Summarizer** | Distills evidence into working notes in `tasks/<id>/notes/` |
-| **Skeptic** | Challenges conclusions, flags weak evidence, writes `tasks/<id>/critique/` |
-| **Integrator** | Synthesizes final answer from notes + critiques |
-| **Builder** | Renders final artifact (report, slides, etc.) to `tasks/<id>/output/` |
+| Role           | Responsibility                                                             |
+| -------------- | -------------------------------------------------------------------------- |
+| **Collector**  | Gathers relevant evidence from L2 into `tasks/<id>/evidence/`              |
+| **Summarizer** | Distills evidence into working notes in `tasks/<id>/notes/`                |
+| **Skeptic**    | Challenges conclusions, flags weak evidence, writes `tasks/<id>/critique/` |
+| **Integrator** | Synthesizes final answer from notes + critiques                            |
+| **Builder**    | Renders final artifact (report, slides, etc.) to `tasks/<id>/output/`      |
 
 ### 8.3 Task completion
 
 When a research task completes:
+
 1. Final artifact is copied to `workspace/outputs/`
 2. Task workspace is archived (retained but no longer active)
 3. User may promote the artifact to L2 via `ico promote`
@@ -324,25 +328,26 @@ The recall layer helps the human retain what the machine compiled.
 
 ### 9.1 Machine knowledge vs human knowledge
 
-| Dimension | Machine-facing (L2) | Human-facing (L5) |
-|-----------|--------------------|--------------------|
-| Optimized for | Retrieval, context efficiency, linkage | Recall, understanding, transfer |
-| Format | Structured markdown with frontmatter | Flashcards, quizzes, explanations |
-| Updates | Recompiled from sources | Adapted from test results |
-| Audience | Agents and retrieval pipelines | The user |
+| Dimension     | Machine-facing (L2)                    | Human-facing (L5)                 |
+| ------------- | -------------------------------------- | --------------------------------- |
+| Optimized for | Retrieval, context efficiency, linkage | Recall, understanding, transfer   |
+| Format        | Structured markdown with frontmatter   | Flashcards, quizzes, explanations |
+| Updates       | Recompiled from sources                | Adapted from test results         |
+| Audience      | Agents and retrieval pipelines         | The user                          |
 
 ### 9.2 Recall operations
 
-| Command | What it does |
-|---------|-------------|
+| Command                              | What it does                                                                  |
+| ------------------------------------ | ----------------------------------------------------------------------------- |
 | `ico recall generate --topic <name>` | Generates flashcards and quiz questions from compiled knowledge on that topic |
-| `ico recall quiz` | Runs an interactive quiz session |
-| `ico recall weak` | Shows concepts with lowest retention scores |
-| `ico recall export --format anki` | Exports to Anki-compatible format |
+| `ico recall quiz`                    | Runs an interactive quiz session                                              |
+| `ico recall weak`                    | Shows concepts with lowest retention scores                                   |
+| `ico recall export --format anki`    | Exports to Anki-compatible format                                             |
 
 ### 9.3 Feedback loop
 
 Quiz results update retention scores per concept. Low-scoring concepts are:
+
 - Surfaced by `ico recall weak`
 - Prioritized in future `ico recall generate` runs
 - Optionally flagged for recompilation with simpler language
@@ -430,16 +435,16 @@ intentional-cognition-os/
 
 ## 12. Tech Stack
 
-| Component | Technology | Rationale |
-|-----------|-----------|-----------|
-| Language | TypeScript, Node.js 22+ | Type safety, Claude SDK native |
-| CLI | Commander.js | Conventional, battle-tested |
-| State | SQLite (better-sqlite3) | Local-first, zero infrastructure |
-| Traces | JSONL | Append-only, greppable |
-| AI | Claude API via @anthropic-ai/sdk | Compilation and reasoning engine |
-| Orchestration | Agent SDK | Multi-agent research (Phase 3) |
-| Retrieval | Full-text search over compiled markdown | Simple first — no vector DB until proven needed |
-| Output | Markdown, Marp, matplotlib | File-based, inspectable |
+| Component     | Technology                              | Rationale                                       |
+| ------------- | --------------------------------------- | ----------------------------------------------- |
+| Language      | TypeScript, Node.js 22+                 | Type safety, Claude SDK native                  |
+| CLI           | Commander.js                            | Conventional, battle-tested                     |
+| State         | SQLite (better-sqlite3)                 | Local-first, zero infrastructure                |
+| Traces        | JSONL                                   | Append-only, greppable                          |
+| AI            | Claude API via @anthropic-ai/sdk        | Compilation and reasoning engine                |
+| Orchestration | Agent SDK                               | Multi-agent research (Phase 3)                  |
+| Retrieval     | Full-text search over compiled markdown | Simple first — no vector DB until proven needed |
+| Output        | Markdown, Marp, matplotlib              | File-based, inspectable                         |
 
 **Obsidian posture.** Obsidian is a strong local inspection and browsing surface for the compiled wiki. Its graph view, backlink panel, and metadata querying are useful for navigating compiled knowledge. However, the architecture does not depend on Obsidian-specific behavior. Output is standard markdown with YAML frontmatter — compatible with Obsidian, any markdown editor, and `cat`. Obsidian is a preferred viewer, not an architectural dependency.
 
@@ -448,6 +453,7 @@ intentional-cognition-os/
 ## 13. What This Is Not
 
 Do not let this collapse into:
+
 - A coding agent (this is a knowledge system, not a code generator)
 - A vector database wrapper (knowledge is compiled markdown, not embeddings)
 - An Obsidian plugin (Obsidian is a preferred inspection surface, not a dependency — the system is frontend-agnostic)
@@ -502,23 +508,23 @@ These assumptions hold through Phases 1-4. Remote and scale requirements are Pha
 
 ## 15. Phase Plan
 
-| Phase | Name | Scope |
-|-------|------|-------|
-| 1 | **Local Foundation** | Repo scaffold, workspace layout, CLI skeleton, SQLite state, raw ingest, provenance, basic ask/render |
-| 2 | **Knowledge Compiler** | Summarize, Extract, Synthesize, Link, Contradict, Gap passes; knowledge linting |
-| 3 | **Episodic Research** | Task workspaces, multi-agent roles, structured report generation, promotion rules |
-| 4 | **Recall Loop** | Flashcards, quizzes, retention tracking, weak-area feedback, adaptive generation |
-| 5 | **Remote Mode** | Shared workspaces, auth, remote jobs, team memory, hosted artifact pipelines |
+| Phase | Name                   | Scope                                                                                                 |
+| ----- | ---------------------- | ----------------------------------------------------------------------------------------------------- |
+| 1     | **Local Foundation**   | Repo scaffold, workspace layout, CLI skeleton, SQLite state, raw ingest, provenance, basic ask/render |
+| 2     | **Knowledge Compiler** | Summarize, Extract, Synthesize, Link, Contradict, Gap passes; knowledge linting                       |
+| 3     | **Episodic Research**  | Task workspaces, multi-agent roles, structured report generation, promotion rules                     |
+| 4     | **Recall Loop**        | Flashcards, quizzes, retention tracking, weak-area feedback, adaptive generation                      |
+| 5     | **Remote Mode**        | Shared workspaces, auth, remote jobs, team memory, hosted artifact pipelines                          |
 
 ---
 
 ## 16. Naming
 
-| Surface | Name |
-|---------|------|
-| Product | Intentional Cognition OS |
-| Repo | `intentional-cognition-os` |
-| CLI | `ico` |
-| Shorthand | ICO |
+| Surface   | Name                       |
+| --------- | -------------------------- |
+| Product   | Intentional Cognition OS   |
+| Repo      | `intentional-cognition-os` |
+| CLI       | `ico`                      |
+| Shorthand | ICO                        |
 
 One identity across all surfaces.

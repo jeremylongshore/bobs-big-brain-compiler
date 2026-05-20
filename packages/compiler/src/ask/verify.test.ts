@@ -4,7 +4,7 @@
  * Uses a real temporary workspace on disk. No network calls are made.
  */
 
-import { mkdirSync, mkdtempSync, rmSync,writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -59,11 +59,7 @@ function setup(): void {
     CONCEPT_PAGE_CONTENT,
     'utf-8',
   );
-  writeFileSync(
-    join(wsPath, 'wiki', 'topics', 'transformer.md'),
-    TOPIC_PAGE_CONTENT,
-    'utf-8',
-  );
+  writeFileSync(join(wsPath, 'wiki', 'topics', 'transformer.md'), TOPIC_PAGE_CONTENT, 'utf-8');
 }
 
 function teardown(): void {
@@ -112,9 +108,7 @@ describe('verifyCitations — citation verification', () => {
   });
 
   it('marks citations pointing to a non-existent file as unverified', () => {
-    const citations: Citation[] = [
-      makeCitation({ pagePath: 'concepts/does-not-exist.md' }),
-    ];
+    const citations: Citation[] = [makeCitation({ pagePath: 'concepts/does-not-exist.md' })];
     const result = verifyCitations(wsPath, citations);
 
     expect(result.ok).toBe(true);
@@ -232,9 +226,7 @@ describe('verifyCitations — provenance chain', () => {
   });
 
   it('produces a chain of only the answer level when all citations are unverified', () => {
-    const citations: Citation[] = [
-      makeCitation({ pagePath: '' }),
-    ];
+    const citations: Citation[] = [makeCitation({ pagePath: '' })];
     const result = verifyCitations(wsPath, citations);
 
     expect(result.ok).toBe(true);

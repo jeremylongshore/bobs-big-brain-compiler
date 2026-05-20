@@ -1,4 +1,5 @@
 # CI/CD Pipeline Upgrade Specification
+
 > From stubs to gates. Every merge proves the code works.
 
 **Author:** Jeremy Longshore — Intent Solutions
@@ -35,23 +36,23 @@ The existing `ci.yml` calls these stubs. It technically passes but proves nothin
 
 ### 3.1 What changes
 
-| Script | Before | After |
-|--------|--------|-------|
-| `build` | `echo 'No build configured yet'` | `pnpm -r --workspace-concurrency=1 build` |
-| `test` | `echo 'No tests configured yet'` | `pnpm -r test` |
-| `lint` | `echo 'No linter configured yet'` | `pnpm -r lint` |
-| `typecheck` | `echo 'No typecheck configured yet'` | `pnpm -r typecheck` |
+| Script      | Before                               | After                                     |
+| ----------- | ------------------------------------ | ----------------------------------------- |
+| `build`     | `echo 'No build configured yet'`     | `pnpm -r --workspace-concurrency=1 build` |
+| `test`      | `echo 'No tests configured yet'`     | `pnpm -r test`                            |
+| `lint`      | `echo 'No linter configured yet'`    | `pnpm -r lint`                            |
+| `typecheck` | `echo 'No typecheck configured yet'` | `pnpm -r typecheck`                       |
 
 ### 3.2 CI gates added
 
-| Gate | Blocks Merge | Command |
-|------|-------------|---------|
-| Lint | Yes | `pnpm -r lint` |
-| Typecheck | Yes | `pnpm -r typecheck` |
-| Test + coverage | Yes | `pnpm -r test -- --coverage` |
-| Build | Yes | `pnpm -r --workspace-concurrency=1 build` |
-| Dependency audit | Yes | `pnpm audit --audit-level=high` |
-| Temp workspace cleanup | No | `find /tmp -name 'ico-test-*' -mmin +30 -exec rm -rf {} +` |
+| Gate                   | Blocks Merge | Command                                                    |
+| ---------------------- | ------------ | ---------------------------------------------------------- |
+| Lint                   | Yes          | `pnpm -r lint`                                             |
+| Typecheck              | Yes          | `pnpm -r typecheck`                                        |
+| Test + coverage        | Yes          | `pnpm -r test -- --coverage`                               |
+| Build                  | Yes          | `pnpm -r --workspace-concurrency=1 build`                  |
+| Dependency audit       | Yes          | `pnpm audit --audit-level=high`                            |
+| Temp workspace cleanup | No           | `find /tmp -name 'ico-test-*' -mmin +30 -exec rm -rf {} +` |
 
 ### 3.3 What does not change
 
@@ -155,13 +156,13 @@ Replace the entire `scripts` block in the root `package.json` with the following
     "pnpm": ">=10.0.0"
   },
   "scripts": {
-    "build":         "pnpm -r --workspace-concurrency=1 build",
-    "test":          "pnpm -r test",
+    "build": "pnpm -r --workspace-concurrency=1 build",
+    "test": "pnpm -r test",
     "test:coverage": "pnpm -r test -- --coverage",
-    "lint":          "pnpm -r lint",
-    "typecheck":     "pnpm -r typecheck",
-    "audit:deps":    "pnpm audit --audit-level=moderate",
-    "clean":         "pnpm -r exec -- rm -rf dist .tsbuildinfo"
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "audit:deps": "pnpm audit --audit-level=moderate",
+    "clean": "pnpm -r exec -- rm -rf dist .tsbuildinfo"
   },
   "author": "Jeremy Longshore",
   "license": "MIT",
@@ -193,13 +194,8 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    include: [
-      'packages/*/src/**/*.test.ts',
-      'tests/integration/**/*.test.ts',
-    ],
-    exclude: [
-      'evals/**',
-    ],
+    include: ['packages/*/src/**/*.test.ts', 'tests/integration/**/*.test.ts'],
+    exclude: ['evals/**'],
     coverage: {
       provider: 'v8',
       include: ['packages/*/src/**/*.ts'],
@@ -208,10 +204,10 @@ export default defineConfig({
       // json-summary is required for Codecov upload
       reportsDirectory: './coverage',
       thresholds: {
-        'packages/types/src':    { statements: 100, branches: 100, functions: 100, lines: 100 },
-        'packages/kernel/src':   { statements: 90,  branches: 90,  functions: 90,  lines: 90  },
-        'packages/compiler/src': { statements: 80,  branches: 80,  functions: 80,  lines: 80  },
-        'packages/cli/src':      { statements: 70,  branches: 70,  functions: 70,  lines: 70  },
+        'packages/types/src': { statements: 100, branches: 100, functions: 100, lines: 100 },
+        'packages/kernel/src': { statements: 90, branches: 90, functions: 90, lines: 90 },
+        'packages/compiler/src': { statements: 80, branches: 80, functions: 80, lines: 80 },
+        'packages/cli/src': { statements: 70, branches: 70, functions: 70, lines: 70 },
       },
     },
     testTimeout: 10_000,
@@ -269,8 +265,8 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
-          cache: "pnpm"
+          node-version: '22'
+          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -303,8 +299,8 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
-          cache: "pnpm"
+          node-version: '22'
+          cache: 'pnpm'
 
       - name: Restore node_modules
         uses: actions/cache/restore@v4
@@ -341,8 +337,8 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
-          cache: "pnpm"
+          node-version: '22'
+          cache: 'pnpm'
 
       - name: Restore node_modules
         uses: actions/cache/restore@v4
@@ -378,8 +374,8 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
-          cache: "pnpm"
+          node-version: '22'
+          cache: 'pnpm'
 
       - name: Restore node_modules
         uses: actions/cache/restore@v4
@@ -427,8 +423,8 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
-          cache: "pnpm"
+          node-version: '22'
+          cache: 'pnpm'
 
       - name: Restore node_modules
         uses: actions/cache/restore@v4
@@ -493,8 +489,8 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
-          cache: "pnpm"
+          node-version: '22'
+          cache: 'pnpm'
 
       - name: Restore node_modules
         uses: actions/cache/restore@v4
@@ -521,23 +517,23 @@ The release workflow requires one targeted change: the `Verify readiness` step m
 Replace only the `Verify readiness` step:
 
 ```yaml
-      - name: Verify readiness
-        run: |
-          echo "--- Checking for uncommitted changes ---"
-          if ! git diff --quiet || ! git diff --staged --quiet; then
-            echo "::error::Uncommitted changes detected"
-            exit 1
-          fi
-          echo "Working tree is clean."
+- name: Verify readiness
+  run: |
+    echo "--- Checking for uncommitted changes ---"
+    if ! git diff --quiet || ! git diff --staged --quiet; then
+      echo "::error::Uncommitted changes detected"
+      exit 1
+    fi
+    echo "Working tree is clean."
 
-          echo "--- Running full CI gates before release ---"
-          # Build in dependency order before running tests.
-          pnpm -r --workspace-concurrency=1 build
-          # Run tests with coverage. Exits non-zero if thresholds are not met.
-          pnpm -r test -- --coverage
-          # Audit for high/critical vulnerabilities.
-          pnpm audit --audit-level=high
-          echo "All release gates passed."
+    echo "--- Running full CI gates before release ---"
+    # Build in dependency order before running tests.
+    pnpm -r --workspace-concurrency=1 build
+    # Run tests with coverage. Exits non-zero if thresholds are not met.
+    pnpm -r test -- --coverage
+    # Audit for high/critical vulnerabilities.
+    pnpm audit --audit-level=high
+    echo "All release gates passed."
 ```
 
 The full `release.yml` file is not reproduced here because all other steps are unchanged. The only line removed is `|| true` from the original test invocation, and the step is expanded to include build and audit as preconditions.
@@ -551,7 +547,7 @@ This file must exist at the repository root before `pnpm -r` commands will disco
 ```yaml
 # pnpm-workspace.yaml
 packages:
-  - "packages/*"
+  - 'packages/*'
 ```
 
 ---
@@ -607,10 +603,10 @@ Complete these tasks in the order listed. Each task has a concrete done conditio
 
 ## 13. Caching Strategy
 
-| Cache key | Contents | Saved by | Restored by |
-|-----------|----------|----------|-------------|
+| Cache key                        | Contents                                       | Saved by      | Restored by                                   |
+| -------------------------------- | ---------------------------------------------- | ------------- | --------------------------------------------- |
 | `node_modules-$OS-$lockfileHash` | `node_modules/` and `packages/*/node_modules/` | `install` job | `lint`, `typecheck`, `build`, `test`, `audit` |
-| `dist-$OS-$sha` | `packages/*/dist/` | `build` job | `test` job only |
+| `dist-$OS-$sha`                  | `packages/*/dist/`                             | `build` job   | `test` job only                               |
 
 The lockfile hash in the node_modules cache key invalidates the cache on any `pnpm-lock.yaml` change. The commit SHA in the dist cache key ensures the test job always uses the dist produced by the build job in the same workflow run, never a stale build from a previous commit.
 
@@ -637,11 +633,11 @@ GHSA-xxxx-xxxx-xxxx
 
 ## 15. Environment Variables Required in CI
 
-| Variable | Where | Required for |
-|----------|-------|-------------|
-| `CODECOV_TOKEN` | Repository secret | Coverage upload (required for private repos, optional for public) |
-| `GITHUB_TOKEN` | Automatically provided | Release workflow — create tags and GitHub Releases |
-| `ICO_MODEL` | Not needed in CI | Compiler unit tests mock the model client; no real API calls in CI |
-| `ANTHROPIC_API_KEY` | Not needed in CI | Same reason — mocked in unit tests, evals run separately |
+| Variable            | Where                  | Required for                                                       |
+| ------------------- | ---------------------- | ------------------------------------------------------------------ |
+| `CODECOV_TOKEN`     | Repository secret      | Coverage upload (required for private repos, optional for public)  |
+| `GITHUB_TOKEN`      | Automatically provided | Release workflow — create tags and GitHub Releases                 |
+| `ICO_MODEL`         | Not needed in CI       | Compiler unit tests mock the model client; no real API calls in CI |
+| `ANTHROPIC_API_KEY` | Not needed in CI       | Same reason — mocked in unit tests, evals run separately           |
 
 Evals (`evals/`) require `ANTHROPIC_API_KEY` and are explicitly excluded from Vitest. They run via `ico eval run` on-demand or on a scheduled cadence, not in the merge-blocking CI pipeline.

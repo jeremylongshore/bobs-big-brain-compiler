@@ -17,6 +17,7 @@ Hard questions need structured working memory. When a research question is too c
 The seven-state lifecycle is: created → collecting → synthesizing → critiquing → rendering → completed → archived.
 
 Each state maps to an agent role:
+
 - Collecting: Collector agents gather evidence
 - Synthesizing: Summarizer agents distill findings
 - Critiquing: Skeptic agents challenge conclusions

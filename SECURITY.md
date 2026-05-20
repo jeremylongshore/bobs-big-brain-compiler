@@ -2,9 +2,9 @@
 
 ## Supported Versions
 
-| Version | Supported |
-|---------|-----------|
-| latest | Yes |
+| Version  | Supported   |
+| -------- | ----------- |
+| latest   | Yes         |
 | < latest | Best effort |
 
 ## Reporting a Vulnerability
@@ -23,21 +23,21 @@ Email **security@jeremylongshore.com** with:
 
 ### Response Timeline
 
-| Stage | Timeframe |
-|-------|-----------|
-| Acknowledgment | 24 hours |
-| Initial assessment | 48 hours |
-| Status update | 5 business days |
-| Resolution | Depends on severity |
+| Stage              | Timeframe           |
+| ------------------ | ------------------- |
+| Acknowledgment     | 24 hours            |
+| Initial assessment | 48 hours            |
+| Status update      | 5 business days     |
+| Resolution         | Depends on severity |
 
 ### Severity Levels
 
-| Severity | CVSS | Examples | Target Resolution |
-|----------|------|---------|-------------------|
-| Critical | 9.0-10.0 | Remote code execution, credential theft | 24 hours |
-| High | 7.0-8.9 | Privilege escalation, data exposure | 7 days |
-| Medium | 4.0-6.9 | Cross-site scripting, denial of service | 30 days |
-| Low | 0.1-3.9 | Information disclosure, minor issues | 90 days |
+| Severity | CVSS     | Examples                                | Target Resolution |
+| -------- | -------- | --------------------------------------- | ----------------- |
+| Critical | 9.0-10.0 | Remote code execution, credential theft | 24 hours          |
+| High     | 7.0-8.9  | Privilege escalation, data exposure     | 7 days            |
+| Medium   | 4.0-6.9  | Cross-site scripting, denial of service | 30 days           |
+| Low      | 0.1-3.9  | Information disclosure, minor issues    | 90 days           |
 
 ## Disclosure Process
 

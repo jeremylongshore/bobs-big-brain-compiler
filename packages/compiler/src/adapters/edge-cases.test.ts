@@ -95,9 +95,7 @@ Some body text.
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.value.metadata.title).toBe(
-      '"Hänschen & Klein: A <Möbius> Story"',
-    );
+    expect(result.value.metadata.title).toBe('"Hänschen & Klein: A <Möbius> Story"');
   });
 
   it('counts words correctly in a file with Unicode multi-byte content', () => {
@@ -166,8 +164,7 @@ describe('ingestPdf — edge cases', () => {
     // Bytes that begin with the PDF magic bytes to pass the first check,
     // then dissolve into noise so the parser fails structurally.
     const corrupted = Buffer.from(
-      '%PDF-1.4\n' +
-        '\x00\xFF\xFE\xFD\xFC\xFB\xFA\xF9\xF8\xF7\xF6garbage!!@@##$$',
+      '%PDF-1.4\n' + '\x00\xFF\xFE\xFD\xFC\xFB\xFA\xF9\xF8\xF7\xF6garbage!!@@##$$',
       'binary',
     );
     const filePath = await writeBinaryTmp('corrupted.pdf', corrupted);
@@ -179,9 +176,7 @@ describe('ingestPdf — edge cases', () => {
     expect(result.error).toBeInstanceOf(Error);
     // The adapter must surface a meaningful message (not a raw pdfjs trace).
     expect(result.error.message.length).toBeGreaterThan(0);
-    expect(result.error.message).toMatch(
-      /corrupt|invalid|malformed|unreadable|parse|unexpected/i,
-    );
+    expect(result.error.message).toMatch(/corrupt|invalid|malformed|unreadable|parse|unexpected/i);
   });
 });
 
@@ -239,9 +234,7 @@ describe('ingestWebClip — edge cases', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.value.metadata.title).toBe(
-      'Café & Bistro — "Über" Edition',
-    );
+    expect(result.value.metadata.title).toBe('Café & Bistro — "Über" Edition');
   });
 
   it('produces clean markdown from HTML with deeply nested tags', () => {

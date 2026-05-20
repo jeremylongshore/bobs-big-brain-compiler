@@ -65,13 +65,13 @@ export function buildProgram(): Command {
   p.name('ico')
     .description(
       'Intentional Cognition OS — Compile knowledge for the machine. Distill understanding for the human.\n\n' +
-      '  Operating loop:\n' +
-      '    ico init → ico mount → ico ingest → ico compile → ico status\n\n' +
-      '  Advanced:\n' +
-      '    ico ask      Query your compiled knowledge\n' +
-      '    ico research  Multi-agent research with episodic workspaces\n' +
-      '    ico render    Generate reports, slides, briefings\n' +
-      '    ico promote   File artifacts back into the knowledge base',
+        '  Operating loop:\n' +
+        '    ico init → ico mount → ico ingest → ico compile → ico status\n\n' +
+        '  Advanced:\n' +
+        '    ico ask      Query your compiled knowledge\n' +
+        '    ico research  Multi-agent research with episodic workspaces\n' +
+        '    ico render    Generate reports, slides, briefings\n' +
+        '    ico promote   File artifacts back into the knowledge base',
     )
     .version(cliVersion)
     .option('--workspace <path>', 'Workspace directory')

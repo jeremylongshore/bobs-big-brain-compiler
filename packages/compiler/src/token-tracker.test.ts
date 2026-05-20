@@ -10,7 +10,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { closeDatabase, type Database, initDatabase } from '@ico/kernel';
 
-import { calculateCost, formatTokenUsage, getTokenUsageSummary, MODEL_PRICING } from './token-tracker.js';
+import {
+  calculateCost,
+  formatTokenUsage,
+  getTokenUsageSummary,
+  MODEL_PRICING,
+} from './token-tracker.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -47,12 +52,7 @@ function insertCompilation(
   db.prepare(
     `INSERT INTO compilations (id, source_id, type, output_path, compiled_at, model, tokens_used)
      VALUES (?, ?, 'summary', ?, '2026-01-01T00:00:00.000Z', 'claude-sonnet-4-6', ?)`,
-  ).run(
-    opts.id,
-    opts.sourceId,
-    `/wiki/${opts.id}.md`,
-    opts.tokensUsed ?? null,
-  );
+  ).run(opts.id, opts.sourceId, `/wiki/${opts.id}.md`, opts.tokensUsed ?? null);
 }
 
 // ---------------------------------------------------------------------------
@@ -116,8 +116,12 @@ describe('formatTokenUsage', () => {
 describe('getTokenUsageSummary', () => {
   let db: Database;
 
-  beforeEach(() => { db = openDb(); });
-  afterEach(() => { closeDatabase(db); });
+  beforeEach(() => {
+    db = openDb();
+  });
+  afterEach(() => {
+    closeDatabase(db);
+  });
 
   it('returns zeros when there are no compilations', () => {
     const result = getTokenUsageSummary(db);

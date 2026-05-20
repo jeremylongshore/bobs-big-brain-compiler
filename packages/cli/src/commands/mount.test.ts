@@ -52,8 +52,12 @@ function runMount(workspacePath: string, args: string[], jsonMode = false): RunR
     .option('--json', 'Output as JSON')
     .exitOverride()
     .configureOutput({
-      writeOut: (str) => { stdout += str; },
-      writeErr: (str) => { stderr += str; },
+      writeOut: (str) => {
+        stdout += str;
+      },
+      writeErr: (str) => {
+        stderr += str;
+      },
     });
 
   // Pre-set global options before parsing so action handlers see them.
@@ -70,7 +74,7 @@ function runMount(workspacePath: string, args: string[], jsonMode = false): RunR
   const errSpy = vi.spyOn(console, 'error').mockImplementation((...msgs: unknown[]) => {
     stderr += msgs.join(' ') + '\n';
   });
-  const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null  ) => {
+  const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null) => {
     exitCode = typeof code === 'number' ? code : 1;
     throw new Error(`process.exit(${exitCode})`);
   });

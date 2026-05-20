@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       bump:
-        description: "Version bump type"
+        description: 'Version bump type'
         required: true
-        default: "auto"
+        default: 'auto'
         type: choice
         options:
           - auto
@@ -14,7 +14,7 @@ on:
           - minor
           - major
       dry_run:
-        description: "Dry run (skip tag/push/release)"
+        description: 'Dry run (skip tag/push/release)'
         required: false
         default: false
         type: boolean
@@ -52,8 +52,8 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "22"
-          cache: "pnpm"
+          node-version: '22'
+          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

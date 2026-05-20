@@ -28,13 +28,7 @@
  * @module agents/integrator
  */
 
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import {
@@ -206,9 +200,7 @@ export async function integrateFindings(
   const notesRelPath = join(task.workspace_path, 'notes', 'synthesis.md');
   if (!existsSync(notesAbsPath)) {
     return err(
-      new Error(
-        `Notes file not found at ${notesAbsPath}. The Summarizer agent must run first.`,
-      ),
+      new Error(`Notes file not found at ${notesAbsPath}. The Summarizer agent must run first.`),
     );
   }
   let notesRaw: string;
@@ -223,18 +215,11 @@ export async function integrateFindings(
   }
 
   // 4. Read critique.
-  const critiqueAbsPath = resolve(
-    workspacePath,
-    task.workspace_path,
-    'critique',
-    'critique.md',
-  );
+  const critiqueAbsPath = resolve(workspacePath, task.workspace_path, 'critique', 'critique.md');
   const critiqueRelPath = join(task.workspace_path, 'critique', 'critique.md');
   if (!existsSync(critiqueAbsPath)) {
     return err(
-      new Error(
-        `Critique file not found at ${critiqueAbsPath}. The Skeptic agent must run first.`,
-      ),
+      new Error(`Critique file not found at ${critiqueAbsPath}. The Skeptic agent must run first.`),
     );
   }
   let critiqueRaw: string;

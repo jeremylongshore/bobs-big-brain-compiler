@@ -30,12 +30,12 @@ PRAGMA busy_timeout = 5000;
 PRAGMA synchronous = NORMAL;
 ```
 
-| Pragma | Value | Rationale |
-|--------|-------|-----------|
-| `journal_mode` | `WAL` | Allows concurrent reads during writes. Required for CLI responsiveness. |
-| `foreign_keys` | `ON` | Enforces referential integrity at the database level. |
-| `busy_timeout` | `5000` | Waits up to 5 seconds for a write lock before returning SQLITE_BUSY. |
-| `synchronous` | `NORMAL` | Balanced durability — safe with WAL mode, avoids fsync on every commit. |
+| Pragma         | Value    | Rationale                                                               |
+| -------------- | -------- | ----------------------------------------------------------------------- |
+| `journal_mode` | `WAL`    | Allows concurrent reads during writes. Required for CLI responsiveness. |
+| `foreign_keys` | `ON`     | Enforces referential integrity at the database level.                   |
+| `busy_timeout` | `5000`   | Waits up to 5 seconds for a write lock before returning SQLITE_BUSY.    |
+| `synchronous`  | `NORMAL` | Balanced durability — safe with WAL mode, avoids fsync on every commit. |
 
 ### 2.1 Workspace Lockfile
 
@@ -76,18 +76,18 @@ CREATE TABLE sources (
 );
 ```
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | TEXT | PRIMARY KEY | ULID or UUID. Generated at ingest time. |
-| `path` | TEXT | NOT NULL | Relative path within `workspace/raw/`. |
-| `mount_id` | TEXT | FK -> mounts(id), nullable | Mount that sourced this file, if any. |
-| `type` | TEXT | NOT NULL, CHECK | Source file type. One of: pdf, markdown, html, text. |
-| `title` | TEXT | nullable | Extracted or user-provided title. |
-| `author` | TEXT | nullable | Extracted or user-provided author. |
-| `ingested_at` | TEXT | NOT NULL | ISO 8601 timestamp. When the source was ingested. |
-| `word_count` | INTEGER | nullable | Approximate word count of extracted text. |
-| `hash` | TEXT | NOT NULL | SHA-256 content hash for dedup and staleness detection. |
-| `metadata` | TEXT | nullable | JSON blob for type-specific metadata (page count, URL, etc.). |
+| Column        | Type    | Constraints                | Description                                                   |
+| ------------- | ------- | -------------------------- | ------------------------------------------------------------- |
+| `id`          | TEXT    | PRIMARY KEY                | ULID or UUID. Generated at ingest time.                       |
+| `path`        | TEXT    | NOT NULL                   | Relative path within `workspace/raw/`.                        |
+| `mount_id`    | TEXT    | FK -> mounts(id), nullable | Mount that sourced this file, if any.                         |
+| `type`        | TEXT    | NOT NULL, CHECK            | Source file type. One of: pdf, markdown, html, text.          |
+| `title`       | TEXT    | nullable                   | Extracted or user-provided title.                             |
+| `author`      | TEXT    | nullable                   | Extracted or user-provided author.                            |
+| `ingested_at` | TEXT    | NOT NULL                   | ISO 8601 timestamp. When the source was ingested.             |
+| `word_count`  | INTEGER | nullable                   | Approximate word count of extracted text.                     |
+| `hash`        | TEXT    | NOT NULL                   | SHA-256 content hash for dedup and staleness detection.       |
+| `metadata`    | TEXT    | nullable                   | JSON blob for type-specific metadata (page count, URL, etc.). |
 
 **Unique constraint:** `(path, hash)` prevents duplicate ingestion of the same content at the same path. Re-ingestion with changed content produces a new row (new hash).
 
@@ -105,13 +105,13 @@ CREATE TABLE mounts (
 );
 ```
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | TEXT | PRIMARY KEY | ULID or UUID. |
-| `name` | TEXT | NOT NULL, UNIQUE | Human-readable mount name (e.g., "research-papers"). |
-| `path` | TEXT | NOT NULL | Absolute or workspace-relative path to the mount directory. |
-| `created_at` | TEXT | NOT NULL | ISO 8601 timestamp. |
-| `last_indexed_at` | TEXT | nullable | ISO 8601 timestamp of last `ico mount` index scan. NULL if never indexed. |
+| Column            | Type | Constraints      | Description                                                               |
+| ----------------- | ---- | ---------------- | ------------------------------------------------------------------------- |
+| `id`              | TEXT | PRIMARY KEY      | ULID or UUID.                                                             |
+| `name`            | TEXT | NOT NULL, UNIQUE | Human-readable mount name (e.g., "research-papers").                      |
+| `path`            | TEXT | NOT NULL         | Absolute or workspace-relative path to the mount directory.               |
+| `created_at`      | TEXT | NOT NULL         | ISO 8601 timestamp.                                                       |
+| `last_indexed_at` | TEXT | nullable         | ISO 8601 timestamp of last `ico mount` index scan. NULL if never indexed. |
 
 ### 3.3 compilations
 
@@ -134,16 +134,16 @@ CREATE TABLE compilations (
 );
 ```
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | TEXT | PRIMARY KEY | ULID or UUID. |
-| `source_id` | TEXT | FK -> sources(id), nullable | Source that was compiled. NULL for cross-source compilations (topics, contradictions). |
-| `type` | TEXT | NOT NULL, CHECK | Compilation pass type. All six blueprint passes represented. |
-| `output_path` | TEXT | NOT NULL | Relative path within `workspace/wiki/` to the compiled page. |
-| `compiled_at` | TEXT | NOT NULL | ISO 8601 timestamp. |
-| `stale` | INTEGER | NOT NULL, DEFAULT 0, CHECK | 0 = current, 1 = stale. Set by staleness detection (blueprint Section 6.3). |
-| `model` | TEXT | NOT NULL | Model identifier used for this compilation (e.g., "claude-sonnet-4-6"). |
-| `tokens_used` | INTEGER | nullable | Total tokens consumed (input + output). NULL if not tracked. |
+| Column        | Type    | Constraints                 | Description                                                                            |
+| ------------- | ------- | --------------------------- | -------------------------------------------------------------------------------------- |
+| `id`          | TEXT    | PRIMARY KEY                 | ULID or UUID.                                                                          |
+| `source_id`   | TEXT    | FK -> sources(id), nullable | Source that was compiled. NULL for cross-source compilations (topics, contradictions). |
+| `type`        | TEXT    | NOT NULL, CHECK             | Compilation pass type. All six blueprint passes represented.                           |
+| `output_path` | TEXT    | NOT NULL                    | Relative path within `workspace/wiki/` to the compiled page.                           |
+| `compiled_at` | TEXT    | NOT NULL                    | ISO 8601 timestamp.                                                                    |
+| `stale`       | INTEGER | NOT NULL, DEFAULT 0, CHECK  | 0 = current, 1 = stale. Set by staleness detection (blueprint Section 6.3).            |
+| `model`       | TEXT    | NOT NULL                    | Model identifier used for this compilation (e.g., "claude-sonnet-4-6").                |
+| `tokens_used` | INTEGER | nullable                    | Total tokens consumed (input + output). NULL if not tracked.                           |
 
 **Unique constraint:** `(source_id, type, output_path)` prevents duplicate compilation records for the same source-type-path combination. Recompilation replaces the existing row.
 
@@ -169,16 +169,16 @@ CREATE TABLE tasks (
 );
 ```
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | TEXT | PRIMARY KEY | ULID or UUID. Also used as the task directory name. |
-| `brief` | TEXT | NOT NULL | User-provided research question or task description. |
-| `status` | TEXT | NOT NULL, DEFAULT 'created', CHECK | Current lifecycle state. Seven valid states per blueprint Section 8.1. |
-| `created_at` | TEXT | NOT NULL | ISO 8601 timestamp. |
-| `updated_at` | TEXT | NOT NULL | ISO 8601 timestamp. Updated on every status transition. |
-| `completed_at` | TEXT | nullable | ISO 8601 timestamp. Set when status transitions to 'completed'. |
-| `archived_at` | TEXT | nullable | ISO 8601 timestamp. Set when status transitions to 'archived'. |
-| `workspace_path` | TEXT | NOT NULL | Relative path to the task workspace (e.g., "tasks/01JQXYZ..."). |
+| Column           | Type | Constraints                        | Description                                                            |
+| ---------------- | ---- | ---------------------------------- | ---------------------------------------------------------------------- |
+| `id`             | TEXT | PRIMARY KEY                        | ULID or UUID. Also used as the task directory name.                    |
+| `brief`          | TEXT | NOT NULL                           | User-provided research question or task description.                   |
+| `status`         | TEXT | NOT NULL, DEFAULT 'created', CHECK | Current lifecycle state. Seven valid states per blueprint Section 8.1. |
+| `created_at`     | TEXT | NOT NULL                           | ISO 8601 timestamp.                                                    |
+| `updated_at`     | TEXT | NOT NULL                           | ISO 8601 timestamp. Updated on every status transition.                |
+| `completed_at`   | TEXT | nullable                           | ISO 8601 timestamp. Set when status transitions to 'completed'.        |
+| `archived_at`    | TEXT | nullable                           | ISO 8601 timestamp. Set when status transitions to 'archived'.         |
+| `workspace_path` | TEXT | NOT NULL                           | Relative path to the task workspace (e.g., "tasks/01JQXYZ...").        |
 
 **Task state machine.** Valid transitions are enforced by the kernel, not the database. The CHECK constraint validates the value domain; the kernel validates transition legality:
 
@@ -205,13 +205,13 @@ CREATE TABLE promotions (
 );
 ```
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | TEXT | PRIMARY KEY | ULID or UUID. |
-| `source_path` | TEXT | NOT NULL | Path in `workspace/outputs/` of the promoted artifact. |
-| `target_path` | TEXT | NOT NULL | Destination path in `workspace/wiki/<type>/`. |
-| `target_type` | TEXT | NOT NULL, CHECK | Target wiki type. Must match the `--as` flag from `ico promote`. |
-| `promoted_at` | TEXT | NOT NULL | ISO 8601 timestamp. |
+| Column        | Type | Constraints     | Description                                                                                         |
+| ------------- | ---- | --------------- | --------------------------------------------------------------------------------------------------- |
+| `id`          | TEXT | PRIMARY KEY     | ULID or UUID.                                                                                       |
+| `source_path` | TEXT | NOT NULL        | Path in `workspace/outputs/` of the promoted artifact.                                              |
+| `target_path` | TEXT | NOT NULL        | Destination path in `workspace/wiki/<type>/`.                                                       |
+| `target_type` | TEXT | NOT NULL, CHECK | Target wiki type. Must match the `--as` flag from `ico promote`.                                    |
+| `promoted_at` | TEXT | NOT NULL        | ISO 8601 timestamp.                                                                                 |
 | `promoted_by` | TEXT | NOT NULL, CHECK | Actor. Currently always 'user' — automatic promotion is not allowed (blueprint Section 7.1 rule 7). |
 
 ### 3.6 recall_results
@@ -230,15 +230,15 @@ CREATE TABLE recall_results (
 );
 ```
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | TEXT | PRIMARY KEY | ULID or UUID. |
-| `concept` | TEXT | NOT NULL | Concept name being tested. Should match a concept page title in wiki. |
-| `topic` | TEXT | nullable | Topic context for the question, if applicable. |
-| `correct` | INTEGER | NOT NULL, CHECK | 0 = incorrect, 1 = correct. |
-| `tested_at` | TEXT | NOT NULL | ISO 8601 timestamp. |
-| `confidence` | REAL | CHECK range | Self-reported confidence (0.0 to 1.0). NULL if not collected. |
-| `source_card` | TEXT | nullable | Path to the flashcard file that generated this question. |
+| Column        | Type    | Constraints     | Description                                                           |
+| ------------- | ------- | --------------- | --------------------------------------------------------------------- |
+| `id`          | TEXT    | PRIMARY KEY     | ULID or UUID.                                                         |
+| `concept`     | TEXT    | NOT NULL        | Concept name being tested. Should match a concept page title in wiki. |
+| `topic`       | TEXT    | nullable        | Topic context for the question, if applicable.                        |
+| `correct`     | INTEGER | NOT NULL, CHECK | 0 = incorrect, 1 = correct.                                           |
+| `tested_at`   | TEXT    | NOT NULL        | ISO 8601 timestamp.                                                   |
+| `confidence`  | REAL    | CHECK range     | Self-reported confidence (0.0 to 1.0). NULL if not collected.         |
+| `source_card` | TEXT    | nullable        | Path to the flashcard file that generated this question.              |
 
 ### 3.7 traces
 
@@ -256,15 +256,15 @@ CREATE TABLE traces (
 );
 ```
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | TEXT | PRIMARY KEY | Matches `event_id` in the JSONL envelope. |
-| `event_type` | TEXT | NOT NULL | Event type string (e.g., "ingest", "compile", "task.transition", "promote", "recall.test", "eval.run"). |
-| `correlation_id` | TEXT | nullable | Groups related events (e.g., all events in a single research task share a correlation_id). |
-| `timestamp` | TEXT | NOT NULL | ISO 8601 timestamp. Matches the JSONL envelope timestamp. |
-| `file_path` | TEXT | NOT NULL | Relative path to the JSONL trace file (e.g., "audit/traces/2026-04-06.jsonl"). |
-| `line_offset` | INTEGER | NOT NULL | Zero-based byte offset within the JSONL file for direct seek. |
-| `summary` | TEXT | nullable | One-line human-readable summary of the event. Used by `log.md` generation. |
+| Column           | Type    | Constraints | Description                                                                                             |
+| ---------------- | ------- | ----------- | ------------------------------------------------------------------------------------------------------- |
+| `id`             | TEXT    | PRIMARY KEY | Matches `event_id` in the JSONL envelope.                                                               |
+| `event_type`     | TEXT    | NOT NULL    | Event type string (e.g., "ingest", "compile", "task.transition", "promote", "recall.test", "eval.run"). |
+| `correlation_id` | TEXT    | nullable    | Groups related events (e.g., all events in a single research task share a correlation_id).              |
+| `timestamp`      | TEXT    | NOT NULL    | ISO 8601 timestamp. Matches the JSONL envelope timestamp.                                               |
+| `file_path`      | TEXT    | NOT NULL    | Relative path to the JSONL trace file (e.g., "audit/traces/2026-04-06.jsonl").                          |
+| `line_offset`    | INTEGER | NOT NULL    | Zero-based byte offset within the JSONL file for direct seek.                                           |
+| `summary`        | TEXT    | nullable    | One-line human-readable summary of the event. Used by `log.md` generation.                              |
 
 ### 3.8 compilation_sources (junction table)
 
@@ -278,10 +278,10 @@ CREATE TABLE compilation_sources (
 );
 ```
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `compilation_id` | TEXT | NOT NULL, FK, PK | The cross-source compilation record. |
-| `source_id` | TEXT | NOT NULL, FK, PK | One of the sources that contributed to this compilation. |
+| Column           | Type | Constraints      | Description                                              |
+| ---------------- | ---- | ---------------- | -------------------------------------------------------- |
+| `compilation_id` | TEXT | NOT NULL, FK, PK | The cross-source compilation record.                     |
+| `source_id`      | TEXT | NOT NULL, FK, PK | One of the sources that contributed to this compilation. |
 
 ---
 
@@ -343,16 +343,16 @@ CREATE INDEX idx_compilation_sources_source_id ON compilation_sources(source_id)
 
 Common queries the kernel and CLI execute against this schema. Provided as implementation guidance.
 
-| Operation | Query Pattern | Indexes Used |
-|-----------|--------------|--------------|
-| `ico ingest` dedup check | `SELECT id FROM sources WHERE hash = ?` | `idx_sources_hash` |
-| `ico compile sources` — find uncompiled | `SELECT s.id FROM sources s LEFT JOIN compilations c ON c.source_id = s.id AND c.type = 'summary' WHERE c.id IS NULL` | `idx_compilations_source_id` |
-| `ico compile all` — find stale | `SELECT * FROM compilations WHERE stale = 1` | `idx_compilations_stale` |
-| `ico status` — task summary | `SELECT status, COUNT(*) FROM tasks GROUP BY status` | `idx_tasks_status` |
-| `ico recall weak` — lowest retention | `SELECT concept, AVG(correct) AS rate FROM recall_results GROUP BY concept ORDER BY rate ASC LIMIT 20` | `idx_recall_results_concept` |
-| `ico lint knowledge` — staleness check | `SELECT c.output_path FROM compilations c JOIN sources s ON c.source_id = s.id WHERE c.compiled_at < s.ingested_at` | `idx_compilations_source_id` |
-| Trace audit — event chain | `SELECT * FROM traces WHERE correlation_id = ? ORDER BY timestamp` | `idx_traces_correlation_id`, `idx_traces_timestamp` |
-| Provenance — wiki page to source | `SELECT s.* FROM sources s JOIN compilations c ON c.source_id = s.id WHERE c.output_path = ?` | `idx_compilations_output_path` |
+| Operation                               | Query Pattern                                                                                                         | Indexes Used                                        |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `ico ingest` dedup check                | `SELECT id FROM sources WHERE hash = ?`                                                                               | `idx_sources_hash`                                  |
+| `ico compile sources` — find uncompiled | `SELECT s.id FROM sources s LEFT JOIN compilations c ON c.source_id = s.id AND c.type = 'summary' WHERE c.id IS NULL` | `idx_compilations_source_id`                        |
+| `ico compile all` — find stale          | `SELECT * FROM compilations WHERE stale = 1`                                                                          | `idx_compilations_stale`                            |
+| `ico status` — task summary             | `SELECT status, COUNT(*) FROM tasks GROUP BY status`                                                                  | `idx_tasks_status`                                  |
+| `ico recall weak` — lowest retention    | `SELECT concept, AVG(correct) AS rate FROM recall_results GROUP BY concept ORDER BY rate ASC LIMIT 20`                | `idx_recall_results_concept`                        |
+| `ico lint knowledge` — staleness check  | `SELECT c.output_path FROM compilations c JOIN sources s ON c.source_id = s.id WHERE c.compiled_at < s.ingested_at`   | `idx_compilations_source_id`                        |
+| Trace audit — event chain               | `SELECT * FROM traces WHERE correlation_id = ? ORDER BY timestamp`                                                    | `idx_traces_correlation_id`, `idx_traces_timestamp` |
+| Provenance — wiki page to source        | `SELECT s.* FROM sources s JOIN compilations c ON c.source_id = s.id WHERE c.output_path = ?`                         | `idx_compilations_output_path`                      |
 
 ---
 
@@ -360,16 +360,16 @@ Common queries the kernel and CLI execute against this schema. Provided as imple
 
 These rules are enforced by the kernel, not by database constraints alone. The database provides the structural foundation; the kernel provides semantic validation.
 
-| Rule | Enforcement | Reference |
-|------|-------------|-----------|
-| Sources are append-only after ingestion | Kernel refuses UPDATE on sources rows (except metadata corrections) | Blueprint Section 5.1 |
-| Compilations track provenance | Every compilation row links to its source(s) via `source_id` or `compilation_sources` | Blueprint Section 5.3 |
-| Task state transitions are ordered | Kernel validates transition legality before UPDATE | Blueprint Section 8.1 |
-| Promotions are user-initiated only | `promoted_by` defaults to 'user'; system-initiated promotion is blocked at the kernel | Blueprint Section 7.1 rule 7 |
-| Traces are append-only | Kernel never issues UPDATE or DELETE on traces rows | Blueprint Section 5.1 (L6 append-only) |
-| Recall results are append-only | Each quiz attempt creates a new row; results are never modified | Blueprint Section 9.3 |
-| All timestamps are ISO 8601 | Kernel formats all dates as `YYYY-MM-DDTHH:mm:ss.sssZ` (UTC) | Project convention |
-| All SQL uses prepared statements | No string interpolation in queries — parameterized only | Security standard (audit H1) |
+| Rule                                    | Enforcement                                                                           | Reference                              |
+| --------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------- |
+| Sources are append-only after ingestion | Kernel refuses UPDATE on sources rows (except metadata corrections)                   | Blueprint Section 5.1                  |
+| Compilations track provenance           | Every compilation row links to its source(s) via `source_id` or `compilation_sources` | Blueprint Section 5.3                  |
+| Task state transitions are ordered      | Kernel validates transition legality before UPDATE                                    | Blueprint Section 8.1                  |
+| Promotions are user-initiated only      | `promoted_by` defaults to 'user'; system-initiated promotion is blocked at the kernel | Blueprint Section 7.1 rule 7           |
+| Traces are append-only                  | Kernel never issues UPDATE or DELETE on traces rows                                   | Blueprint Section 5.1 (L6 append-only) |
+| Recall results are append-only          | Each quiz attempt creates a new row; results are never modified                       | Blueprint Section 9.3                  |
+| All timestamps are ISO 8601             | Kernel formats all dates as `YYYY-MM-DDTHH:mm:ss.sssZ` (UTC)                          | Project convention                     |
+| All SQL uses prepared statements        | No string interpolation in queries — parameterized only                               | Security standard (audit H1)           |
 
 ---
 
@@ -607,14 +607,14 @@ Rules for future migrations (002+).
 
 ## 9. Cross-Reference Map
 
-| Table | Blueprint Section | Tech Spec Section | CLI Commands |
-|-------|-------------------|-------------------|--------------|
-| `sources` | 5.1 (L1 Raw Corpus) | SQLite Schema | `ico ingest`, `ico status` |
-| `mounts` | 4.2 (Semantic Filesystem) | SQLite Schema | `ico mount`, `ico status` |
-| `compilations` | 6 (The Compiler), 6.3 (Staleness) | SQLite Schema | `ico compile`, `ico lint knowledge`, `ico status` |
-| `tasks` | 8.1 (Task Lifecycle) | SQLite Schema | `ico research`, `ico status` |
-| `promotions` | 7 (Promotion Rules) | SQLite Schema | `ico promote` |
-| `recall_results` | 9.3 (Feedback Loop) | SQLite Schema | `ico recall quiz`, `ico recall weak` |
-| `traces` | 5.5 (Operational Control), 5.6 (Learning Model) | Not in original spec (added per audit C8) | `ico status`, internal audit queries |
-| `compilation_sources` | 6.1 (cross-source passes) | Not in original spec | Internal provenance queries |
-| `_migrations` | N/A (infrastructure) | N/A | Internal kernel use |
+| Table                 | Blueprint Section                               | Tech Spec Section                         | CLI Commands                                      |
+| --------------------- | ----------------------------------------------- | ----------------------------------------- | ------------------------------------------------- |
+| `sources`             | 5.1 (L1 Raw Corpus)                             | SQLite Schema                             | `ico ingest`, `ico status`                        |
+| `mounts`              | 4.2 (Semantic Filesystem)                       | SQLite Schema                             | `ico mount`, `ico status`                         |
+| `compilations`        | 6 (The Compiler), 6.3 (Staleness)               | SQLite Schema                             | `ico compile`, `ico lint knowledge`, `ico status` |
+| `tasks`               | 8.1 (Task Lifecycle)                            | SQLite Schema                             | `ico research`, `ico status`                      |
+| `promotions`          | 7 (Promotion Rules)                             | SQLite Schema                             | `ico promote`                                     |
+| `recall_results`      | 9.3 (Feedback Loop)                             | SQLite Schema                             | `ico recall quiz`, `ico recall weak`              |
+| `traces`              | 5.5 (Operational Control), 5.6 (Learning Model) | Not in original spec (added per audit C8) | `ico status`, internal audit queries              |
+| `compilation_sources` | 6.1 (cross-source passes)                       | Not in original spec                      | Internal provenance queries                       |
+| `_migrations`         | N/A (infrastructure)                            | N/A                                       | Internal kernel use                               |

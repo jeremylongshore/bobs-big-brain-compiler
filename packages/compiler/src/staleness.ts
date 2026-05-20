@@ -137,19 +137,14 @@ export function detectStalePages(db: Database): Result<StalePageInfo[], Error> {
  * @param compilationIds - UUIDs of the compilations to mark as stale.
  * @returns `ok(count)` — number of rows updated; `err(error)` on failure.
  */
-export function markStale(
-  db: Database,
-  compilationIds: string[],
-): Result<number, Error> {
+export function markStale(db: Database, compilationIds: string[]): Result<number, Error> {
   if (compilationIds.length === 0) {
     return ok(0);
   }
 
   let stmt: ReturnType<Database['prepare']>;
   try {
-    stmt = db.prepare<[string], void>(
-      'UPDATE compilations SET stale = 1 WHERE id = ?',
-    );
+    stmt = db.prepare<[string], void>('UPDATE compilations SET stale = 1 WHERE id = ?');
   } catch (e) {
     return err(e instanceof Error ? e : new Error(String(e)));
   }

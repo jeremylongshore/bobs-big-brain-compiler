@@ -164,8 +164,7 @@ export function formatTable(headers: string[], rows: string[][]): string {
     return Math.max(h.length, dataMax);
   });
 
-  const pad = (text: string, width: number): string =>
-    text + ' '.repeat(width - text.length);
+  const pad = (text: string, width: number): string => text + ' '.repeat(width - text.length);
 
   const separator = '  '; // two-space column gap
 
@@ -173,7 +172,7 @@ export function formatTable(headers: string[], rows: string[][]): string {
   const ruleLine = widths.map((w) => '─'.repeat(w)).join(separator);
 
   const dataLines = rows.map((row) =>
-    row.map((cell, i) => pad(cell ?? '', widths[i]!)).join(separator)
+    row.map((cell, i) => pad(cell ?? '', widths[i]!)).join(separator),
   );
 
   return [headerLine, ruleLine, ...dataLines].join('\n');

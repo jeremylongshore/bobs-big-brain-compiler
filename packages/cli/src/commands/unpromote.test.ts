@@ -5,12 +5,7 @@
  * Filesystem operations are performed against real temporary directories.
  */
 
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -226,11 +221,7 @@ describe('runUnpromote — JSON output', () => {
 
     const stdoutMock = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
 
-    runUnpromote(
-      targetPath,
-      commandOpts({ dryRun: true }),
-      { ...globalOpts(), json: true },
-    );
+    runUnpromote(targetPath, commandOpts({ dryRun: true }), { ...globalOpts(), json: true });
 
     const written = stdoutMock.mock.calls.map((c) => c[0]).join('');
     const parsed = JSON.parse(written) as Record<string, unknown>;

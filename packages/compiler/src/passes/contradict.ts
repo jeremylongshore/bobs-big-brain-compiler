@@ -26,12 +26,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 
-import {
-  appendAuditLog,
-  type Database,
-  recordProvenance,
-  writeTrace,
-} from '@ico/kernel';
+import { appendAuditLog, type Database, recordProvenance, writeTrace } from '@ico/kernel';
 import { err, ok, type Result } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
@@ -144,8 +139,8 @@ function readWikiSubdir(workspacePath: string, subdir: string): string[] {
   if (!existsSync(dir)) return [];
   try {
     return readdirSync(dir)
-      .filter(f => f.endsWith('.md'))
-      .map(f => readFileSync(join(dir, f), 'utf-8'));
+      .filter((f) => f.endsWith('.md'))
+      .map((f) => readFileSync(join(dir, f), 'utf-8'));
   } catch {
     return [];
   }
@@ -211,8 +206,8 @@ export async function detectContradictions(
   // 5. Split response into individual contradiction pages.
   const rawPages = content
     .split(PAGE_BREAK)
-    .map(p => p.trim())
-    .filter(p => p.length > 0);
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
 
   if (rawPages.length === 0) {
     return ok([]);

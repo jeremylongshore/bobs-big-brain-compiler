@@ -89,7 +89,13 @@ function mockClientError(message: string): ClaudeClient {
 function seedTaskWithEvidence(
   env: TestEnv,
   brief: string,
-  evidenceFiles: Array<{ filename: string; sourcePath: string; sourceTitle: string; truncated?: boolean; body: string }>,
+  evidenceFiles: Array<{
+    filename: string;
+    sourcePath: string;
+    sourceTitle: string;
+    truncated?: boolean;
+    body: string;
+  }>,
   options: { skipCollectingTransition?: boolean } = {},
 ): { id: string; workspacePath: string } {
   const created = createTask(env.db, env.wsRoot, brief);
@@ -160,11 +166,22 @@ afterEach(() => {
 describe('summarizeEvidence — happy path', () => {
   it('writes notes/synthesis.md with frontmatter and model content', async () => {
     const task = seedTaskWithEvidence(env, 'How does attention work?', [
-      { filename: '01-concepts-attention.md', sourcePath: 'concepts/attention.md', sourceTitle: 'Attention', body: 'Attention weights tokens by relevance.' },
-      { filename: '02-concepts-softmax.md', sourcePath: 'concepts/softmax.md', sourceTitle: 'Softmax', body: 'Softmax normalises scores into a distribution.' },
+      {
+        filename: '01-concepts-attention.md',
+        sourcePath: 'concepts/attention.md',
+        sourceTitle: 'Attention',
+        body: 'Attention weights tokens by relevance.',
+      },
+      {
+        filename: '02-concepts-softmax.md',
+        sourcePath: 'concepts/softmax.md',
+        sourceTitle: 'Softmax',
+        body: 'Softmax normalises scores into a distribution.',
+      },
     ]);
 
-    const synthesis = '## Key Points\n\nAttention re-weights inputs [source: Attention]. Softmax turns scores into probabilities [source: Softmax].';
+    const synthesis =
+      '## Key Points\n\nAttention re-weights inputs [source: Attention]. Softmax turns scores into probabilities [source: Softmax].';
     const client = mockClient(synthesis);
 
     const result = await summarizeEvidence(env.db, env.wsRoot, task.id, client);
@@ -209,8 +226,19 @@ describe('summarizeEvidence — happy path', () => {
 
   it('passes brief and evidence bodies to Claude in the user prompt', async () => {
     const task = seedTaskWithEvidence(env, 'My research brief', [
-      { filename: '01.md', sourcePath: 'concepts/alpha.md', sourceTitle: 'Alpha', body: 'ALPHA_BODY_MARKER content.' },
-      { filename: '02.md', sourcePath: 'concepts/beta.md', sourceTitle: 'Beta', truncated: true, body: 'BETA_BODY_MARKER content.' },
+      {
+        filename: '01.md',
+        sourcePath: 'concepts/alpha.md',
+        sourceTitle: 'Alpha',
+        body: 'ALPHA_BODY_MARKER content.',
+      },
+      {
+        filename: '02.md',
+        sourcePath: 'concepts/beta.md',
+        sourceTitle: 'Beta',
+        truncated: true,
+        body: 'BETA_BODY_MARKER content.',
+      },
     ]);
 
     const client = mockClient('synthesis output');
@@ -352,7 +380,11 @@ describe('summarizeEvidence — error paths', () => {
 
     const evidenceDir = resolve(env.wsRoot, created.value.workspace_path, 'evidence');
     mkdirSync(evidenceDir, { recursive: true });
-    writeFileSync(join(evidenceDir, '01.md'), '---\nsource_title: "X"\nsource_path: x.md\n---\nbody', 'utf-8');
+    writeFileSync(
+      join(evidenceDir, '01.md'),
+      '---\nsource_title: "X"\nsource_path: x.md\n---\nbody',
+      'utf-8',
+    );
 
     const result = await summarizeEvidence(env.db, env.wsRoot, created.value.id, mockClient('out'));
     expect(result.ok).toBe(false);
@@ -372,7 +404,12 @@ describe('summarizeEvidence — error paths', () => {
     const task = seedTaskWithEvidence(env, 'Brief', [
       { filename: '01.md', sourcePath: 'x.md', sourceTitle: 'X', body: 'body' },
     ]);
-    const result = await summarizeEvidence(env.db, env.wsRoot, task.id, mockClientError('rate limited'));
+    const result = await summarizeEvidence(
+      env.db,
+      env.wsRoot,
+      task.id,
+      mockClientError('rate limited'),
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.message).toContain('rate limited');

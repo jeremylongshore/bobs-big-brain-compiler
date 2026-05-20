@@ -149,10 +149,13 @@ export async function runRecallGenerate(
       process.stdout.write(
         formatInfo(`  Quiz:      ${result.value.quiz.questionCount} questions`) + '\n',
       );
-      process.stdout.write(formatInfo(`  Sources:   ${result.value.sourcePages.length} pages`) + '\n');
+      process.stdout.write(
+        formatInfo(`  Sources:   ${result.value.sourcePages.length} pages`) + '\n',
+      );
       process.stdout.write(formatInfo(`  Quiz file: ${result.value.quiz.path}`) + '\n');
       process.stdout.write(
-        dim(`  Tokens:    ${result.value.tokensUsed.toLocaleString()} (~$${cost.toFixed(2)})`) + '\n',
+        dim(`  Tokens:    ${result.value.tokensUsed.toLocaleString()} (~$${cost.toFixed(2)})`) +
+          '\n',
       );
       process.stdout.write('\n');
     }
@@ -173,18 +176,30 @@ export async function runRecallGenerate(
  * leaves room for richer fixtures (confidence values, timestamps) later
  * without breaking existing files.
  */
-function loadAnswersFile(path: string): { ok: true; value: string[] } | { ok: false; error: Error } {
+function loadAnswersFile(
+  path: string,
+): { ok: true; value: string[] } | { ok: false; error: Error } {
   let raw: string;
   try {
     raw = readFileSync(path, 'utf-8');
   } catch (e) {
-    return { ok: false, error: new Error(`Failed to read answers file ${path}: ${e instanceof Error ? e.message : String(e)}`) };
+    return {
+      ok: false,
+      error: new Error(
+        `Failed to read answers file ${path}: ${e instanceof Error ? e.message : String(e)}`,
+      ),
+    };
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch (e) {
-    return { ok: false, error: new Error(`Answers file is not valid JSON: ${e instanceof Error ? e.message : String(e)}`) };
+    return {
+      ok: false,
+      error: new Error(
+        `Answers file is not valid JSON: ${e instanceof Error ? e.message : String(e)}`,
+      ),
+    };
   }
 
   let candidate: unknown = parsed;
@@ -236,7 +251,10 @@ export async function runRecallQuiz(
   try {
     config = loadConfig(wsPath);
   } catch (e) {
-    return { ok: false, error: new Error(`Config error: ${e instanceof Error ? e.message : String(e)}`) };
+    return {
+      ok: false,
+      error: new Error(`Config error: ${e instanceof Error ? e.message : String(e)}`),
+    };
   }
   const client = createClaudeClient(config.apiKey);
 
@@ -262,16 +280,19 @@ export async function runRecallQuiz(
     }
 
     let rl: ReturnType<typeof createInterface> | undefined;
-    const prompter = answers === undefined
-      ? async (params: { index: number; total: number; question: string }): Promise<string> => {
-          rl ??= createInterface({ input: process.stdin, output: process.stdout });
-          process.stdout.write('\n');
-          process.stdout.write(formatHeader(`Question ${params.index} of ${params.total}`) + '\n\n');
-          process.stdout.write(`  ${params.question}\n\n`);
-          const answer = await rl.question(`${bold('Your answer:')} `);
-          return answer;
-        }
-      : undefined;
+    const prompter =
+      answers === undefined
+        ? async (params: { index: number; total: number; question: string }): Promise<string> => {
+            rl ??= createInterface({ input: process.stdin, output: process.stdout });
+            process.stdout.write('\n');
+            process.stdout.write(
+              formatHeader(`Question ${params.index} of ${params.total}`) + '\n\n',
+            );
+            process.stdout.write(`  ${params.question}\n\n`);
+            const answer = await rl.question(`${bold('Your answer:')} `);
+            return answer;
+          }
+        : undefined;
 
     try {
       const result = await runQuiz(db, wsPath, topicSlug, client, {
@@ -308,9 +329,7 @@ function printQuizSummary(summary: QuizSummary): void {
   );
 
   if (summary.weakConcepts.length > 0) {
-    process.stdout.write(
-      formatWarning(`  Weak areas: ${summary.weakConcepts.join(', ')}`) + '\n',
-    );
+    process.stdout.write(formatWarning(`  Weak areas: ${summary.weakConcepts.join(', ')}`) + '\n');
   } else {
     process.stdout.write(formatSuccess(`  No weak areas detected.`) + '\n');
   }
@@ -382,18 +401,12 @@ function printWeakAreas(weak: ConceptRetention[], report: RetentionReport | null
   process.stdout.write('\n');
   if (report !== null) {
     process.stdout.write(formatHeader('Retention Report') + '\n\n');
-    process.stdout.write(
-      formatInfo(`  Total answers:  ${report.totalAnswers}`) + '\n',
-    );
-    process.stdout.write(
-      formatInfo(`  Total correct:  ${report.totalCorrect}`) + '\n',
-    );
+    process.stdout.write(formatInfo(`  Total answers:  ${report.totalAnswers}`) + '\n');
+    process.stdout.write(formatInfo(`  Total correct:  ${report.totalCorrect}`) + '\n');
     process.stdout.write(
       formatInfo(`  Overall:        ${(report.overall * 100).toFixed(1)}%`) + '\n',
     );
-    process.stdout.write(
-      formatInfo(`  Concepts seen:  ${report.conceptCount}`) + '\n',
-    );
+    process.stdout.write(formatInfo(`  Concepts seen:  ${report.conceptCount}`) + '\n');
     process.stdout.write('\n');
     if (report.strongest.length > 0) {
       process.stdout.write(formatHeader('Strongest concepts') + '\n\n');
@@ -408,7 +421,9 @@ function printWeakAreas(weak: ConceptRetention[], report: RetentionReport | null
 
   process.stdout.write(formatHeader('Weakest concepts') + '\n\n');
   if (weak.length === 0) {
-    process.stdout.write(dim('  No recall results recorded yet. Run `ico recall quiz` first.') + '\n');
+    process.stdout.write(
+      dim('  No recall results recorded yet. Run `ico recall quiz` first.') + '\n',
+    );
     process.stdout.write('\n');
     return;
   }
@@ -547,7 +562,9 @@ export function register(program: Command): void {
   recall
     .command('weak')
     .description('Show the lowest-retention concepts')
-    .option('--limit <n>', 'Max number of weak concepts to show (default: 10)', (v: string) => parseInt(v, 10))
+    .option('--limit <n>', 'Max number of weak concepts to show (default: 10)', (v: string) =>
+      parseInt(v, 10),
+    )
     .option(
       '--min-sample-size <n>',
       'Exclude concepts with fewer than n results (default: 1)',
@@ -580,7 +597,9 @@ export function register(program: Command): void {
 
   recall
     .command('export')
-    .description('Export recall cards (Anki TSV by default; writes to stdout when --out is omitted)')
+    .description(
+      'Export recall cards (Anki TSV by default; writes to stdout when --out is omitted)',
+    )
     .option('--format <format>', 'Output format (only "anki" supported)', 'anki')
     .option('--topic <name>', 'Export only cards for the given topic')
     .option('--out <path>', 'Workspace-relative output path; omit to write TSV to stdout')

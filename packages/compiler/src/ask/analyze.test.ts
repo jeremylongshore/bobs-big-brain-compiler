@@ -5,19 +5,14 @@
  * populated with fixture pages. No network calls are made.
  */
 
-import { mkdirSync, mkdtempSync, rmSync,writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { Database } from '@ico/kernel';
-import {
-  closeDatabase,
-  createSearchIndex,
-  indexCompiledPages,
-  initDatabase,
-} from '@ico/kernel';
+import { closeDatabase, createSearchIndex, indexCompiledPages, initDatabase } from '@ico/kernel';
 
 import { analyzeQuestion } from './analyze.js';
 

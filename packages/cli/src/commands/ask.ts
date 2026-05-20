@@ -78,20 +78,12 @@ interface GlobalOptions {
  */
 function printNoKnowledgeFallback(question: string, workspacePath: string): void {
   process.stdout.write('\n');
-  process.stdout.write(
-    formatWarning(`No compiled knowledge found for: "${question}"`) + '\n',
-  );
+  process.stdout.write(formatWarning(`No compiled knowledge found for: "${question}"`) + '\n');
   process.stdout.write('\n');
   process.stdout.write('Suggestions:\n');
-  process.stdout.write(
-    `  ${dim('•')} Ingest sources on this topic:  ico ingest <path>\n`,
-  );
-  process.stdout.write(
-    `  ${dim('•')} Compile ingested sources:       ico compile all\n`,
-  );
-  process.stdout.write(
-    `  ${dim('•')} Check what is available:        ico status --sources\n`,
-  );
+  process.stdout.write(`  ${dim('•')} Ingest sources on this topic:  ico ingest <path>\n`);
+  process.stdout.write(`  ${dim('•')} Compile ingested sources:       ico compile all\n`);
+  process.stdout.write(`  ${dim('•')} Check what is available:        ico status --sources\n`);
   process.stdout.write('\n');
 
   // Hint about uncompiled sources when the raw directory exists.
@@ -126,9 +118,7 @@ export async function runAsk(
   // 1. Resolve workspace
   // -------------------------------------------------------------------------
   const wsOverride = askOptions.workspace ?? globalOpts.workspace;
-  const wsResult = resolveWorkspace(
-    wsOverride !== undefined ? { workspace: wsOverride } : {},
-  );
+  const wsResult = resolveWorkspace(wsOverride !== undefined ? { workspace: wsOverride } : {});
 
   if (!wsResult.ok) {
     process.stderr.write(formatError(wsResult.error.message) + '\n');
@@ -191,9 +181,7 @@ export async function runAsk(
     }
 
     if (globalOpts.verbose === true) {
-      process.stdout.write(
-        formatInfo(`Indexed ${indexResult.value} compiled pages`) + '\n',
-      );
+      process.stdout.write(formatInfo(`Indexed ${indexResult.value} compiled pages`) + '\n');
     }
 
     // -----------------------------------------------------------------------
@@ -201,9 +189,7 @@ export async function runAsk(
     // -----------------------------------------------------------------------
     const analysisResult = analyzeQuestion(db, wsPath, question);
     if (!analysisResult.ok) {
-      process.stderr.write(
-        formatError(`Analysis failed: ${analysisResult.error.message}`) + '\n',
-      );
+      process.stderr.write(formatError(`Analysis failed: ${analysisResult.error.message}`) + '\n');
       process.exitCode = 1;
       return;
     }
@@ -222,9 +208,10 @@ export async function runAsk(
     // 7. Retrieve top relevant pages with question-type boosting (E7-B08)
     // -----------------------------------------------------------------------
     const boostResult = findRelevantPages(db, question, analysis.type, 5);
-    const topPages = boostResult.ok && boostResult.value.length > 0
-      ? boostResult.value
-      : analysis.relevantPages.slice(0, 5);
+    const topPages =
+      boostResult.ok && boostResult.value.length > 0
+        ? boostResult.value
+        : analysis.relevantPages.slice(0, 5);
 
     // Read full content of each selected page.
     const pagesWithContent: Array<{ path: string; title: string; content: string }> = [];
@@ -325,7 +312,8 @@ export async function runAsk(
 
       for (const citation of unverified) {
         process.stdout.write(
-          `  ${formatWarning(citation.pageTitle)}  ${dim('(unverified — could not locate page)')}` + '\n',
+          `  ${formatWarning(citation.pageTitle)}  ${dim('(unverified — could not locate page)')}` +
+            '\n',
         );
       }
     }
@@ -384,11 +372,7 @@ export function register(program: Command): void {
     .command('ask <question>')
     .description('Answer a question from compiled knowledge')
     .option('--model <model>', 'Claude model to use for answer generation')
-    .option(
-      '--max-tokens <n>',
-      'Maximum tokens in the response',
-      (v: string) => parseInt(v, 10),
-    )
+    .option('--max-tokens <n>', 'Maximum tokens in the response', (v: string) => parseInt(v, 10))
     .addHelpText(
       'after',
       [

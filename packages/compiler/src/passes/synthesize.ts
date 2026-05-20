@@ -26,12 +26,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 
-import {
-  appendAuditLog,
-  type Database,
-  recordProvenance,
-  writeTrace,
-} from '@ico/kernel';
+import { appendAuditLog, type Database, recordProvenance, writeTrace } from '@ico/kernel';
 import { err, ok, type Result } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
@@ -148,8 +143,8 @@ function readWikiDir(workspacePath: string, subdir: string): string[] {
   if (!existsSync(dir)) return [];
   try {
     return readdirSync(dir)
-      .filter(f => f.endsWith('.md'))
-      .map(f => readFileSync(join(dir, f), 'utf-8'));
+      .filter((f) => f.endsWith('.md'))
+      .map((f) => readFileSync(join(dir, f), 'utf-8'));
   } catch {
     return [];
   }
@@ -190,7 +185,8 @@ export async function synthesizeTopics(
   }
 
   const summaryContent = summaries.join('\n\n---\n\n');
-  const conceptContent = concepts.length > 0 ? concepts.join('\n\n---\n\n') : '(no concepts extracted yet)';
+  const conceptContent =
+    concepts.length > 0 ? concepts.join('\n\n---\n\n') : '(no concepts extracted yet)';
 
   // 2. Build prompts.
   const userPrompt = buildUserPrompt({ compiledAt, model, summaryContent, conceptContent });
@@ -211,8 +207,8 @@ export async function synthesizeTopics(
   // 4. Split response into individual topic pages.
   const rawPages = content
     .split(PAGE_BREAK)
-    .map(p => p.trim())
-    .filter(p => p.length > 0);
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
 
   if (rawPages.length === 0) {
     return ok([]);
@@ -252,16 +248,7 @@ export async function synthesizeTopics(
         `INSERT INTO compilations
            (id, source_id, type, output_path, compiled_at, stale, model, tokens_used)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(
-        compilationId,
-        null,
-        'topic',
-        outputPath,
-        compiledAt,
-        0,
-        responseModel,
-        tokensUsed,
-      );
+      ).run(compilationId, null, 'topic', outputPath, compiledAt, 0, responseModel, tokensUsed);
     } catch (e) {
       return err(e instanceof Error ? e : new Error(String(e)));
     }

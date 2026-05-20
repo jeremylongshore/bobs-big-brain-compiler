@@ -10,7 +10,15 @@
  * @module agents/collector.test
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -96,7 +104,11 @@ function writeWikiPage(
  * Create a task in `created` state with a `brief.md` containing `briefText`.
  * Returns the task record for assertions.
  */
-function createTaskWithBrief(db: Database, wsRoot: string, briefText: string): { id: string; workspacePath: string } {
+function createTaskWithBrief(
+  db: Database,
+  wsRoot: string,
+  briefText: string,
+): { id: string; workspacePath: string } {
   const created = createTask(db, wsRoot, briefText);
   if (!created.ok) throw created.error;
   const task = created.value;
@@ -161,7 +173,11 @@ describe('collectEvidence — happy path', () => {
     const idx = indexCompiledPages(env.db, env.wsRoot);
     if (!idx.ok) throw idx.error;
 
-    const task = createTaskWithBrief(env.db, env.wsRoot, 'How does attention work in transformers?');
+    const task = createTaskWithBrief(
+      env.db,
+      env.wsRoot,
+      'How does attention work in transformers?',
+    );
 
     const result = collectEvidence(env.db, env.wsRoot, task.id);
     expect(result.ok).toBe(true);
@@ -470,14 +486,7 @@ describe('collectEvidence — error paths', () => {
     const briefPath = resolve(env.wsRoot, created.value.workspace_path, 'brief.md');
     writeFileSync(
       briefPath,
-      [
-        '---',
-        `task_id: ${created.value.id}`,
-        'status: created',
-        '---',
-        '',
-        '',
-      ].join('\n'),
+      ['---', `task_id: ${created.value.id}`, 'status: created', '---', '', ''].join('\n'),
       'utf-8',
     );
 
@@ -529,4 +538,3 @@ describe('collectEvidence — idempotency guard', () => {
     expect(result.error.message).toContain("status 'collecting'");
   });
 });
-

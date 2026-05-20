@@ -109,10 +109,7 @@ describe('runEvalCommand — discover + run all', () => {
   });
 
   it('surfaces malformed specs in loadErrors but still runs valid ones', async () => {
-    writeSpec(
-      'evals/good.eval.yaml',
-      'id: g\nname: G\ntype: smoke\ncheck: no-failed-tasks\n',
-    );
+    writeSpec('evals/good.eval.yaml', 'id: g\nname: G\ntype: smoke\ncheck: no-failed-tasks\n');
     writeSpec('evals/bad.eval.yaml', 'this is not a valid spec\n');
 
     const r = await runEvalCommand({}, {});
@@ -181,10 +178,7 @@ describe('runEvalCommand — --spec', () => {
 
 describe('runEvalCommand — output modes', () => {
   it('emits JSON when --json is passed', async () => {
-    writeSpec(
-      'evals/s.eval.yaml',
-      'id: s\nname: S\ntype: smoke\ncheck: no-failed-tasks\n',
-    );
+    writeSpec('evals/s.eval.yaml', 'id: s\nname: S\ntype: smoke\ncheck: no-failed-tasks\n');
     const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     await runEvalCommand({}, { json: true });
     const joined = writeSpy.mock.calls.map((c) => String(c[0])).join('');

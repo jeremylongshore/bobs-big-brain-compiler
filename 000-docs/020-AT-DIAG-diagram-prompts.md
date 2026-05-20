@@ -1,4 +1,5 @@
 # Architecture Diagram Prompt Pack
+
 > Six diagrams. Six perspectives on the same system.
 
 **Author:** Jeremy Longshore — Intent Solutions
@@ -538,11 +539,11 @@ flowchart TD
 
 **Color palette.** The six-layer color scheme is consistent across all diagrams:
 
-| Layer | Fill | Border |
-|-------|------|--------|
-| L1 Raw Corpus | `#2d4a22` (dark green) | `#4caf50` |
-| L2 Semantic Knowledge | `#1a3a5c` (dark blue) | `#42a5f5` |
-| L3 Episodic Tasks | `#4a2d00` (dark amber) | `#ffa726` |
-| L4 Artifacts | `#3a1a5c` (dark purple) | `#ab47bc` |
-| L5 Recall | `#1a4a3a` (dark teal) | `#26a69a` |
-| L6 Audit & Policy | `#4a1a1a` (dark red) | `#ef5350` |
+| Layer                 | Fill                    | Border    |
+| --------------------- | ----------------------- | --------- |
+| L1 Raw Corpus         | `#2d4a22` (dark green)  | `#4caf50` |
+| L2 Semantic Knowledge | `#1a3a5c` (dark blue)   | `#42a5f5` |
+| L3 Episodic Tasks     | `#4a2d00` (dark amber)  | `#ffa726` |
+| L4 Artifacts          | `#3a1a5c` (dark purple) | `#ab47bc` |
+| L5 Recall             | `#1a4a3a` (dark teal)   | `#26a69a` |
+| L6 Audit & Policy     | `#4a1a1a` (dark red)    | `#ef5350` |

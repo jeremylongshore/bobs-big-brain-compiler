@@ -8,13 +8,13 @@
 
 ## Persona
 
-| Field | Value |
-|-------|-------|
-| Name | Alex — independent AI researcher |
-| Role | Technical researcher building a knowledge system for ongoing AI safety work |
-| Goal | Turn 200+ papers, articles, and notes into a maintained, queryable, auditable knowledge base |
-| Experience Level | Intermediate — comfortable with CLI, uses Claude Code daily, familiar with markdown workflows |
-| Current Pain | Re-reads papers constantly, loses synthesis across sessions, can't trace conclusions back to sources |
+| Field            | Value                                                                                                |
+| ---------------- | ---------------------------------------------------------------------------------------------------- |
+| Name             | Alex — independent AI researcher                                                                     |
+| Role             | Technical researcher building a knowledge system for ongoing AI safety work                          |
+| Goal             | Turn 200+ papers, articles, and notes into a maintained, queryable, auditable knowledge base         |
+| Experience Level | Intermediate — comfortable with CLI, uses Claude Code daily, familiar with markdown workflows        |
+| Current Pain     | Re-reads papers constantly, loses synthesis across sessions, can't trace conclusions back to sources |
 
 ## Prerequisites
 
@@ -35,6 +35,7 @@ cd ai-safety-research
 ```
 
 **Expected Result:** A workspace directory is created:
+
 ```
 ai-safety-research/
 ├── workspace/
@@ -70,6 +71,7 @@ ico status
 ```
 
 **Expected Result:**
+
 - Files copied to `workspace/raw/` with original structure preserved
 - Metadata extracted (title, author, date, word count, type)
 - Provenance record created in `workspace/audit/provenance/`
@@ -101,6 +103,7 @@ ico compile concepts
 ```
 
 **Expected Result:**
+
 - Source summaries appear in `workspace/wiki/sources/`
 - Topic page created at `workspace/wiki/topics/mechanistic-interpretability.md`
 - Concept pages extracted to `workspace/wiki/concepts/`
@@ -124,6 +127,7 @@ ico ask "What evidence exists that RLHF reduces model honesty?"
 ```
 
 **Expected Result:**
+
 - Answer returned with inline citations: `[source: circuits-paper-2025.pdf, p.12]`
 - Provenance chain traceable: answer -> compiled concept -> source summary -> raw file
 - For simple questions: direct answer in < 10 seconds
@@ -139,6 +143,7 @@ ico research "Build a briefing on the relationship between scaling laws and alig
 
 **Expected Result:**
 A temporary research workspace is created:
+
 ```
 workspace/tasks/task-20260402-001/
 ├── evidence/          # Gathered source excerpts
@@ -149,6 +154,7 @@ workspace/tasks/task-20260402-001/
 ```
 
 Multiple agents work the task:
+
 1. **Collector** gathers relevant evidence from compiled knowledge
 2. **Summarizer** distills findings into working notes
 3. **Skeptic** challenges conclusions, flags weak evidence
@@ -172,6 +178,7 @@ ico render report --topic "mechanistic interpretability"
 ```
 
 **Expected Result:**
+
 - Report saved to `workspace/outputs/reports/scaling-alignment-briefing.md`
 - Slides saved to `workspace/outputs/slides/scaling-alignment.md` (Marp format)
 - Files are self-contained, inspectable, shareable
@@ -195,6 +202,7 @@ ico lint knowledge
 ```
 
 **Expected Result:**
+
 ```
 Knowledge Health Report:
   Sources: 47 ingested, 42 compiled (5 pending)
@@ -218,6 +226,7 @@ ico recall quiz
 ```
 
 **Expected Result:**
+
 - Flashcards saved to `workspace/recall/cards/`
 - Quiz questions generated from compiled knowledge
 - After quiz: weak areas identified and logged
@@ -225,13 +234,13 @@ ico recall quiz
 
 ## Error Scenarios
 
-| Scenario | Error Message | Resolution |
-|----------|--------------|------------|
-| No API key | `ANTHROPIC_API_KEY not set. Set it in .env` | Add key to `.env` |
-| Empty workspace | `No sources ingested. Run 'ico ingest <path>' first` | Ingest source material |
-| PDF extraction failure | `Failed to extract text from X.pdf (image-only PDF)` | Use OCR-capable PDF or convert first |
-| Compilation failure | `Compilation failed for source X: rate limit exceeded` | Wait and retry, or reduce batch size |
-| No compiled knowledge | `No compiled knowledge found. Run 'ico compile sources' first` | Run compiler before asking questions |
+| Scenario               | Error Message                                                  | Resolution                           |
+| ---------------------- | -------------------------------------------------------------- | ------------------------------------ |
+| No API key             | `ANTHROPIC_API_KEY not set. Set it in .env`                    | Add key to `.env`                    |
+| Empty workspace        | `No sources ingested. Run 'ico ingest <path>' first`           | Ingest source material               |
+| PDF extraction failure | `Failed to extract text from X.pdf (image-only PDF)`           | Use OCR-capable PDF or convert first |
+| Compilation failure    | `Compilation failed for source X: rate limit exceeded`         | Wait and retry, or reduce batch size |
+| No compiled knowledge  | `No compiled knowledge found. Run 'ico compile sources' first` | Run compiler before asking questions |
 
 ## FAQ
 

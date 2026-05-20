@@ -120,7 +120,9 @@ interface StagedResponse {
  * Summarizer, Skeptic, Integrator, and Render stages all do, in that
  * order. So a four-response queue covers the happy path.
  */
-function stagedClient(responses: StagedResponse[]): ClaudeClient & { spy: ReturnType<typeof vi.fn> } {
+function stagedClient(
+  responses: StagedResponse[],
+): ClaudeClient & { spy: ReturnType<typeof vi.fn> } {
   const spy = vi.fn();
   for (const r of responses) {
     spy.mockResolvedValueOnce(
@@ -327,9 +329,7 @@ describe('executeResearch — step mode', () => {
     seedCorpus(env);
     const task = createTaskWithBrief(env, 'Step mode attention test');
 
-    const client = stagedClient([
-      { content: 'summarizer output' },
-    ]);
+    const client = stagedClient([{ content: 'summarizer output' }]);
 
     const r = await executeResearch(env.db, env.wsRoot, task.id, {
       client,
@@ -352,10 +352,7 @@ describe('executeResearch — step mode', () => {
     seedCorpus(env);
     const task = createTaskWithBrief(env, 'Confirm step attention test');
 
-    const client = stagedClient([
-      { content: 'summarizer output' },
-      { content: 'skeptic output' },
-    ]);
+    const client = stagedClient([{ content: 'summarizer output' }, { content: 'skeptic output' }]);
 
     let callCount = 0;
     const confirmStep = vi.fn(() => {
@@ -550,7 +547,13 @@ describe('executeResearch — terminal & missing', () => {
     seedCorpus(env);
     const task = createTaskWithBrief(env, 'Already done attention task');
 
-    for (const s of ['collecting', 'synthesizing', 'critiquing', 'rendering', 'completed'] as const) {
+    for (const s of [
+      'collecting',
+      'synthesizing',
+      'critiquing',
+      'rendering',
+      'completed',
+    ] as const) {
       const tr = transitionTask(env.db, env.wsRoot, task.id, s);
       if (!tr.ok) throw tr.error;
     }

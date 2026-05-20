@@ -115,7 +115,10 @@ export function buildWikiIndex(workspacePath: string): WikiIndex {
       }
       const titleMatch = /^title:\s*(.+)$/m.exec(content);
       if (titleMatch !== null) {
-        const title = titleMatch[1]!.trim().replace(/^['"]|['"]$/g, '').toLowerCase();
+        const title = titleMatch[1]!
+          .trim()
+          .replace(/^['"]|['"]$/g, '')
+          .toLowerCase();
         if (title !== '') byTitle.set(title, relPath);
       }
     }

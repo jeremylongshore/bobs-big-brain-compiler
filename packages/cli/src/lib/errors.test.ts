@@ -27,7 +27,7 @@ describe('WorkspaceNotFoundError', () => {
 
   it('has the correct resolution hint', () => {
     const err = new WorkspaceNotFoundError();
-    expect(err.resolution).toContain("ico init");
+    expect(err.resolution).toContain('ico init');
     expect(err.resolution).toContain('--workspace');
   });
 
@@ -90,16 +90,12 @@ describe('FileNotFoundError', () => {
 describe('ConfigError', () => {
   it('gives a specific resolution for ANTHROPIC_API_KEY', () => {
     const err = new ConfigError('ANTHROPIC_API_KEY');
-    expect(err.resolution).toBe(
-      'Set ANTHROPIC_API_KEY in your environment or .env file.',
-    );
+    expect(err.resolution).toBe('Set ANTHROPIC_API_KEY in your environment or .env file.');
   });
 
   it('gives a generic resolution for other variables', () => {
     const err = new ConfigError('MY_CUSTOM_VAR');
-    expect(err.resolution).toBe(
-      'Set MY_CUSTOM_VAR in your environment or .env file.',
-    );
+    expect(err.resolution).toBe('Set MY_CUSTOM_VAR in your environment or .env file.');
   });
 
   it('includes the variable name in the message', () => {

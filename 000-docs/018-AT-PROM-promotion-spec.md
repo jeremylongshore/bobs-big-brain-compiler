@@ -17,13 +17,13 @@ Promotion is explicit, audited, and copy-not-move. The operator decides what get
 
 **Governing references:**
 
-| Document | Section | What it governs |
-|----------|---------|-----------------|
-| Master Blueprint (007-PP-PLAN) | Section 7 | Promotion rules and anti-patterns |
-| Database Schema (010-AT-DBSC) | Section 3.5 | `promotions` table DDL |
-| Trace Schema (011-AT-TRSC) | Section 6.9 | `promotion` event type and payload |
+| Document                       | Section       | What it governs                         |
+| ------------------------------ | ------------- | --------------------------------------- |
+| Master Blueprint (007-PP-PLAN) | Section 7     | Promotion rules and anti-patterns       |
+| Database Schema (010-AT-DBSC)  | Section 3.5   | `promotions` table DDL                  |
+| Trace Schema (011-AT-TRSC)     | Section 6.9   | `promotion` event type and payload      |
 | Workspace Policy (012-AT-WPOL) | Section 3, 10 | Directory classifications and ownership |
-| Glossary (008-AT-GLOS) | Section 9 | Canonical promotion terminology |
+| Glossary (008-AT-GLOS)         | Section 9     | Canonical promotion terminology         |
 
 ---
 
@@ -33,22 +33,22 @@ Promotion is explicit, audited, and copy-not-move. The operator decides what get
 ico promote <path> --as <type> [--confirm]
 ```
 
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `<path>` | Yes | Workspace-relative or absolute path to the artifact in `workspace/outputs/`. |
-| `--as <type>` | Yes | Target wiki page type. Must be one of: `topic`, `concept`, `entity`, `reference`. |
-| `--confirm` | No | Skip interactive confirmation prompt. Required for non-interactive (scripted) invocation. |
+| Argument      | Required | Description                                                                               |
+| ------------- | -------- | ----------------------------------------------------------------------------------------- |
+| `<path>`      | Yes      | Workspace-relative or absolute path to the artifact in `workspace/outputs/`.              |
+| `--as <type>` | Yes      | Target wiki page type. Must be one of: `topic`, `concept`, `entity`, `reference`.         |
+| `--confirm`   | No       | Skip interactive confirmation prompt. Required for non-interactive (scripted) invocation. |
 
 **Exit codes:**
 
-| Code | Meaning |
-|------|---------|
-| 0 | Promotion succeeded |
-| 1 | Eligibility check failed (file not in outputs, empty, missing frontmatter) |
-| 2 | Type validation failed (invalid `--as` value) |
-| 3 | Anti-pattern detected (draft, evidence, or unreviewed file) |
-| 4 | Filesystem error (copy failed, target path collision) |
-| 5 | Database or audit write failed |
+| Code | Meaning                                                                    |
+| ---- | -------------------------------------------------------------------------- |
+| 0    | Promotion succeeded                                                        |
+| 1    | Eligibility check failed (file not in outputs, empty, missing frontmatter) |
+| 2    | Type validation failed (invalid `--as` value)                              |
+| 3    | Anti-pattern detected (draft, evidence, or unreviewed file)                |
+| 4    | Filesystem error (copy failed, target path collision)                      |
+| 5    | Database or audit write failed                                             |
 
 ---
 
@@ -64,7 +64,10 @@ Each rule has a validation check executed by the kernel before the copy operatio
 // Pseudocode
 const resolved = path.resolve(workspaceRoot, sourcePath);
 if (!resolved.startsWith(path.join(workspaceRoot, 'outputs'))) {
-  throw new PromotionError('INELIGIBLE_PATH', `Only files in workspace/outputs/ are eligible for promotion. Got: ${sourcePath}`);
+  throw new PromotionError(
+    'INELIGIBLE_PATH',
+    `Only files in workspace/outputs/ are eligible for promotion. Got: ${sourcePath}`,
+  );
 }
 ```
 
@@ -82,21 +85,24 @@ if (!resolved.startsWith(path.join(workspaceRoot, 'outputs'))) {
 
 ```typescript
 const VALID_PROMOTION_TYPES = ['topic', 'concept', 'entity', 'reference'] as const;
-type PromotionType = typeof VALID_PROMOTION_TYPES[number];
+type PromotionType = (typeof VALID_PROMOTION_TYPES)[number];
 
 if (!VALID_PROMOTION_TYPES.includes(targetType)) {
-  throw new PromotionError('INVALID_TYPE', `--as must be one of: ${VALID_PROMOTION_TYPES.join(', ')}. Got: ${targetType}`);
+  throw new PromotionError(
+    'INVALID_TYPE',
+    `--as must be one of: ${VALID_PROMOTION_TYPES.join(', ')}. Got: ${targetType}`,
+  );
 }
 ```
 
 **Type semantics:**
 
-| Type | Target directory | When to use |
-|------|-----------------|-------------|
-| `topic` | `workspace/wiki/topics/` | Cross-source synthesis on a named subject |
-| `concept` | `workspace/wiki/concepts/` | Discrete concept definition with citations |
-| `entity` | `workspace/wiki/entities/` | Named entity — person, org, tool, framework |
-| `reference` | `workspace/wiki/sources/` | Reference material that functions as a source summary |
+| Type        | Target directory           | When to use                                           |
+| ----------- | -------------------------- | ----------------------------------------------------- |
+| `topic`     | `workspace/wiki/topics/`   | Cross-source synthesis on a named subject             |
+| `concept`   | `workspace/wiki/concepts/` | Discrete concept definition with citations            |
+| `entity`    | `workspace/wiki/entities/` | Named entity — person, org, tool, framework           |
+| `reference` | `workspace/wiki/sources/`  | Reference material that functions as a source summary |
 
 ### Rule 4: Promoted content is copied, not moved
 
@@ -105,8 +111,10 @@ if (!VALID_PROMOTION_TYPES.includes(targetType)) {
 ```typescript
 await fs.copyFile(sourcePath, targetPath);
 // Verify source still exists (copy-not-move invariant)
-if (!await fs.pathExists(sourcePath)) {
-  logger.warn(`Source file disappeared after copy: ${sourcePath}. Promotion succeeded but copy-not-move invariant was violated.`);
+if (!(await fs.pathExists(sourcePath))) {
+  logger.warn(
+    `Source file disappeared after copy: ${sourcePath}. Promotion succeeded but copy-not-move invariant was violated.`,
+  );
 }
 ```
 
@@ -141,7 +149,10 @@ No special flag or metadata exempts promoted pages from the standard compilation
 ```typescript
 // Kernel-level enforcement
 if (actor !== 'user') {
-  throw new PromotionError('AUTOMATIC_PROMOTION_BLOCKED', 'Automatic promotion is not allowed. Promotion must be user-initiated.');
+  throw new PromotionError(
+    'AUTOMATIC_PROMOTION_BLOCKED',
+    'Automatic promotion is not allowed. Promotion must be user-initiated.',
+  );
 }
 ```
 
@@ -159,8 +170,14 @@ Three anti-patterns are defined in the Master Blueprint (Section 7.2). Each has 
 
 ```typescript
 const resolvedPath = path.resolve(workspaceRoot, sourcePath);
-if (resolvedPath.includes(path.join('tasks', '')) && resolvedPath.includes(path.join('drafts', ''))) {
-  throw new PromotionError('DRAFT_REJECTED', `Cannot promote task drafts. Only final artifacts in workspace/outputs/ are eligible. Got: ${sourcePath}`);
+if (
+  resolvedPath.includes(path.join('tasks', '')) &&
+  resolvedPath.includes(path.join('drafts', ''))
+) {
+  throw new PromotionError(
+    'DRAFT_REJECTED',
+    `Cannot promote task drafts. Only final artifacts in workspace/outputs/ are eligible. Got: ${sourcePath}`,
+  );
 }
 ```
 
@@ -192,8 +209,14 @@ Without confirmation (interactive `y` or `--confirm` flag), the promotion is abo
 
 ```typescript
 const resolvedPath = path.resolve(workspaceRoot, sourcePath);
-if (resolvedPath.includes(path.join('tasks', '')) && resolvedPath.includes(path.join('evidence', ''))) {
-  throw new PromotionError('EVIDENCE_REJECTED', `Cannot promote task evidence. Evidence stays in L3. Only synthesis outputs in workspace/outputs/ are eligible. Got: ${sourcePath}`);
+if (
+  resolvedPath.includes(path.join('tasks', '')) &&
+  resolvedPath.includes(path.join('evidence', ''))
+) {
+  throw new PromotionError(
+    'EVIDENCE_REJECTED',
+    `Cannot promote task evidence. Evidence stays in L3. Only synthesis outputs in workspace/outputs/ are eligible. Got: ${sourcePath}`,
+  );
 }
 ```
 
@@ -220,14 +243,14 @@ CREATE TABLE promotions (
 
 **Record construction:**
 
-| Field | Value | Source |
-|-------|-------|--------|
-| `id` | ULID | Generated by the kernel at promotion time |
-| `source_path` | Workspace-relative path | The `<path>` argument, normalized to workspace-relative |
-| `target_path` | Workspace-relative path | Computed: `wiki/<type>/<slugified-title>.md` |
-| `target_type` | Promotion type | The `--as` argument: `topic`, `concept`, `entity`, or `reference` |
-| `promoted_at` | ISO 8601 UTC timestamp | `new Date().toISOString()` at promotion time |
-| `promoted_by` | `'user'` | Always `'user'` in Phase 1. `'system'` is blocked by kernel. |
+| Field         | Value                   | Source                                                            |
+| ------------- | ----------------------- | ----------------------------------------------------------------- |
+| `id`          | ULID                    | Generated by the kernel at promotion time                         |
+| `source_path` | Workspace-relative path | The `<path>` argument, normalized to workspace-relative           |
+| `target_path` | Workspace-relative path | Computed: `wiki/<type>/<slugified-title>.md`                      |
+| `target_type` | Promotion type          | The `--as` argument: `topic`, `concept`, `entity`, or `reference` |
+| `promoted_at` | ISO 8601 UTC timestamp  | `new Date().toISOString()` at promotion time                      |
+| `promoted_by` | `'user'`                | Always `'user'` in Phase 1. `'system'` is blocked by kernel.      |
 
 **Additional field: `source_hash`.** The blueprint and bead spec call for `source_hash` in the promotion record. This field is not in the Phase 1 DDL (010-AT-DBSC). It will be added via migration `002-add-source-hash-to-promotions.sql` before the promote command is implemented. Until then, the SHA-256 content hash of the source file is recorded in the trace event payload and the audit file, ensuring no provenance data is lost.
 
@@ -272,13 +295,13 @@ The `promotion` event type is defined in 011-AT-TRSC Section 6.9. Every promotio
 
 **Payload fields:**
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `source_path` | string | Yes | Workspace-relative path of the artifact being promoted |
-| `target_path` | string | Yes | Workspace-relative path in wiki where the page lands |
-| `target_type` | string | Yes | Wiki page type: `topic`, `concept`, `entity`, `reference` |
-| `actor` | string | Yes | Who triggered: `user` (always in Phase 1) |
-| `source_hash` | string | Yes | `sha256:<hex>` digest of the source file content at promotion time |
+| Field         | Type   | Required | Description                                                        |
+| ------------- | ------ | -------- | ------------------------------------------------------------------ |
+| `source_path` | string | Yes      | Workspace-relative path of the artifact being promoted             |
+| `target_path` | string | Yes      | Workspace-relative path in wiki where the page lands               |
+| `target_type` | string | Yes      | Wiki page type: `topic`, `concept`, `entity`, `reference`          |
+| `actor`       | string | Yes      | Who triggered: `user` (always in Phase 1)                          |
+| `source_hash` | string | Yes      | `sha256:<hex>` digest of the source file content at promotion time |
 
 **`correlation_id`:** Promotion events are standalone operations. `correlation_id` is `null` unless the promotion occurs as part of a larger workflow (e.g., a task completion flow that prompts the operator to promote). In that case, the promotion event shares the task's `correlation_id`.
 
@@ -432,20 +455,20 @@ The copied file (at the target path in `workspace/wiki/`) has three fields added
 
 **Fields added:**
 
-| Field | Type | Value |
-|-------|------|-------|
+| Field           | Type   | Value                                                                                            |
+| --------------- | ------ | ------------------------------------------------------------------------------------------------ |
 | `promoted_from` | string | Workspace-relative path of the original artifact (e.g., `outputs/reports/transformer-survey.md`) |
-| `promoted_at` | string | ISO 8601 UTC timestamp of the promotion |
-| `promoted_by` | string | `user` (always in Phase 1) |
+| `promoted_at`   | string | ISO 8601 UTC timestamp of the promotion                                                          |
+| `promoted_by`   | string | `user` (always in Phase 1)                                                                       |
 
 **Example frontmatter before promotion (in outputs/):**
 
 ```yaml
 ---
-title: "Transformer Architecture Survey"
+title: 'Transformer Architecture Survey'
 format: report
 task_id: task-20260406-001
-rendered_at: "2026-04-06T10:00:04.567Z"
+rendered_at: '2026-04-06T10:00:04.567Z'
 ---
 ```
 
@@ -453,13 +476,13 @@ rendered_at: "2026-04-06T10:00:04.567Z"
 
 ```yaml
 ---
-title: "Transformer Architecture Survey"
+title: 'Transformer Architecture Survey'
 format: report
 task_id: task-20260406-001
-rendered_at: "2026-04-06T10:00:04.567Z"
-promoted_from: "outputs/reports/transformer-survey.md"
-promoted_at: "2026-04-06T14:30:00.000Z"
-promoted_by: "user"
+rendered_at: '2026-04-06T10:00:04.567Z'
+promoted_from: 'outputs/reports/transformer-survey.md'
+promoted_at: '2026-04-06T14:30:00.000Z'
+promoted_by: 'user'
 ---
 ```
 
@@ -483,12 +506,12 @@ The target path is deterministically computed from the `--as` type and the sourc
 
 **Type-to-directory mapping:**
 
-| `--as` value | Target directory |
-|-------------|-----------------|
-| `topic` | `workspace/wiki/topics/` |
-| `concept` | `workspace/wiki/concepts/` |
-| `entity` | `workspace/wiki/entities/` |
-| `reference` | `workspace/wiki/sources/` |
+| `--as` value | Target directory           |
+| ------------ | -------------------------- |
+| `topic`      | `workspace/wiki/topics/`   |
+| `concept`    | `workspace/wiki/concepts/` |
+| `entity`     | `workspace/wiki/entities/` |
+| `reference`  | `workspace/wiki/sources/`  |
 
 **Collision handling:** If a file already exists at the computed target path, the promotion is rejected with exit code 4 and the message: `Target path already exists: <path>. Rename the existing page or choose a different title before promoting.` The system does not auto-suffix with `-v2` or similar — the operator resolves naming conflicts manually.
 
@@ -503,6 +526,7 @@ Three enforcement points in the promotion pipeline ensure policy compliance. Eac
 **When:** After the eligibility check (Section 9), before `fs.copyFile`.
 
 **What it checks:**
+
 - All seven promotion rules (Section 3) pass
 - All three anti-patterns (Section 4) are not detected
 - Target directory exists (create it if not, per workspace init policy)
@@ -515,6 +539,7 @@ Three enforcement points in the promotion pipeline ensure policy compliance. Eac
 **When:** Immediately after the file copy and frontmatter mutation succeed.
 
 **What it does:**
+
 - Writes the `promotions` table record
 - Emits the `promotion` trace event
 - Writes the promotion audit file
@@ -527,6 +552,7 @@ Three enforcement points in the promotion pipeline ensure policy compliance. Eac
 **When:** On subsequent `ico lint knowledge` runs.
 
 **What it checks:**
+
 - Promoted pages have valid frontmatter including `promoted_from`, `promoted_at`, `promoted_by`
 - The `promoted_from` path still exists in `workspace/outputs/` (copy-not-move verification)
 - The promoted page conforms to the schema for its type (same lint rules as compiler-generated pages)
@@ -534,12 +560,12 @@ Three enforcement points in the promotion pipeline ensure policy compliance. Eac
 
 **Lint output:**
 
-| Lint code | Severity | Description |
-|-----------|----------|-------------|
-| `PROM001` | warning | Source file missing from outputs (copy-not-move violated — manual deletion is fine, but lint warns) |
-| `PROM002` | error | Promoted page missing `promoted_from` frontmatter field |
-| `PROM003` | error | Promoted page has no corresponding promotions table record |
-| `PROM004` | error | Promoted page frontmatter does not conform to wiki type schema |
+| Lint code | Severity | Description                                                                                         |
+| --------- | -------- | --------------------------------------------------------------------------------------------------- |
+| `PROM001` | warning  | Source file missing from outputs (copy-not-move violated — manual deletion is fine, but lint warns) |
+| `PROM002` | error    | Promoted page missing `promoted_from` frontmatter field                                             |
+| `PROM003` | error    | Promoted page has no corresponding promotions table record                                          |
+| `PROM004` | error    | Promoted page frontmatter does not conform to wiki type schema                                      |
 
 ---
 
@@ -605,19 +631,19 @@ export type PromotionAuditRecord = z.infer<typeof PromotionAuditRecord>;
 
 All promotion errors use a structured error type. The kernel throws `PromotionError` with a code and message. The CLI catches and formats the error for the operator.
 
-| Error Code | Exit Code | Trigger |
-|------------|-----------|---------|
-| `INELIGIBLE_PATH` | 1 | Source path not in `workspace/outputs/` |
-| `FILE_NOT_FOUND` | 1 | Source file does not exist |
-| `EMPTY_FILE` | 1 | Source file is 0 bytes |
-| `MISSING_FRONTMATTER` | 1 | Source file has no YAML frontmatter or no `title` field |
-| `INVALID_TYPE` | 2 | `--as` value not in allowed set |
-| `DRAFT_REJECTED` | 3 | File path matches task drafts pattern |
-| `EVIDENCE_REJECTED` | 3 | File path matches task evidence pattern |
-| `NOT_CONFIRMED` | 3 | Operator did not confirm promotion |
-| `TARGET_EXISTS` | 4 | File already exists at computed target path |
-| `COPY_FAILED` | 4 | `fs.copyFile` threw an error |
-| `AUDIT_WRITE_FAILED` | 5 | Database insert, trace write, or audit file write failed |
+| Error Code            | Exit Code | Trigger                                                  |
+| --------------------- | --------- | -------------------------------------------------------- |
+| `INELIGIBLE_PATH`     | 1         | Source path not in `workspace/outputs/`                  |
+| `FILE_NOT_FOUND`      | 1         | Source file does not exist                               |
+| `EMPTY_FILE`          | 1         | Source file is 0 bytes                                   |
+| `MISSING_FRONTMATTER` | 1         | Source file has no YAML frontmatter or no `title` field  |
+| `INVALID_TYPE`        | 2         | `--as` value not in allowed set                          |
+| `DRAFT_REJECTED`      | 3         | File path matches task drafts pattern                    |
+| `EVIDENCE_REJECTED`   | 3         | File path matches task evidence pattern                  |
+| `NOT_CONFIRMED`       | 3         | Operator did not confirm promotion                       |
+| `TARGET_EXISTS`       | 4         | File already exists at computed target path              |
+| `COPY_FAILED`         | 4         | `fs.copyFile` threw an error                             |
+| `AUDIT_WRITE_FAILED`  | 5         | Database insert, trace write, or audit file write failed |
 
 ---
 
@@ -680,19 +706,19 @@ Operator                    CLI                     Kernel                     S
 
 ## 17. Cross-Reference Map
 
-| Concept | This Document | Blueprint | Database Schema | Trace Schema | Workspace Policy | Glossary |
-|---------|--------------|-----------|-----------------|--------------|-----------------|----------|
-| Promotion rules | Section 3 | Section 7.1 | — | — | — | Section 9 |
-| Anti-patterns | Section 4 | Section 7.2 | — | — | — | Section 9 |
-| Promotions table | Section 5 | Section 7 | Section 3.5 | — | — | — |
-| Trace event | Section 6 | Section 5.5 | Section 3.7 | Section 6.9 | — | Section 12 |
-| Audit file | Section 7 | — | — | — | Section 3 (L6) | — |
-| Log entry | Section 8 | Section 5.5 | — | — | Section 3 (L6) | Section 12 |
-| Eligibility check | Section 9 | Section 7.1 | — | — | Section 3 (L4) | — |
-| Target path | Section 12 | Section 11 | — | — | Section 4 | — |
-| Slug rules | Section 12 | — | — | — | Section 4.1 | — |
-| Lint codes | Section 13.3 | — | — | — | Section 11 | — |
-| Zod schemas | Section 14 | — | Section 3.5 | Section 6.9 | — | — |
+| Concept           | This Document | Blueprint   | Database Schema | Trace Schema | Workspace Policy | Glossary   |
+| ----------------- | ------------- | ----------- | --------------- | ------------ | ---------------- | ---------- |
+| Promotion rules   | Section 3     | Section 7.1 | —               | —            | —                | Section 9  |
+| Anti-patterns     | Section 4     | Section 7.2 | —               | —            | —                | Section 9  |
+| Promotions table  | Section 5     | Section 7   | Section 3.5     | —            | —                | —          |
+| Trace event       | Section 6     | Section 5.5 | Section 3.7     | Section 6.9  | —                | Section 12 |
+| Audit file        | Section 7     | —           | —               | —            | Section 3 (L6)   | —          |
+| Log entry         | Section 8     | Section 5.5 | —               | —            | Section 3 (L6)   | Section 12 |
+| Eligibility check | Section 9     | Section 7.1 | —               | —            | Section 3 (L4)   | —          |
+| Target path       | Section 12    | Section 11  | —               | —            | Section 4        | —          |
+| Slug rules        | Section 12    | —           | —               | —            | Section 4.1      | —          |
+| Lint codes        | Section 13.3  | —           | —               | —            | Section 11       | —          |
+| Zod schemas       | Section 14    | —           | Section 3.5     | Section 6.9  | —                | —          |
 
 ---
 

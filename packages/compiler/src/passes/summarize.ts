@@ -14,20 +14,10 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import {
-  existsSync,
-  mkdirSync,
-  renameSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
 
-import {
-  appendAuditLog,
-  type Database,
-  recordProvenance,
-  writeTrace,
-} from '@ico/kernel';
+import { appendAuditLog, type Database, recordProvenance, writeTrace } from '@ico/kernel';
 import { err, ok, type Result } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
@@ -234,16 +224,7 @@ export async function summarizeSource(
       `INSERT INTO compilations
          (id, source_id, type, output_path, compiled_at, stale, model, tokens_used)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
-      compilationId,
-      sourceId,
-      'summary',
-      outputPath,
-      compiledAt,
-      0,
-      responseModel,
-      tokensUsed,
-    );
+    ).run(compilationId, sourceId, 'summary', outputPath, compiledAt, 0, responseModel, tokensUsed);
   } catch (e) {
     return err(e instanceof Error ? e : new Error(String(e)));
   }

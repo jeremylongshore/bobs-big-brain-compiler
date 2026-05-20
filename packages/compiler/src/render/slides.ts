@@ -112,13 +112,14 @@ function escapeYaml(value: string): string {
 /**
  * Wrap SlideSource items in XML tags suitable for the user prompt.
  */
-function buildUserPrompt(
-  sources: ReadonlyArray<SlideSource>,
-  deckTitle: string,
-): string {
+function buildUserPrompt(sources: ReadonlyArray<SlideSource>, deckTitle: string): string {
   const sourceBlocks = sources
     .map((s) =>
-      [`<source title="${escapeXmlAttr(s.title)}" path="${escapeXmlAttr(s.path)}">`, s.content, '</source>'].join('\n'),
+      [
+        `<source title="${escapeXmlAttr(s.title)}" path="${escapeXmlAttr(s.path)}">`,
+        s.content,
+        '</source>',
+      ].join('\n'),
     )
     .join('\n\n');
 
@@ -252,11 +253,10 @@ export async function renderSlides(
   const model = options.model ?? DEFAULT_MODEL;
   const maxTokens = options.maxTokens ?? DEFAULT_MAX_TOKENS;
 
-  const completionResult = await options.client.createCompletion(
-    SYSTEM_PROMPT,
-    userPrompt,
-    { model, maxTokens },
-  );
+  const completionResult = await options.client.createCompletion(SYSTEM_PROMPT, userPrompt, {
+    model,
+    maxTokens,
+  });
 
   if (!completionResult.ok) {
     return err(completionResult.error);

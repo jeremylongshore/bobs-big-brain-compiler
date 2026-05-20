@@ -172,9 +172,7 @@ export function getWeakAreas(
   const all = aggregateAll(db);
   if (!all.ok) return err(all.error);
 
-  const filtered = all.value.filter(
-    (c) => c.total >= minSampleSize && c.retention <= maxRetention,
-  );
+  const filtered = all.value.filter((c) => c.total >= minSampleSize && c.retention <= maxRetention);
   filtered.sort((a, b) => {
     if (a.retention !== b.retention) return a.retention - b.retention;
     if (a.total !== b.total) return b.total - a.total;

@@ -205,7 +205,13 @@ function mockQuizSuccess(): void {
       mode: 'review',
       results: [
         {
-          question: { index: 1, question: 'Q1', expectedAnswer: 'A1', concept: 'c1', sourcePages: [] },
+          question: {
+            index: 1,
+            question: 'Q1',
+            expectedAnswer: 'A1',
+            concept: 'c1',
+            sourcePages: [],
+          },
           userAnswer: 'mine',
           correct: true,
           feedback: 'good',
@@ -214,7 +220,13 @@ function mockQuizSuccess(): void {
           resultId: 'row-1',
         },
         {
-          question: { index: 2, question: 'Q2', expectedAnswer: 'A2', concept: 'c2', sourcePages: [] },
+          question: {
+            index: 2,
+            question: 'Q2',
+            expectedAnswer: 'A2',
+            concept: 'c2',
+            sourcePages: [],
+          },
           userAnswer: 'mine',
           correct: false,
           feedback: 'missed',
@@ -373,7 +385,13 @@ describe('runRecallWeak', () => {
     vi.mocked(kernelModule.getWeakAreas).mockReturnValue({
       ok: true,
       value: [
-        { concept: 'c1', total: 4, correct: 1, retention: 0.25, lastTestedAt: '2026-04-08T12:00:00Z' },
+        {
+          concept: 'c1',
+          total: 4,
+          correct: 1,
+          retention: 0.25,
+          lastTestedAt: '2026-04-08T12:00:00Z',
+        },
       ],
     });
 

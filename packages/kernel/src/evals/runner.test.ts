@@ -76,7 +76,15 @@ describe('loadEvalSpec', () => {
   it('loads a valid retrieval spec', () => {
     const path = writeSpec(
       'evals/retrieval/q1.eval.yaml',
-      ['id: r1', 'name: Q1', 'type: retrieval', 'question: how?', 'expected_pages:', '  - a.md', ''].join('\n'),
+      [
+        'id: r1',
+        'name: Q1',
+        'type: retrieval',
+        'question: how?',
+        'expected_pages:',
+        '  - a.md',
+        '',
+      ].join('\n'),
     );
     const r = loadEvalSpec(path);
     expect(r.ok).toBe(true);
@@ -95,7 +103,10 @@ describe('loadEvalSpec', () => {
   });
 
   it('rejects missing id', () => {
-    const path = writeSpec('evals/bad.eval.yaml', 'name: x\ntype: smoke\ncheck: fts5-index-nonempty\n');
+    const path = writeSpec(
+      'evals/bad.eval.yaml',
+      'name: x\ntype: smoke\ncheck: fts5-index-nonempty\n',
+    );
     const r = loadEvalSpec(path);
     expect(r.ok).toBe(false);
     if (r.ok) return;
@@ -103,10 +114,7 @@ describe('loadEvalSpec', () => {
   });
 
   it('rejects invalid type', () => {
-    const path = writeSpec(
-      'evals/bad-type.eval.yaml',
-      'id: x\nname: x\ntype: nonsense\n',
-    );
+    const path = writeSpec('evals/bad-type.eval.yaml', 'id: x\nname: x\ntype: nonsense\n');
     const r = loadEvalSpec(path);
     expect(r.ok).toBe(false);
     if (r.ok) return;
@@ -116,7 +124,9 @@ describe('loadEvalSpec', () => {
   it('rejects out-of-range threshold', () => {
     const path = writeSpec(
       'evals/bad-thresh.eval.yaml',
-      ['id: x', 'name: x', 'type: smoke', 'check: fts5-index-nonempty', 'threshold: 1.5', ''].join('\n'),
+      ['id: x', 'name: x', 'type: smoke', 'check: fts5-index-nonempty', 'threshold: 1.5', ''].join(
+        '\n',
+      ),
     );
     const r = loadEvalSpec(path);
     expect(r.ok).toBe(false);
@@ -180,10 +190,7 @@ describe('loadEvalSpec', () => {
 
 describe('discoverEvalSpecs', () => {
   it('finds .eval.yaml and .eval.yml recursively', () => {
-    writeSpec(
-      'evals/a/x.eval.yaml',
-      'id: a\nname: A\ntype: smoke\ncheck: fts5-index-nonempty\n',
-    );
+    writeSpec('evals/a/x.eval.yaml', 'id: a\nname: A\ntype: smoke\ncheck: fts5-index-nonempty\n');
     writeSpec(
       'evals/a/nested/y.eval.yml',
       'id: b\nname: B\ntype: smoke\ncheck: fts5-index-nonempty\n',
@@ -208,10 +215,7 @@ describe('discoverEvalSpecs', () => {
 
 describe('loadAllEvalSpecs', () => {
   it('returns one entry per discovered file with per-file Result', () => {
-    writeSpec(
-      'evals/good.eval.yaml',
-      'id: g\nname: G\ntype: smoke\ncheck: fts5-index-nonempty\n',
-    );
+    writeSpec('evals/good.eval.yaml', 'id: g\nname: G\ntype: smoke\ncheck: fts5-index-nonempty\n');
     writeSpec('evals/bad.eval.yaml', 'id: b\nname: B\ntype: NOPE\n');
 
     const r = loadAllEvalSpecs(resolve(env.wsRoot, 'evals'));
@@ -302,7 +306,9 @@ describe('runEval — smoke', () => {
     // Tamper: rewrite the second line so its prev_hash no longer matches.
     const today = new Date().toISOString().slice(0, 10);
     const path = resolve(env.wsRoot, 'audit', 'traces', `${today}.jsonl`);
-    const lines = readFileSync(path, 'utf-8').split('\n').filter((l) => l.length > 0);
+    const lines = readFileSync(path, 'utf-8')
+      .split('\n')
+      .filter((l) => l.length > 0);
     const bad = JSON.parse(lines[1]!) as { prev_hash: string };
     bad.prev_hash = '0'.repeat(64);
     lines[1] = JSON.stringify(bad);
@@ -454,7 +460,12 @@ describe('runEvals — batch', () => {
 
 describe('runEval — retrieval precision', () => {
   it('reports both recall@k and precision@k in details', () => {
-    seedWiki('concepts', 'self-attention', 'Self-Attention', 'Self-attention quadratic transformers');
+    seedWiki(
+      'concepts',
+      'self-attention',
+      'Self-Attention',
+      'Self-attention quadratic transformers',
+    );
     seedWiki('concepts', 'noise', 'Noise', 'Unrelated transformers content');
     const idx = indexCompiledPages(env.db, env.wsRoot);
     if (!idx.ok) throw idx.error;
@@ -531,12 +542,7 @@ describe('runEval — citation', () => {
   }
 
   it('verifies every [source: Title] marker against the wiki index', () => {
-    seedWiki(
-      'concepts',
-      'self-attention',
-      'Self-Attention',
-      'Body.',
-    );
+    seedWiki('concepts', 'self-attention', 'Self-Attention', 'Body.');
     seedArtifact(
       'outputs/reports/r1.md',
       'Attention scales quadratically [source: Self-Attention]. Done.',
@@ -618,10 +624,7 @@ describe('runEval — citation', () => {
   it('fails when an expected_citation is absent from the artifact', () => {
     seedWiki('concepts', 'self-attention', 'Self-Attention', 'body');
     seedWiki('concepts', 'embeddings', 'Embeddings', 'body');
-    seedArtifact(
-      'outputs/partial.md',
-      'Cites [source: Self-Attention] but not the other one.',
-    );
+    seedArtifact('outputs/partial.md', 'Cites [source: Self-Attention] but not the other one.');
 
     const r = runEval(env.db, env.wsRoot, {
       id: 'c',
@@ -772,11 +775,7 @@ describe('citation handler — wiki index reuse across batch', () => {
     // contain that title. The spec passes — which is only possible if
     // the prebuilt index was used instead of walking wiki/.
     mkdirSync(resolve(env.wsRoot, 'outputs'), { recursive: true });
-    writeFileSync(
-      resolve(env.wsRoot, 'outputs/r.md'),
-      '[source: NeverWrittenToDisk]',
-      'utf-8',
-    );
+    writeFileSync(resolve(env.wsRoot, 'outputs/r.md'), '[source: NeverWrittenToDisk]', 'utf-8');
     const customIndex = {
       byTitle: new Map([['neverwrittentodisk', 'concepts/synthetic.md']]),
       bySlug: new Map<string, string>(),
@@ -890,9 +889,7 @@ describe('citation handler — extractCitations regex isolation', () => {
       const short = extractCitations(shortBody);
       // longBody has 20 source markers + 1 wikilink.
       expect(long).toHaveLength(21);
-      expect(short).toEqual([
-        { marker: '[source: Short]', target: 'Short', kind: 'source' },
-      ]);
+      expect(short).toEqual([{ marker: '[source: Short]', target: 'Short', kind: 'source' }]);
     }
   });
 });

@@ -209,18 +209,22 @@ export function validateArtifact(filePath: string): Result<ArtifactValidation, E
   try {
     raw = readFileSync(filePath, 'utf-8');
   } catch (e) {
-    return err(new Error(
-      `Failed to read artifact file "${filePath}": ${e instanceof Error ? e.message : String(e)}`,
-    ));
+    return err(
+      new Error(
+        `Failed to read artifact file "${filePath}": ${e instanceof Error ? e.message : String(e)}`,
+      ),
+    );
   }
 
   let parsed: matter.GrayMatterFile<string>;
   try {
     parsed = matter(raw);
   } catch (e) {
-    return err(new Error(
-      `Failed to parse frontmatter in "${filePath}": ${e instanceof Error ? e.message : String(e)}`,
-    ));
+    return err(
+      new Error(
+        `Failed to parse frontmatter in "${filePath}": ${e instanceof Error ? e.message : String(e)}`,
+      ),
+    );
   }
 
   const { errors, warnings, frontmatter } = inspectFrontmatter(
@@ -293,9 +297,11 @@ export function validateAllArtifacts(workspacePath: string): Result<ArtifactVali
   try {
     allFiles = scanDirs.flatMap(collectMarkdownFiles);
   } catch (e) {
-    return err(new Error(
-      `Failed to scan artifact directories: ${e instanceof Error ? e.message : String(e)}`,
-    ));
+    return err(
+      new Error(
+        `Failed to scan artifact directories: ${e instanceof Error ? e.message : String(e)}`,
+      ),
+    );
   }
 
   const validations: ArtifactValidation[] = [];

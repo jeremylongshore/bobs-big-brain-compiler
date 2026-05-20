@@ -11,13 +11,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  closeDatabase,
-  type Database,
-  initDatabase,
-  initWorkspace,
-  readTraces,
-} from '@ico/kernel';
+import { closeDatabase, type Database, initDatabase, initWorkspace, readTraces } from '@ico/kernel';
 import { ok } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
@@ -213,9 +207,7 @@ describe('detectContradictions', () => {
     if (!result.ok) return;
 
     const rows = env.db
-      .prepare<[], { type: string }>(
-        `SELECT type FROM compilations WHERE type = 'contradiction'`,
-      )
+      .prepare<[], { type: string }>(`SELECT type FROM compilations WHERE type = 'contradiction'`)
       .all();
     expect(rows.length).toBeGreaterThanOrEqual(1);
   });

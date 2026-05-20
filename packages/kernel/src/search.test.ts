@@ -5,11 +5,7 @@ import { join, resolve } from 'node:path';
 import type { Database } from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  createSearchIndex,
-  indexCompiledPages,
-  searchPages,
-} from './search.js';
+import { createSearchIndex, indexCompiledPages, searchPages } from './search.js';
 import { closeDatabase, initDatabase } from './state.js';
 
 // ---------------------------------------------------------------------------
@@ -118,7 +114,7 @@ describe('search', () => {
       // If the table was not created this would throw and the test would fail.
       expect(() => {
         db.prepare(
-          "INSERT INTO pages_fts(path, title, type, tags, body) VALUES (?, ?, ?, ?, ?)",
+          'INSERT INTO pages_fts(path, title, type, tags, body) VALUES (?, ?, ?, ?, ?)',
         ).run('wiki/test.md', 'Test', 'concept', '', 'Some body text');
       }).not.toThrow();
     });

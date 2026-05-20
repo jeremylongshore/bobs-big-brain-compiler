@@ -160,10 +160,7 @@ export function detectOrphans(wikiPath: string, allPages: string[]): string[] {
 
   for (const pagePath of allPages) {
     if (basename(pagePath) === 'index.md') continue;
-    if (
-      pagePath.startsWith(sourcesDirPath + '/') ||
-      pagePath.startsWith(sourcesDirPath + '\\')
-    ) {
+    if (pagePath.startsWith(sourcesDirPath + '/') || pagePath.startsWith(sourcesDirPath + '\\')) {
       continue;
     }
     const slug = basename(pagePath, '.md');

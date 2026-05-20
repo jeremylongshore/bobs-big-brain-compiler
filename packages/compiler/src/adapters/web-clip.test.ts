@@ -199,9 +199,7 @@ describe('ingestWebClip', () => {
     // "one two three four five" = 5 words
     expect(result.value.metadata.wordCount).toBe(5);
     // wordCount must match what you get counting the content directly
-    const derivedCount = result.value.content
-      .split(/\s+/)
-      .filter((w) => w.length > 0).length;
+    const derivedCount = result.value.content.split(/\s+/).filter((w) => w.length > 0).length;
     expect(result.value.metadata.wordCount).toBe(derivedCount);
   });
 

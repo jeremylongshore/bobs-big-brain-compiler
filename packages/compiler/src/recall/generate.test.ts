@@ -105,7 +105,8 @@ const STANDARD_RESPONSE = {
     {
       concept: 'Self-Attention Mechanism',
       question: 'What does self-attention compute?',
-      answer: 'It computes a weighted sum of all input positions, weights derived from query-key similarity.',
+      answer:
+        'It computes a weighted sum of all input positions, weights derived from query-key similarity.',
       source_pages: ['concepts/self-attention.md'],
     },
     {
@@ -367,7 +368,12 @@ describe('generateRecall — error paths', () => {
 
   it('returns err when topic contains only stop words', async () => {
     seedStandardWiki(env);
-    const r = await generateRecall(env.db, env.wsRoot, 'the what when', mockClient(STANDARD_RESPONSE));
+    const r = await generateRecall(
+      env.db,
+      env.wsRoot,
+      'the what when',
+      mockClient(STANDARD_RESPONSE),
+    );
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.error.message).toContain('no searchable terms');
@@ -376,7 +382,12 @@ describe('generateRecall — error paths', () => {
   it('returns err when the wiki has no matching pages', async () => {
     // Index empty wiki.
     reindex(env);
-    const r = await generateRecall(env.db, env.wsRoot, 'transformers', mockClient(STANDARD_RESPONSE));
+    const r = await generateRecall(
+      env.db,
+      env.wsRoot,
+      'transformers',
+      mockClient(STANDARD_RESPONSE),
+    );
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.error.message).toContain('No compiled wiki pages match');
@@ -414,7 +425,10 @@ describe('generateRecall — error paths', () => {
       env.db,
       env.wsRoot,
       'attention',
-      mockClient({ cards: [{ concept: '', question: 'q', answer: 'a', source_pages: [] }], quiz: [] }),
+      mockClient({
+        cards: [{ concept: '', question: 'q', answer: 'a', source_pages: [] }],
+        quiz: [],
+      }),
     );
     expect(r.ok).toBe(false);
     if (r.ok) return;

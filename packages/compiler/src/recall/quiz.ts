@@ -184,7 +184,9 @@ function buildScoringPrompt(question: string, expected: string, userAnswer: stri
  *
  * Returns the parsed topic + ordered question array.
  */
-export function parseQuizFile(content: string): Result<{ topic: string; questions: QuizQuestion[] }, Error> {
+export function parseQuizFile(
+  content: string,
+): Result<{ topic: string; questions: QuizQuestion[] }, Error> {
   if (!content.startsWith('---')) {
     return err(new Error('Quiz file is missing YAML frontmatter'));
   }
@@ -316,7 +318,9 @@ function parseScoringResponse(raw: string): Result<{ correct: boolean; feedback:
   try {
     parsed = JSON.parse(trimmed.slice(first, last + 1));
   } catch (e) {
-    return err(new Error(`Scoring JSON parse failed: ${e instanceof Error ? e.message : String(e)}`));
+    return err(
+      new Error(`Scoring JSON parse failed: ${e instanceof Error ? e.message : String(e)}`),
+    );
   }
   if (typeof parsed !== 'object' || parsed === null) {
     return err(new Error('Scoring response root is not an object'));
@@ -464,7 +468,9 @@ export async function runQuiz(
         });
       } catch (e) {
         return err(
-          new Error(`Prompter failed at question ${i + 1}: ${e instanceof Error ? e.message : String(e)}`),
+          new Error(
+            `Prompter failed at question ${i + 1}: ${e instanceof Error ? e.message : String(e)}`,
+          ),
         );
       }
     }
