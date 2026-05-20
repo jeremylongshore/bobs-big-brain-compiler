@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.1.0] - 2026-05-20
+
+- docs(readme): rewrite for new readers — concrete intro + alternatives table (670405a)
+- feat(test-infra): install Intent Solutions Testing SOP layers L0-L7 (e0efdee)
+- chore(style): apply prettier formatting to existing files (26de1d7)
+
+
 ## [v1.0.7] - 2026-05-20
 
 - docs(gate): reconcile lint perf metrics with E10-B06 bead (PR #73 follow-up) (#75) (c181452)
