@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.2.0] - 2026-05-21
+
+- feat(dogfood,plugin): scaffold dog-food trail + /ico-your-internals skill (#77) (1b32149)
+
+
 ## [v1.1.2] - 2026-05-20
 
 - chore(blame): ignore prettier-formatting sweep commit in git blame (ba9e012)
