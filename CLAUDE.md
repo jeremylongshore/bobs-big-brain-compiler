@@ -263,3 +263,43 @@ This repo participates in the **Intent Solutions Testing SOP** per `~/.claude/CL
 **Next step**: run `/audit-tests` to produce `TEST_AUDIT.md`. See `000-docs/022-OD-SOPS-audit-harness-baseline-2026-05-01.md`.
 
 **Upgrade**: `AUDIT_HARNESS_VERSION=vX.Y.Z curl -sSL https://raw.githubusercontent.com/jeremylongshore/audit-harness/main/install.sh | bash`. Or run `/sync-testing-harness` from any session.
+
+## Dog-fooding ICO (`dogfood/` + `plugin/`)
+
+We eat our own cooking. Every run of ICO against a real corpus produces a structured receipts trail with deterministic citation verification. The dog-food loop IS the primary bug-discovery channel for ICO.
+
+| Path                                                                                                   | Contents                                                                                                                     | Visibility     |
+| ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| `dogfood/JOURNAL.md`                                                                                   | Narrative log of every dog-food session. Append-only.                                                                        | **Committed**  |
+| `dogfood/progress.md`                                                                                  | Machine-appended one-line-per-run trend table. The citation-verify-rate trend signal lives here.                             | **Committed**  |
+| `dogfood/question-banks/<target>-v<N>.yaml`                                                            | Versioned Q/A pairs per target. `id` is stable across versions; `version` bumps on any content change.                       | **Committed**  |
+| `dogfood/runs/<run-id>/{summary.md,metrics.json,friction.jsonl,manifest.json}`                         | Sanitized per-run artifacts. Counts + bead candidates only, no raw answer text.                                              | **Committed**  |
+| `~/.cache/ico-your-internals/runs/<run-id>/{workspace/,receipts.jsonl,verifications.jsonl,cost.jsonl}` | Raw answer content, the compiled wiki, source-grep evidence, per-API-call cost ledger. Echoes source text — never committed. | **Local only** |
+| `plugin/skills/ico-your-internals/`                                                                    | The plugin skill that orchestrates dog-food runs. v0.1: single-target with hand-authored question banks.                     | **Committed**  |
+
+### Hard rules (enforced by the skill)
+
+1. Target is mounted read-only; ICO never writes inside the target tree
+2. Token-budget gate before any Claude call > $0.50 (see `plugin/skills/ico-your-internals/references/budget-math.md`)
+3. Skill never auto-commits — operator decides what lands in `dogfood/`
+4. Raw artifacts stay in `~/.cache/` outside the repo; `.gitignore` blocks any workspace from leaking in
+
+### Trigger a run
+
+```bash
+plugin/skills/ico-your-internals/scripts/run.sh \
+    --target ~/000-projects/intent-eval-platform/intent-eval-core \
+    --bank dogfood/question-banks/intent-eval-core-v1.yaml
+plugin/skills/ico-your-internals/scripts/verify.py <run-id>
+plugin/skills/ico-your-internals/scripts/render-summary.py <run-id> --repo-root .
+```
+
+Or invoke `/ico-your-internals` via Claude Code once the plugin is loaded.
+
+### Friction → beads
+
+Every entry in a `friction.jsonl` with `recommend_bead: true` should be triaged into a bead on this repo. Don't ignore them — they're the bug-discovery output of the dog-food loop.
+
+### Why the receipts trail is public
+
+This is the answer when someone asks "is ICO real?" — point at `progress.md`, the trend table of citation-verify rates across N runs. Raw content stays private; the metrics trail is the proof.
