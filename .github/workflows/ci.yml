@@ -173,6 +173,22 @@ jobs:
           fi
           exit "${rc:-0}"
 
+  plugin-scripts:
+    name: Plugin Script Tests
+    runs-on: ubuntu-latest
+    # Runs the script-test suite for plugin/skills/ico-your-internals/.
+    # 15 bash assertions + 6 Python unittest tests covering the
+    # citation-verify logic, budget estimator, and Gemini PR #77 fixes
+    # (E2BIG handling, PRUNE_PARTS, snippet centering).
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run script tests
+        run: plugin/skills/ico-your-internals/scripts/tests/run-all.sh
+
   arch-check:
     name: Architecture Rules
     runs-on: ubuntu-latest

@@ -9,3 +9,4 @@ coverage/
 pnpm-lock.yaml
 CHANGELOG.md
 workspace/
+.beads/
