@@ -325,15 +325,26 @@ jobs:
             --access public \
             --tag latest
 
-          # Verify the publish actually landed before considering the job done.
-          sleep 5
-          LANDED=$(npm view intentional-cognition-os@"$VERSION_NUM" version 2>/dev/null || true)
-          if [ "$LANDED" != "$VERSION_NUM" ]; then
-            echo "::error::pnpm publish exited 0 but npm registry does not show $VERSION_NUM yet."
-            echo "::error::This may be propagation lag — check https://www.npmjs.com/package/intentional-cognition-os manually."
-            exit 1
-          fi
-          echo "::notice::intentional-cognition-os@$VERSION_NUM published to npm."
+          # Verify the publish actually landed. Registry propagation is
+          # typically 5-30s but occasionally crosses 60s; v1.2.0 (commit
+          # 1b32149) was visible to `npm view` ~90s after publish exit,
+          # which made the previous fixed `sleep 5` check produce a
+          # false failure on a successful release. Poll every 5s for up
+          # to 120s before declaring the publish missing.
+          PROPAGATION_DEADLINE=120
+          ELAPSED=0
+          while [ "$ELAPSED" -lt "$PROPAGATION_DEADLINE" ]; do
+            LANDED=$(npm view intentional-cognition-os@"$VERSION_NUM" version 2>/dev/null || true)
+            if [ "$LANDED" = "$VERSION_NUM" ]; then
+              echo "::notice::intentional-cognition-os@$VERSION_NUM visible on npm after ${ELAPSED}s"
+              exit 0
+            fi
+            sleep 5
+            ELAPSED=$((ELAPSED + 5))
+          done
+          echo "::error::pnpm publish exited 0 but npm registry still does not show $VERSION_NUM after ${PROPAGATION_DEADLINE}s."
+          echo "::error::Check https://www.npmjs.com/package/intentional-cognition-os manually — publish may have succeeded with longer-than-normal propagation lag."
+          exit 1
 
       - name: Dry run summary
         if: github.event.inputs.dry_run == 'true'
