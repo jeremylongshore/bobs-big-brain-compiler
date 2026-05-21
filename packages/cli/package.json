@@ -1,6 +1,6 @@
 {
   "name": "intentional-cognition-os",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Local-first knowledge operating system. Compile knowledge for the machine; distill understanding for the human.",
   "type": "module",
   "bin": {

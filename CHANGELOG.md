@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.2.2] - 2026-05-21
+
+- docs(dogfood): author intent-eval-core-v1 question bank + session-1 journal (#79) (1a0cb0d)
+
+
 ## [v1.2.1] - 2026-05-21
 
 - fix(release): poll for npm propagation up to 120s, not fixed sleep 5 (#78) (25596ca)
