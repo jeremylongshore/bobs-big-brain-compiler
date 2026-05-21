@@ -1,0 +1,41 @@
+# Question bank: intent-eval-core v1
+#
+# Hand-authored Q/A against ~/000-projects/intent-eval-platform/intent-eval-core/.
+# Each question has known correct answers — substrings we expect to appear
+# in ICO's response. expected_sources lists the file paths ICO ought to
+# cite. The verify pipeline checks both:
+#
+#   1. ICO's answer contains every expected_substring (strong signal)
+#   2. ICO's citations resolve to files matching expected_sources
+#      AND the cited substring is findable in that source via grep (weak signal)
+#
+# Bumping a question's content is a breaking change to the bank — bump
+# `version` and rev the filename (intent-eval-core-v2.yaml) so prior runs'
+# verify-rates remain comparable against the v1 bank specifically.
+
+version: v1
+target: intent-eval-core
+target_path_hint: ~/000-projects/intent-eval-platform/intent-eval-core
+authored: 2026-05-20
+author: Jeremy Longshore
+
+# Filled in by session 1 of dogfood. Session 0 (scaffold) defines the schema
+# but leaves questions unauthored — they need to be written against the
+# actual repo state, not from memory.
+questions: []
+
+# Schema reference (delete this comment block once the file has real questions):
+#
+# - id: Q01                                   # stable identifier, never renumber
+#   question: |
+#     Free-text question — should be answerable from the target's docs.
+#   expected_substrings:                      # all must appear in ICO's answer
+#     - "scoring"
+#     - "rubric"
+#   expected_sources:                         # ICO must cite at least one of these
+#     - CLAUDE.md
+#     - 000-docs/003-AT-ARCH-architecture.md
+#   verification_mode: strong                 # strong = check substrings + citations
+#                                             # weak = check citations only
+#   notes: |
+#     Why this question is in the bank. What it's probing in ICO.

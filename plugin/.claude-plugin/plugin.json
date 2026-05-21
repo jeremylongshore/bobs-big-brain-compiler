@@ -1,0 +1,26 @@
+{
+  "$schema": "https://anthropic.com/schemas/claude-plugin/v1.json",
+  "name": "intentional-cognition",
+  "version": "0.1.0",
+  "description": "Plugin for intentional-cognition-os. Ships the /ico-your-internals skill that dog-foods ICO against the operator's own system — discovers a target, compiles its docs into an ICO workspace, runs question banks, verifies citations deterministically, and produces a structured receipts trail.",
+  "author": {
+    "name": "Jeremy Longshore",
+    "email": "jeremy@intentsolutions.io",
+    "url": "https://intentsolutions.io"
+  },
+  "homepage": "https://github.com/jeremylongshore/intentional-cognition-os",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jeremylongshore/intentional-cognition-os.git",
+    "directory": "plugin"
+  },
+  "license": "MIT",
+  "keywords": ["knowledge", "rag", "compilation", "audit", "dogfood", "evaluation"],
+  "compatibility": "Designed for Claude Code. Requires intentional-cognition-os installed (npm install -g intentional-cognition-os) and an ANTHROPIC_API_KEY in env.",
+  "skills": [
+    {
+      "name": "ico-your-internals",
+      "path": "skills/ico-your-internals"
+    }
+  ]
+}

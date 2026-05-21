@@ -20,6 +20,20 @@ coverage/
 .stryker-tmp/
 reports/mutation/
 
+# Dog-food workspaces. The skill writes sanitized per-run summaries
+# into dogfood/runs/<run-id>/ (kept) but never copies the actual
+# compiled wiki or raw answer content here — those live in
+# ~/.cache/ico-your-internals/ outside the repo. This guard is
+# belt-and-suspenders in case a workspace ever gets moved here.
+dogfood/runs/*/workspace/
+dogfood/runs/*/receipts.jsonl
+dogfood/runs/*/verifications.jsonl
+dogfood/runs/*/cost.jsonl
+
+# Python bytecode caches (the dog-food skill scripts are Python)
+__pycache__/
+*.pyc
+
 # TypeScript
 *.tsbuildinfo
 
