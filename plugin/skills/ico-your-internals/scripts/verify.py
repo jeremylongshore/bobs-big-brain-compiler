@@ -122,11 +122,24 @@ def main() -> int:
                 source_path = (target_root / source).resolve()
 
                 # Try multiple resolution strategies: as-is, basename-only,
-                # and search target tree for matching filename.
+                # and search target tree for matching filename. Skip
+                # high-noise dirs (node_modules, .git, dist, coverage, etc.)
+                # so rglob doesn't slow to a crawl on repos with vendor trees
+                # — addresses Gemini PR #77 review on perf.
                 if not source_path.is_file():
-                    matches = list(target_root.rglob(pathlib.Path(source).name))
-                    matches = [m for m in matches if m.is_file()]
-                    source_path = matches[0] if matches else None
+                    PRUNE_PARTS = {
+                        "node_modules", ".git", "dist", "coverage",
+                        ".next", ".nuxt", ".cache", ".venv", "venv",
+                        "__pycache__", ".stryker-tmp",
+                    }
+                    target_name = pathlib.Path(source).name
+                    source_path = None
+                    for candidate in target_root.rglob(target_name):
+                        if any(p in PRUNE_PARTS for p in candidate.parts):
+                            continue
+                        if candidate.is_file():
+                            source_path = candidate
+                            break
 
                 if not source_path or not source_path.is_file():
                     out.write(
@@ -149,10 +162,12 @@ def main() -> int:
                     continue
 
                 source_text = source_path.read_text(errors="replace")
+                # Lowercase once, not per-substring (Gemini PR #77 perf review).
+                source_text_lower = source_text.lower()
                 hits: list[dict[str, Any]] = []
                 for sub in expected_substrings:
                     # Case-insensitive containment + capture the matching line.
-                    idx_in_text = source_text.lower().find(sub.lower())
+                    idx_in_text = source_text_lower.find(sub.lower())
                     if idx_in_text >= 0:
                         line_start = source_text.rfind("\n", 0, idx_in_text) + 1
                         line_end = source_text.find("\n", idx_in_text)
@@ -161,11 +176,25 @@ def main() -> int:
                         )
                         line_text = source_text[line_start:line_end].strip()
                         line_no = source_text.count("\n", 0, idx_in_text) + 1
+
+                        # Snippet centered on the match — earlier code used
+                        # line_text[:200] which can omit the actual hit on
+                        # long lines (Gemini PR #77 evidence-truncation review).
+                        SNIPPET_HALF = 100
+                        match_in_line = max(idx_in_text - line_start, 0)
+                        snippet_start = max(match_in_line - SNIPPET_HALF, 0)
+                        snippet_end = match_in_line + len(sub) + SNIPPET_HALF
+                        snippet = line_text[snippet_start:snippet_end]
+                        if snippet_start > 0:
+                            snippet = "…" + snippet
+                        if snippet_end < len(line_text):
+                            snippet = snippet + "…"
+
                         hits.append(
                             {
                                 "substring": sub,
                                 "line": line_no,
-                                "evidence_grep": f"L{line_no}: {line_text[:200]}",
+                                "evidence_grep": f"L{line_no}: {snippet}",
                             }
                         )
 

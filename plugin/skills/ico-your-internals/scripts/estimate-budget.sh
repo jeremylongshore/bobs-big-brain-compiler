@@ -26,15 +26,22 @@ bank="${2:?usage: estimate-budget.sh <target-path> <bank.yaml>}"
 [ -d "$target" ] || { echo "target not a directory: $target" >&2; exit 1; }
 [ -f "$bank" ]   || { echo "bank not a file: $bank" >&2; exit 1; }
 
-# Count .md files + words (excluding node_modules, .git, dist, coverage)
-mapfile -t md_files < <(find "$target" -type f -name "*.md" \
+# Count .md files + words (excluding node_modules, .git, dist, coverage).
+# Stream through `find -exec wc -w {} +` rather than expanding into a shell
+# argv array — large corpora would hit E2BIG (per Gemini PR #77 review).
+md_count=$(find "$target" -type f -name "*.md" \
   -not -path "*/node_modules/*" -not -path "*/.git/*" \
-  -not -path "*/dist/*" -not -path "*/coverage/*" 2>/dev/null)
-md_count=${#md_files[@]}
+  -not -path "*/dist/*" -not -path "*/coverage/*" 2>/dev/null | wc -l)
 
 words=0
 if [ "$md_count" -gt 0 ]; then
-  words=$(wc -w "${md_files[@]}" 2>/dev/null | tail -1 | awk '{print $1}')
+  # `wc -w ... {} +` may produce a trailing 'total' line; sum the first
+  # column of all non-total rows so partial-batch totals are handled too.
+  words=$(find "$target" -type f -name "*.md" \
+    -not -path "*/node_modules/*" -not -path "*/.git/*" \
+    -not -path "*/dist/*" -not -path "*/coverage/*" \
+    -exec wc -w {} + 2>/dev/null \
+    | awk '$2 != "total" {sum += $1} END {print sum+0}')
 fi
 
 # Question count from the bank (count `- id:` lines as a rough proxy)
