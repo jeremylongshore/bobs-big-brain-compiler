@@ -1,13 +1,14 @@
 # Question bank: intent-eval-core v1
 #
 # Hand-authored Q/A against ~/000-projects/intent-eval-platform/intent-eval-core/.
-# Each question has known correct answers — substrings we expect to appear
-# in ICO's response. expected_sources lists the file paths ICO ought to
-# cite. The verify pipeline checks both:
+# Every question has expected_substrings verified to be present in the source
+# at authoring time (2026-05-21). If any expected_substring is missing from
+# ICO's answer or its cited source, the verify pipeline flags it for review.
 #
-#   1. ICO's answer contains every expected_substring (strong signal)
-#   2. ICO's citations resolve to files matching expected_sources
-#      AND the cited substring is findable in that source via grep (weak signal)
+# Strong-signal questions probe the kernel-only role separation that defines
+# intent-eval-core within the 5-repo Intent Eval Platform ecosystem. The
+# expected_sources reference the Document Filing Standard v4.3 names so the
+# verify pipeline can resolve them deterministically.
 #
 # Bumping a question's content is a breaking change to the bank — bump
 # `version` and rev the filename (intent-eval-core-v2.yaml) so prior runs'
@@ -16,26 +17,96 @@
 version: v1
 target: intent-eval-core
 target_path_hint: ~/000-projects/intent-eval-platform/intent-eval-core
-authored: 2026-05-20
+authored: 2026-05-21
 author: Jeremy Longshore
 
-# Filled in by session 1 of dogfood. Session 0 (scaffold) defines the schema
-# but leaves questions unauthored — they need to be written against the
-# actual repo state, not from memory.
-questions: []
+questions:
+  - id: Q01
+    question: |
+      What is intent-eval-core's role inside the Intent Eval Platform, and what does it explicitly not do?
+    expected_substrings:
+      - 'kernel'
+      - 'contracts'
+      - 'no runtime'
+    expected_sources:
+      - CLAUDE.md
+      - 000-docs/002-AT-ARCH-repo-blueprint-2026-05-18.md
+      - 000-docs/003-AT-STND-core-repo-boundaries-2026-05-18.md
+    verification_mode: strong
+    notes: |
+      Probes the foundational role boundary — kernel-only, contracts only,
+      no execution. This is the load-bearing claim ICO has to get right
+      for any other intent-eval-core question to mean anything. The role
+      separation is documented in both CLAUDE.md and the per-repo
+      blueprint, with the boundary doctrine (003-AT-STND) as the
+      enforcement spec.
 
-# Schema reference (delete this comment block once the file has real questions):
-#
-# - id: Q01                                   # stable identifier, never renumber
-#   question: |
-#     Free-text question — should be answerable from the target's docs.
-#   expected_substrings:                      # all must appear in ICO's answer
-#     - "scoring"
-#     - "rubric"
-#   expected_sources:                         # ICO must cite at least one of these
-#     - CLAUDE.md
-#     - 000-docs/003-AT-ARCH-architecture.md
-#   verification_mode: strong                 # strong = check substrings + citations
-#                                             # weak = check citations only
-#   notes: |
-#     Why this question is in the bank. What it's probing in ICO.
+  - id: Q02
+    question: |
+      How many canonical platform entities does intent-eval-core define?
+    expected_substrings:
+      - '13'
+    expected_sources:
+      - CLAUDE.md
+      - README.md
+    verification_mode: strong
+    notes: |
+      Surface-level fact check. The number 13 appears in both CLAUDE.md
+      ("13 canonical platform entities") and README.md ("13 canonical
+      platform entities"). If ICO hallucinates a different count this
+      is a clear citation regression.
+
+  - id: Q03
+    question: |
+      Which document carries the NORMATIVE gate-result/v1 predicate contract, and which section is it in?
+    expected_substrings:
+      - 'Blueprint B'
+      - '§ 7'
+    expected_sources:
+      - CLAUDE.md
+      - 000-docs/002-AT-ARCH-repo-blueprint-2026-05-18.md
+    verification_mode: strong
+    notes: |
+      Cross-doc synthesis. CLAUDE.md cites Blueprint B at
+      012-AT-ARCH-platform-runtime-blueprint.md as the NORMATIVE source
+      for the gate-result/v1 predicate spec at § 7. The per-repo
+      blueprint (002-AT-ARCH) inherits from this — citing the lab's
+      Blueprint B via the inherits_from frontmatter. Tests whether ICO
+      can follow the inherits-from chain to the right source.
+
+  - id: Q04
+    question: |
+      What license is intent-eval-core published under, and why was that choice made?
+    expected_substrings:
+      - 'Apache'
+      - '2.0'
+      - 'downstream'
+    expected_sources:
+      - README.md
+      - LICENSE
+    verification_mode: strong
+    notes: |
+      Tests both surface fact (Apache 2.0) and the why (README's
+      explicit justification: "The kernel is permissively licensed so
+      every downstream consumer (commercial, OSS, internal) can depend
+      on it without friction"). If ICO gets the license wrong or
+      omits the downstream-consumer rationale, that's a real miss.
+
+  - id: Q05
+    question: |
+      What is the source-of-truth hierarchy intent-eval-core's CLAUDE.md prescribes when sources disagree, listed from highest to lowest authority?
+    expected_substrings:
+      - 'bd'
+      - 'DR-010'
+      - 'Blueprint A'
+    expected_sources:
+      - CLAUDE.md
+    verification_mode: strong
+    notes: |
+      Deepest question in the bank — probes ICO's ability to articulate
+      a 7-tier ordered hierarchy from a table inside CLAUDE.md. Strong
+      signal because the answer is structurally constrained: get the
+      first three tiers right (bd → DR-010 → Blueprint A) and ICO has
+      the spine of the answer. Missing any of those three is a clear
+      regression. CLAUDE.md is the only document containing the table
+      so this also tests citation precision (single-source answer).
