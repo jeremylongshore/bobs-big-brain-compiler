@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.2.1] - 2026-05-21
+
+- fix(release): poll for npm propagation up to 120s, not fixed sleep 5 (#78) (25596ca)
+
+
 ## [v1.2.0] - 2026-05-21
 
 - feat(dogfood,plugin): scaffold dog-food trail + /ico-your-internals skill (#77) (1b32149)
