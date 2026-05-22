@@ -72,12 +72,27 @@ if not qs:
 fi
 
 # --- ids and paths ---
-TARGET_SLUG="$(basename "$TARGET" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-')"
+# IMPORTANT: pipe the basename through `printf %s` to strip its trailing
+# newline BEFORE the tr pipeline. Without that, `tr -cs 'a-z0-9' '-'`
+# converts the newline to a trailing dash, contaminating the slug and the
+# run-id (e.g. "intent-eval-core" → "intent-eval-core-" → run id has
+# "intent-eval-core--v1" with a double dash). Caught in the v0.1 first
+# real run; the regression test in tests/test_run_sh.sh pins this.
+TARGET_SLUG="$(printf '%s' "$(basename "$TARGET")" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-')"
+# Trim trailing dashes that can still result from leading/trailing
+# non-alphanum bytes in oddly-named target dirs.
+TARGET_SLUG="${TARGET_SLUG%-}"
+TARGET_SLUG="${TARGET_SLUG#-}"
+
 BANK_VERSION="$(grep -E '^version:' "$BANK" | head -1 | awk '{print $2}' | tr -d '\"')"
 TS="$(date -u +%Y-%m-%dT%H%MZ)"
 RUN_ID="${TS}-${TARGET_SLUG}-${BANK_VERSION:-vX}"
 CACHE_ROOT="$HOME/.cache/ico-your-internals/runs/$RUN_ID"
-WS="$CACHE_ROOT/workspace"
+# `ico init <name> --path <parent>` creates the workspace at
+# <parent>/<name>/, NOT at <parent>/workspace/. WS must match where ico
+# actually puts it, otherwise downstream --workspace pointers miss the
+# state.db and every command fails with "Cannot open database".
+WS="$CACHE_ROOT/$TARGET_SLUG"
 PUB_DIR="$REPO_ROOT/dogfood/runs/$RUN_ID"
 
 mkdir -p "$CACHE_ROOT" "$PUB_DIR"
@@ -110,6 +125,12 @@ EOF
 cp "$CACHE_ROOT/manifest.json" "$PUB_DIR/manifest.json"
 
 # --- ingest + compile ---
+# IMPORTANT: --workspace is a GLOBAL flag on `ico`, not a subcommand option.
+# Order matters: `ico --workspace <ws> <subcommand> <args>` works;
+# `ico <subcommand> <args> --workspace <ws>` is silently ignored, and ico
+# falls back to looking for a default workspace which doesn't exist.
+# Caught in the v0.1 first real run; reflected in the constant below.
+
 echo "[ico-your-internals] ico init + mount + ingest…" >&2
 ico init "$TARGET_SLUG" --path "$CACHE_ROOT" || {
   jq -nc --arg msg "ico init failed" --arg stage init --arg run "$RUN_ID" \
@@ -118,30 +139,42 @@ ico init "$TARGET_SLUG" --path "$CACHE_ROOT" || {
   exit 1
 }
 
-# ico mount add (read-only intent — ICO mount itself doesn't write to target)
-ico mount add target "$TARGET" --workspace "$WS" || {
+# ico mount add — read-only intent (mount records a pointer; does not copy)
+ico --workspace "$WS" mount add target "$TARGET" || {
   jq -nc --arg msg "ico mount add failed" --arg stage mount --arg run "$RUN_ID" \
     '{run_id:$run, stage:$stage, severity:"error", message:$msg, recommend_bead:true}' \
     >> "$PUB_DIR/friction.jsonl"
   exit 1
 }
 
-ico ingest "$TARGET" --workspace "$WS" 2> "$CACHE_ROOT/ingest.stderr" || {
-  msg="$(tail -1 "$CACHE_ROOT/ingest.stderr" 2>/dev/null || echo 'ico ingest failed')"
-  jq -nc --arg msg "$msg" --arg stage ingest --arg run "$RUN_ID" \
-    '{run_id:$run, stage:$stage, severity:"error", message:$msg, recommend_bead:true}' \
-    >> "$PUB_DIR/friction.jsonl"
-  exit 1
-}
+# ico ingest accepts a single file at a time. For a directory of .md files,
+# walk and ingest each. Skips non-.md (PDFs/web-clips would need adapter
+# config beyond v0.1 scope).
+while IFS= read -r -d '' f; do
+  ico --workspace "$WS" ingest "$f" --yes 2>> "$CACHE_ROOT/ingest.stderr" || {
+    jq -nc --arg msg "ico ingest failed on $f" --arg stage ingest --arg run "$RUN_ID" --arg file "$f" \
+      '{run_id:$run, stage:$stage, severity:"warning", message:$msg, file:$file, recommend_bead:false}' \
+      >> "$PUB_DIR/friction.jsonl"
+  }
+done < <(find "$TARGET" -type f -name "*.md" \
+  -not -path "*/node_modules/*" -not -path "*/.git/*" \
+  -not -path "*/dist/*" -not -path "*/coverage/*" \
+  -print0)
 
-echo "[ico-your-internals] ico compile all…" >&2
-ico compile all --workspace "$WS" 2> "$CACHE_ROOT/compile.stderr" || {
-  msg="$(tail -1 "$CACHE_ROOT/compile.stderr" 2>/dev/null || echo 'ico compile failed')"
-  jq -nc --arg msg "$msg" --arg stage compile --arg run "$RUN_ID" \
-    '{run_id:$run, stage:$stage, severity:"error", message:$msg, recommend_bead:true}' \
-    >> "$PUB_DIR/friction.jsonl"
-  exit 1
-}
+# `ico compile` does NOT accept "all" — it takes one of:
+# sources | concepts | topics | links | contradictions | gaps
+# Loop through the 6 passes in order. Each pass depends on its predecessor.
+echo "[ico-your-internals] ico compile (6 passes)…" >&2
+for pass in sources concepts topics links contradictions gaps; do
+  echo "[ico-your-internals]   pass: $pass" >&2
+  ico --workspace "$WS" compile "$pass" 2>> "$CACHE_ROOT/compile.stderr" || {
+    msg="$(tail -1 "$CACHE_ROOT/compile.stderr" 2>/dev/null || echo "ico compile $pass failed")"
+    jq -nc --arg msg "$msg" --arg stage compile --arg pass "$pass" --arg run "$RUN_ID" \
+      '{run_id:$run, stage:$stage, pass:$pass, severity:"error", message:$msg, recommend_bead:true}' \
+      >> "$PUB_DIR/friction.jsonl"
+    exit 1
+  }
+done
 
 # --- ask loop ---
 echo "[ico-your-internals] ask loop…" >&2
@@ -160,8 +193,11 @@ for q in bank.get("questions", []):
     question = q["question"]
     started = time.time()
     try:
+        # IMPORTANT: --workspace and --json are GLOBAL flags. They go BEFORE
+        # the subcommand. `ico ask "..." --workspace ... --json` silently
+        # drops both flags and falls back to defaults.
         result = subprocess.run(
-            ["ico", "ask", question, "--workspace", ws, "--json"],
+            ["ico", "--workspace", ws, "--json", "ask", question],
             capture_output=True, text=True, timeout=180,
         )
     except subprocess.TimeoutExpired:

@@ -227,6 +227,51 @@ describe('runAsk — happy path', () => {
     writeSpy.mockRestore();
   });
 
+  it('emits a single JSON record on stdout and skips the pretty surface when globalOpts.json is true', async () => {
+    mockWorkspace();
+    const pages = [
+      { path: 'concepts/x.md', title: 'X', type: 'concept', rank: 0.5, snippet: '<b>X</b>' },
+    ];
+    mockAnalysis({ pages });
+    mockBoost(pages);
+    seedWikiPage('concepts/x.md');
+    mockGenerate('X is a thing [Page 0].', [
+      { pagePath: 'p0.md', pageTitle: 'Page 0', claim: 'X is a thing' },
+    ]);
+    mockVerify(1, 0);
+
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    await runAsk('What is X?', {}, { json: true });
+    const joined = writeSpy.mock.calls.map((c) => String(c[0])).join('');
+    writeSpy.mockRestore();
+
+    // JSON mode: stdout contains exactly one JSON line and NONE of the
+    // pretty-print headers/glyphs.
+    expect(joined).not.toContain('Answer');
+    expect(joined).not.toContain('Citations');
+    expect(joined).not.toContain('Used');
+
+    const lines = joined.trim().split('\n').filter(Boolean);
+    expect(lines.length).toBe(1);
+
+    const payload = JSON.parse(lines[0]!) as Record<string, unknown>;
+    expect(payload['question']).toBe('What is X?');
+    expect(payload['answer']).toBe('X is a thing [Page 0].');
+    expect(Array.isArray(payload['citations'])).toBe(true);
+    expect((payload['citations'] as unknown[]).length).toBe(1);
+    const cite = (payload['citations'] as Array<Record<string, unknown>>)[0]!;
+    expect(cite['source']).toBe('wiki/p0.md');
+    expect(cite['title']).toBe('Page 0');
+    // verified set keys are derived from `verifyCitations` output;
+    // our mockVerify(1, 0) returns 1 verified, 0 unverified.
+    expect(payload['verified_citations']).toBe(1);
+    expect(payload['unverified_citations']).toBe(0);
+    expect(typeof payload['tokens_in']).toBe('number');
+    expect(typeof payload['tokens_out']).toBe('number');
+    expect(typeof payload['latency_ms']).toBe('number');
+    expect(typeof payload['model']).toBe('string');
+  });
+
   it('falls back gracefully when verifyCitations reports unverified entries', async () => {
     mockWorkspace();
     const pages = [
