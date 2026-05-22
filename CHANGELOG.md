@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.2.4] - 2026-05-22
+
+- fix(compiler): analyzeQuestion strict-then-broad + possessive normalization (closes fmo) (#81) (50a0053)
+
+
 ## [v1.2.3] - 2026-05-22
 
 - fix(cli,plugin): ask --json + run.sh orchestrator + first real dog-food run (P1 bug filed) (#80) (0fb8b00)
