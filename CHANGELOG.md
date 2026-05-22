@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.2.3] - 2026-05-22
+
+- fix(cli,plugin): ask --json + run.sh orchestrator + first real dog-food run (P1 bug filed) (#80) (0fb8b00)
+
+
 ## [v1.2.2] - 2026-05-21
 
 - docs(dogfood): author intent-eval-core-v1 question bank + session-1 journal (#79) (1a0cb0d)
