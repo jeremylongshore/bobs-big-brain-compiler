@@ -230,18 +230,26 @@ const STOP_WORDS = new Set([
  * Returns `[]` when nothing meaningful remains.
  */
 function extractTokens(question: string): string[] {
-  // Replace hyphens and other FTS5 operators/punctuation with spaces.
-  // Hyphens are parsed as boolean NOT by FTS5 (`a-b` → `a NOT b`).
-  const cleaned = question.replace(/[-"*()^?!]/g, ' ').toLowerCase();
-  return cleaned
-    .split(/\s+/)
-    .map((t) => {
-      // Normalize possessives BEFORE stripping non-word chars so `core's`
-      // becomes `core`, not `cores` (the v0.1 dog-food run's possessive bug).
-      const noPossessive = t.replace(/['']s\b/g, '');
-      return noPossessive.replace(/[^\w]/g, '');
-    })
-    .filter((t) => t.length >= 2 && !STOP_WORDS.has(t));
+  // 1. Normalize possessives FIRST, before any other punctuation handling.
+  //    Covers ASCII apostrophe ('), the right-single-quotation-mark
+  //    (U+2019 ’ — common in published prose and what most word processors
+  //    auto-correct ' to), and the left form (U+2018 ‘) for symmetry.
+  //    `core's` / `core’s` / `core‘s` all become `core`, never `cores`.
+  //    Caught by Gemini PR #81 review: the prior regex was `['']s\b` which
+  //    looked like it covered smart quotes but actually had two ASCII
+  //    apostrophes (a typo) and missed U+2018/U+2019 entirely.
+  const noPossessives = question.replace(/[‘’']s\b/g, '');
+
+  // 2. Replace ALL non-word punctuation (commas, periods, hyphens, FTS5
+  //    operators, smart quotes, etc.) with whitespace BEFORE splitting on
+  //    whitespace. Doing this in the right order prevents token-merging
+  //    bugs like `foo,bar` collapsing to `foobar` (Gemini PR #81 review).
+  //    Hyphens specifically are parsed as boolean NOT by FTS5 (`a-b` →
+  //    `a NOT b`); we replace them with spaces so each side becomes a
+  //    distinct token.
+  const spaced = noPossessives.replace(/[^\w\s]/g, ' ').toLowerCase();
+
+  return spaced.split(/\s+/).filter((t) => t.length >= 2 && !STOP_WORDS.has(t));
 }
 
 /**
@@ -317,7 +325,10 @@ export function analyzeQuestion(
   }
 
   let relevantPages = strictResult.value;
-  if (relevantPages.length === 0) {
+  // When the question has only one searchable token, `strict` and `broad`
+  // are byte-identical — running the same query twice would just waste an
+  // FTS5 round-trip. Skip the fallback in that case (Gemini PR #81 review).
+  if (relevantPages.length === 0 && ftsQuery.strict !== ftsQuery.broad) {
     const broadResult = searchPages(db, ftsQuery.broad, 10);
     if (!broadResult.ok) {
       // OR query syntax is broader; if even that fails, surface the error.

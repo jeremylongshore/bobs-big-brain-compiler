@@ -347,6 +347,35 @@ describe('analyzeQuestion — fmo regression (paraphrase variance + dashed ident
     ).toBe(true);
   });
 
+  it('normalizes smart-quote possessives (U+2019) the same as ASCII apostrophe', () => {
+    // Gemini PR #81 review: the prior regex looked like it covered smart
+    // quotes but actually had two ASCII apostrophes. Real prose almost
+    // always uses U+2019 (’), so this matters in practice.
+    const smartQuote = 'intent-eval-core’s license';
+    const result = analyzeQuestion(db, wsPath, smartQuote);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.relevantPages.length).toBeGreaterThan(0);
+    expect(
+      result.value.relevantPages.some((p) => p.path.toLowerCase().includes('intent-eval-core')),
+    ).toBe(true);
+  });
+
+  it('does not merge tokens across punctuation (foo,bar → foo + bar, not foobar)', () => {
+    // Gemini PR #81 review: splitting on whitespace before stripping
+    // punctuation merged `foo,bar` into `foobar`. Now we replace
+    // punctuation with whitespace FIRST, then split.
+    const punctuated = 'intent-eval-core,Apache,license';
+    const result = analyzeQuestion(db, wsPath, punctuated);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.relevantPages.length).toBeGreaterThan(0);
+    // The intent-eval-core page is the most relevant hit.
+    expect(
+      result.value.relevantPages.some((p) => p.path.toLowerCase().includes('intent-eval-core')),
+    ).toBe(true);
+  });
+
   it('retrieves at least one page for the full v0.1 bank Q01-Q05 set', () => {
     // The v0.1 dog-food bank's exact 5 questions. Each must retrieve > 0
     // pages — the integration confirmation that the fmo fix resolves the
