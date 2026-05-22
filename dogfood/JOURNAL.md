@@ -288,3 +288,98 @@ ICO bug in ~30 minutes of operator time.
   questions), consider whether the bank should be split into a "v1
   simple" and "v1 synthesis" tier so we get gradient signal rather
   than binary pass/fail.
+
+---
+
+## 2026-05-21 — session 3: fmo fix lands, 5/5 engagement on the bank
+
+**Target**: `intent-eval-core` (same compiled workspace as session 2)
+**Question bank**: `dogfood/question-banks/intent-eval-core-v1.yaml`
+**Run id**: `2026-05-22T0257Z-intent-eval-core-v1-postfmo`
+
+### Headline
+
+**5/5 questions ENGAGED with the compiled wiki (was 0/5 in session 2).**
+ICO produced 28 citations across 5 answers, spending 48k tokens. The fmo
+retrieval gap is closed for the v0.1 bank.
+
+### What changed
+
+`packages/compiler/src/ask/analyze.ts`:
+
+1. `buildFtsQuery` now returns both a strict (AND-joined) and broad
+   (OR-joined) form. `analyzeQuestion` tries strict first for precision;
+   falls back to broad when strict returns zero rows so sophisticated
+   multi-clause questions still surface topical pages.
+2. Possessive normalization: `core's` → `core` (was `cores`, a plural
+   form that broke matching).
+3. Each token is now FTS5-quoted, so accidental keyword collisions
+   (token spelled the same as `AND`/`OR`/etc.) can't break the query.
+
+Five new regression tests in `analyze.test.ts`:
+
+- Paraphrase variance (5 phrasings of same intent → ≥4 retrieve)
+- Compound multi-clause Q01 verbatim from the bank → engages
+- Dashed identifier `intent-eval-core` → matches
+- Possessive form `intent-eval-core's license` → matches
+- Full v0.1 bank Q01-Q05 set → 5/5 engage
+
+All 466 compiler tests green. Followed strict TDD discipline: tests
+written FIRST (red), then fix (green).
+
+### Per-question signal (post-fix)
+
+| Q   | citations | tokens (in+out) | latency_ms |
+| --- | --------- | --------------- | ---------- |
+| Q01 | 11        | ~8,154          | ?          |
+| Q02 | 6         | ~9,570          | ?          |
+| Q03 | 6         | ~8,858          | ?          |
+| Q04 | 4         | ~10,829         | ?          |
+| Q05 | 1         | ~10,608         | ?          |
+
+Total: 5/5 engaged, 28 citations, 48,019 tokens (~$0.20). Compared to
+v0.1 baseline: 0/5 engaged, 0 citations, 0 tokens. The trend signal
+went binary.
+
+### The verify-rate caveat
+
+The post-fix run's `verify_rate` reads as 0% in `progress.md`, which
+is **misleading**. ICO is now emitting real wiki paths (e.g.
+`wiki/sources/002-at-arch-repo-blueprint-2026-05-18.md`) with its own
+`verified: true` flag set per citation. But our `verify.py` greps the
+**target tree** (`intent-eval-core/`) for those paths — and the
+compiled wiki lives in the **workspace cache** (`~/.cache/...`),
+not the target. So `verify.py` reports UNVERIFIED for everything,
+even though ICO's internal citation-verification reported VERIFIED
+for ~20 of 28.
+
+This is a separate paradigm gap in `verify.py`, filed as
+**`intentional-cognition-os-h99`** (P2). Fixing it would bring the
+v0.1 bank's verify-rate to ~60-80% on the same data.
+
+The bigger lesson: the dog-food loop has TWO honest signals — ICO's
+internal citation-verify (what ICO claims about itself) and the
+bank's expected_substrings (what we know is ground truth). v0.2 of
+the verify pipeline should report both side-by-side.
+
+### Bugs filed
+
+- **`intentional-cognition-os-h99`** (P2) — verify.py paradigm gap;
+  greps target tree instead of compiled wiki.
+
+### Bugs fixed this session
+
+- **`intentional-cognition-os-fmo`** (P1) — analyzeQuestion retrieval
+  too narrow. Strict-then-broad fallback + possessive normalization.
+
+### Next session priorities
+
+- Fix `h99` (verify.py paradigm gap). Once that lands, the v0.1 bank
+  rerun will produce a meaningful verify-rate floor for future runs to
+  beat.
+- Cut v0.2 of the bank with paraphrase-variance built into the
+  question schema (so the question_bank-spec.md doc captures the
+  "test the same intent N ways" pattern as first-class).
+- After h99, decide whether to widen the v0.2 bank's target (keep
+  intent-eval-core for trend comparability, or jump to intent-eval-lab
+  which is ~5x larger).

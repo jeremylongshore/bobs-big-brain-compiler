@@ -1,0 +1,79 @@
+{
+  "run_id": "2026-05-22T0257Z-intent-eval-core-v1-postfmo",
+  "target": "/home/jeremy/000-projects/intent-eval-platform/intent-eval-core",
+  "target_slug": "intent-eval-core",
+  "bank_version": "v1",
+  "ico_version": "1.2.3+fmo",
+  "started_at": "2026-05-22T02:57:00Z",
+  "questions": 5,
+  "total_citations": 28,
+  "verified": 0,
+  "challenged": 0,
+  "unverified": 28,
+  "verify_rate": 0.0,
+  "tokens_in": 46003,
+  "tokens_out": 2016,
+  "friction_count": 0,
+  "per_question": [
+    {
+      "q_id": "Q01",
+      "citations": 11,
+      "verified": 0,
+      "challenged": 0,
+      "unverified": 11,
+      "expected_substrings": 3,
+      "substrings_hit_in_answer": 2,
+      "tokens_in": 7619,
+      "tokens_out": 535,
+      "latency_ms": 12781
+    },
+    {
+      "q_id": "Q02",
+      "citations": 6,
+      "verified": 0,
+      "challenged": 0,
+      "unverified": 6,
+      "expected_substrings": 1,
+      "substrings_hit_in_answer": 1,
+      "tokens_in": 9392,
+      "tokens_out": 178,
+      "latency_ms": 5462
+    },
+    {
+      "q_id": "Q03",
+      "citations": 6,
+      "verified": 0,
+      "challenged": 0,
+      "unverified": 6,
+      "expected_substrings": 2,
+      "substrings_hit_in_answer": 2,
+      "tokens_in": 8381,
+      "tokens_out": 477,
+      "latency_ms": 12103
+    },
+    {
+      "q_id": "Q04",
+      "citations": 4,
+      "verified": 0,
+      "challenged": 0,
+      "unverified": 4,
+      "expected_substrings": 3,
+      "substrings_hit_in_answer": 3,
+      "tokens_in": 10377,
+      "tokens_out": 452,
+      "latency_ms": 13261
+    },
+    {
+      "q_id": "Q05",
+      "citations": 1,
+      "verified": 0,
+      "challenged": 0,
+      "unverified": 1,
+      "expected_substrings": 3,
+      "substrings_hit_in_answer": 1,
+      "tokens_in": 10234,
+      "tokens_out": 374,
+      "latency_ms": 9349
+    }
+  ]
+}
