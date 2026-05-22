@@ -76,7 +76,38 @@ interface GlobalOptions {
  * @param question      - The user's original question.
  * @param workspacePath - Absolute workspace root (used for raw directory hint).
  */
-function printNoKnowledgeFallback(question: string, workspacePath: string): void {
+function printNoKnowledgeFallback(question: string, workspacePath: string, asJson = false): void {
+  // JSON mode — emit a single record consistent with the happy-path shape so
+  // parsers like the ico-your-internals dog-food orchestrator can handle both
+  // outcomes uniformly. Use empty answer + zero counts + a `no_knowledge: true`
+  // sentinel so verify pipelines can distinguish "ICO didn't engage" from
+  // "ICO engaged but gave a bad answer".
+  if (asJson) {
+    const rawPath = join(workspacePath, 'raw');
+    process.stdout.write(
+      JSON.stringify({
+        question,
+        answer: '',
+        citations: [],
+        question_type: null,
+        retrieved_pages: [],
+        tokens_in: 0,
+        tokens_out: 0,
+        tokens_total: 0,
+        cost_usd: 0,
+        model: null,
+        latency_ms: 0,
+        verified_citations: 0,
+        unverified_citations: 0,
+        provenance_chain: [],
+        suggest_research: false,
+        no_knowledge: true,
+        has_uncompiled_sources: existsSync(rawPath),
+      }) + '\n',
+    );
+    return;
+  }
+
   process.stdout.write('\n');
   process.stdout.write(formatWarning(`No compiled knowledge found for: "${question}"`) + '\n');
   process.stdout.write('\n');
@@ -200,7 +231,7 @@ export async function runAsk(
     // 6. No-knowledge fallback (E7-B09)
     // -----------------------------------------------------------------------
     if (analysis.relevantPages.length === 0) {
-      printNoKnowledgeFallback(question, wsPath);
+      printNoKnowledgeFallback(question, wsPath, globalOpts.json === true);
       return;
     }
 
@@ -231,14 +262,19 @@ export async function runAsk(
     }
 
     if (pagesWithContent.length === 0) {
-      printNoKnowledgeFallback(question, wsPath);
+      printNoKnowledgeFallback(question, wsPath, globalOpts.json === true);
       return;
     }
 
     // -----------------------------------------------------------------------
     // 8. Generate answer via Claude (E7-B03)
     // -----------------------------------------------------------------------
-    process.stdout.write(dim('Generating answer...') + '\n');
+    // Progress indicator on stderr so --json output stays a single line on
+    // stdout for parsers like the ico-your-internals dog-food orchestrator.
+    // Always stderr — progress belongs there regardless of --json. Gating on
+    // !json would leave a stdout artifact in pretty mode that interactive
+    // shells already render fine via stderr.
+    process.stderr.write(dim('Generating answer...') + '\n');
 
     const generateResult = await generateAnswer(client, question, pagesWithContent, {
       model,
@@ -289,6 +325,43 @@ export async function runAsk(
     // -----------------------------------------------------------------------
     // 11. Display output
     // -----------------------------------------------------------------------
+
+    // JSON mode (global --json flag) — emit a single structured record on
+    // stdout and skip the pretty-printed surface. Consumers like the
+    // ico-your-internals dog-food skill parse this record verbatim; do not
+    // print anything else to stdout when --json is on.
+    if (globalOpts.json) {
+      const totalTokens = inputTokens + outputTokens;
+      const cost = calculateCost(inputTokens, outputTokens, model);
+      const verifiedSet = new Set(verified.map((c) => c.pagePath));
+      const payload = {
+        question,
+        answer,
+        citations: citations.map((c) => ({
+          source: `wiki/${c.pagePath}`,
+          title: c.pageTitle,
+          verified: verifiedSet.has(c.pagePath),
+        })),
+        question_type: analysis.type,
+        retrieved_pages: topPages.map((p) => p.path),
+        tokens_in: inputTokens,
+        tokens_out: outputTokens,
+        tokens_total: totalTokens,
+        cost_usd: Number(cost.toFixed(4)),
+        model,
+        latency_ms: latencyMs,
+        verified_citations: verified.length,
+        unverified_citations: unverified.length,
+        provenance_chain: provenanceChain.map((e) => ({
+          level: e.level,
+          path: 'path' in e ? e.path : null,
+        })),
+        suggest_research: analysis.suggestResearch,
+      };
+      process.stdout.write(JSON.stringify(payload) + '\n');
+      return;
+    }
+
     process.stdout.write('\n');
 
     // Answer section

@@ -180,3 +180,111 @@ None. Nothing ran.
 - File friction as beads with `doc_category` enrichment if useful
 - Decide whether v0.2 of the bank adds Q06-Q10 or moves to a different
   target (intent-eval-lab is a strong candidate — much larger corpus)
+
+---
+
+## 2026-05-21 — session 2: first real run hit ICO retrieval gap (5/5 no-knowledge)
+
+**Target**: `intent-eval-core` (in `~/000-projects/intent-eval-platform/`)
+**Question bank**: `dogfood/question-banks/intent-eval-core-v1.yaml`
+**Run id**: `2026-05-22T0056Z-intent-eval-core-v1` (UTC date because the run crossed midnight)
+
+### Headline
+
+**5 questions asked, 5 hit ICO's "no compiled knowledge found" fallback.**
+Zero Claude API calls made on the asks (fallback is pre-Claude). The compile
+ran successfully against 19 source files (132k tokens, $0.50–0.70 actual)
+producing 19 source pages + 6 concept pages + 2 topic pages + 5
+contradictions + 4 gaps. Wiki populated.
+
+verify-rate: **0%** — but read this carefully: 0% because there were no
+citations to verify, not because ICO cited wrong sources. The actual
+finding is that ICO never engaged the wiki at all.
+
+### What we found
+
+ICO's `analyzeQuestion` (the FTS5-based retrieval step that picks
+candidate wiki pages for an `ask` query) is **too narrow**:
+
+| Test                                                                                                             | Result                                             |
+| ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Manual short query: "What is intent-eval-core?"                                                                  | ✅ Engaged. 13k tokens, 10 citations, rich answer. |
+| Bank Q01: "What is intent-eval-core's role inside the Intent Eval Platform, and what does it explicitly not do?" | ❌ No compiled knowledge found                     |
+| Bank Q02: "How many canonical platform entities does intent-eval-core define?"                                   | ❌ No compiled knowledge found                     |
+| Bank Q03-Q05: similar sophisticated phrasing                                                                     | ❌ No compiled knowledge found                     |
+
+Same workspace, same compiled wiki. Only the question phrasing changed.
+Compound multi-clause questions, dashed identifiers, and synonymous
+vocabulary all fail to match. The retrieval requires near-literal
+keyword presence in the FTS5 index.
+
+Filed as bead **`intentional-cognition-os-fmo`** (P1 — bug). Suspected
+fix surface: `packages/compiler/src/ask/analyze.ts`. Options laid out
+in the bead.
+
+### What worked
+
+The dog-food infrastructure itself caught all of this cleanly:
+
+- Pre-flight checks (ico installed, ANTHROPIC_API_KEY present, target
+  exists, bank parses)
+- Budget estimate ($1.83 upper, ~$0.60 actual — well within calibration)
+- All 4 prior run.sh bugs from the previous attempt are fixed and have
+  regression tests
+- ICO's `--json` flag now emits structured JSON on both the happy path
+  AND the no-knowledge fallback path (fixed this session)
+- friction.jsonl captured the no-knowledge response as a real signal
+- Per-question receipts JSONL produced
+- Render-summary collapsed friction by (stage, message); progress.md
+  appended cleanly
+
+### Bugs filed
+
+- **intentional-cognition-os-fmo (P1)** — ICO analyzeQuestion retrieval
+  too narrow. 5/5 hand-authored questions hit no-knowledge fallback
+  even though the compiled wiki has the answers.
+
+### Bugs fixed this session
+
+In `plugin/skills/ico-your-internals/scripts/run.sh`:
+
+1. TARGET_SLUG was eating `basename`'s trailing newline → trailing dash.
+   Fix: pipe through `printf '%s'` first. Regression test in
+   `tests/test_run_sh.sh` test 2.
+2. WS path didn't match where `ico init <name> --path <parent>` actually
+   creates the workspace. Fix: `WS="$CACHE_ROOT/$TARGET_SLUG"`.
+   Regression test 5.
+3. `--workspace` and `--json` are GLOBAL flags on `ico`, must come
+   BEFORE the subcommand. Fix: rewrote all subprocess calls. Regression
+   tests 3 + 6.
+4. `ico compile` doesn't accept "all" — takes one of
+   `sources|concepts|topics|links|contradictions|gaps`. Fix: loop the
+   six passes in order. Regression test 4.
+
+In `packages/cli/src/commands/ask.ts`: 5. `--json` flag was being silently ignored on the happy path. Fix:
+added explicit JSON output branch before the pretty surface.
+Vitest covers in `ask.test.ts`. 6. `--json` flag was ALSO silently ignored on the no-knowledge fallback
+path. Fix: `printNoKnowledgeFallback` now takes a `asJson` param.
+
+### What the dog-food session ACTUALLY proved
+
+This is the most important paragraph in this entry. Five questions
+authored against a real corpus, all hand-verified to have ground-truth
+answers in the source, came back with **zero** retrievable knowledge.
+Without the dog-food loop we wouldn't have seen this. The OPS bugs
+(run.sh + ask.ts --json) would have shipped because they were silent;
+the retrieval gap would have shipped because no one asks ICO their own
+questions against their own docs. v0.1 dog-food session 2 found a P1
+ICO bug in ~30 minutes of operator time.
+
+### Next session priorities
+
+- Fix `fmo` (ICO retrieval gap). Either loosen analyzeQuestion's FTS5
+  query, strip dashes/punctuation before tokenizing, or add a broaden
+  fallback when direct match returns empty.
+- Re-run the v1 bank against the (then-fixed) ICO. Compare verify-rate
+  to this session's 0% baseline — expect 60%+.
+- If retrieval is still too narrow on Q03-Q05 (the cross-doc synthesis
+  questions), consider whether the bank should be split into a "v1
+  simple" and "v1 synthesis" tier so we get gradient signal rather
+  than binary pass/fail.

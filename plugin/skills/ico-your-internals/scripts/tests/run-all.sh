@@ -17,6 +17,14 @@ fi
 
 echo
 echo "==============================================="
+echo "  test_run_sh.sh"
+echo "==============================================="
+if ! "$SCRIPT_DIR/test_run_sh.sh"; then
+  OVERALL=1
+fi
+
+echo
+echo "==============================================="
 echo "  test_verify.py"
 echo "==============================================="
 if ! python3 -m unittest "$SCRIPT_DIR/test_verify.py" -v 2>&1; then
