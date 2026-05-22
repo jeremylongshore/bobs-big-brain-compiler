@@ -223,30 +223,55 @@ const STOP_WORDS = new Set([
 ]);
 
 /**
+ * Extract content-bearing tokens from a question, ready for FTS5 query
+ * construction. Lowercased, stop-words removed, possessives normalized
+ * (`core's` → `core`), short tokens dropped.
+ *
+ * Returns `[]` when nothing meaningful remains.
+ */
+function extractTokens(question: string): string[] {
+  // Replace hyphens and other FTS5 operators/punctuation with spaces.
+  // Hyphens are parsed as boolean NOT by FTS5 (`a-b` → `a NOT b`).
+  const cleaned = question.replace(/[-"*()^?!]/g, ' ').toLowerCase();
+  return cleaned
+    .split(/\s+/)
+    .map((t) => {
+      // Normalize possessives BEFORE stripping non-word chars so `core's`
+      // becomes `core`, not `cores` (the v0.1 dog-food run's possessive bug).
+      const noPossessive = t.replace(/['']s\b/g, '');
+      return noPossessive.replace(/[^\w]/g, '');
+    })
+    .filter((t) => t.length >= 2 && !STOP_WORDS.has(t));
+}
+
+/**
  * Prepare a question string as an FTS5 query.
  *
- * Steps:
- *   1. Strip FTS5 special characters and replace hyphens with spaces
- *      (hyphens are parsed as boolean NOT by FTS5: `a-b` → `a NOT b`).
- *   2. Lowercase and split on whitespace.
- *   3. Remove stop words and tokens shorter than 2 characters.
- *   4. Join remaining tokens with spaces (FTS5 implicit AND).
+ * Returns BOTH a strict (AND-joined, high-precision) form and a broad
+ * (OR-joined, high-recall) form, so {@link analyzeQuestion} can try the
+ * strict query first and fall back to the broad one when the strict query
+ * returns zero results.
+ *
+ * Why both: v0.1 dog-food (bead `fmo`) showed that sophisticated multi-
+ * clause questions accumulate too many residual tokens — no single page
+ * contains ALL of them, so the AND query returns zero rows even though
+ * pages with strong topical relevance exist. OR retrieves them and FTS5's
+ * bm25 ranking surfaces the most-matching pages first.
  *
  * Returns `null` when no content tokens remain after filtering.
  */
-function buildFtsQuery(question: string): string | null {
-  // Replace hyphens and other FTS5 operators/punctuation with spaces.
-  const cleaned = question.replace(/[-"*()^?!]/g, ' ').toLowerCase();
-  const tokens = cleaned
-    .split(/\s+/)
-    .map((t) => t.replace(/[^\w]/g, '')) // keep only word chars
-    .filter((t) => t.length >= 2 && !STOP_WORDS.has(t));
-
+function buildFtsQuery(question: string): { strict: string; broad: string } | null {
+  const tokens = extractTokens(question);
   if (tokens.length === 0) {
     return null;
   }
-
-  return tokens.join(' ');
+  // Quote each token so FTS5 treats them as literals (avoids the rare case
+  // of a token accidentally being a reserved keyword like `AND` / `OR`).
+  const quoted = tokens.map((t) => `"${t}"`);
+  return {
+    strict: quoted.join(' '), // implicit AND
+    broad: quoted.join(' OR '),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -281,10 +306,24 @@ export function analyzeQuestion(
     return err(new Error('Question contains no searchable terms after stop-word removal'));
   }
 
-  const searchResult = searchPages(db, ftsQuery, 10);
-  if (!searchResult.ok) {
-    // FTS5 may throw on malformed queries; surface a friendly error.
-    return err(new Error(`Search failed: ${searchResult.error.message}`));
+  // Try the high-precision AND query first. If it returns ≥ 1 row we
+  // keep those — bm25 ranking is meaningful and the pages are tightly
+  // matched. If it returns 0 rows (the fmo case), fall back to the
+  // broader OR query so a sophisticated question still surfaces topical
+  // pages instead of bailing to "no compiled knowledge".
+  const strictResult = searchPages(db, ftsQuery.strict, 10);
+  if (!strictResult.ok) {
+    return err(new Error(`Search failed: ${strictResult.error.message}`));
+  }
+
+  let relevantPages = strictResult.value;
+  if (relevantPages.length === 0) {
+    const broadResult = searchPages(db, ftsQuery.broad, 10);
+    if (!broadResult.ok) {
+      // OR query syntax is broader; if even that fails, surface the error.
+      return err(new Error(`Search failed: ${broadResult.error.message}`));
+    }
+    relevantPages = broadResult.value;
   }
 
   const type = classifyQuestion(question);
@@ -293,7 +332,7 @@ export function analyzeQuestion(
   return ok({
     originalQuestion: question,
     type,
-    relevantPages: searchResult.value,
+    relevantPages,
     suggestResearch,
   });
 }

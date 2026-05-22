@@ -1,0 +1,12 @@
+{
+  "run_id": "2026-05-22T0257Z-intent-eval-core-v1-postfmo",
+  "target": "/home/jeremy/000-projects/intent-eval-platform/intent-eval-core",
+  "target_slug": "intent-eval-core",
+  "bank_path": "/home/jeremy/000-projects/intentional-cognition-os/dogfood/question-banks/intent-eval-core-v1.yaml",
+  "bank_version": "v1",
+  "ico_version": "1.2.3+fmo",
+  "started_at": "2026-05-22T02:57:00Z",
+  "workspace": "/home/jeremy/.cache/ico-your-internals/runs/2026-05-22T0056Z-intent-eval-core-v1/intent-eval-core",
+  "public_dir": "/home/jeremy/000-projects/intentional-cognition-os/dogfood/runs/2026-05-22T0257Z-intent-eval-core-v1-postfmo",
+  "note": "post-fmo-fix retest against the same compiled workspace as 2026-05-22T0056Z"
+}
