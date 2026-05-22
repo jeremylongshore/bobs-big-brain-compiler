@@ -271,9 +271,10 @@ export async function runAsk(
     // -----------------------------------------------------------------------
     // Progress indicator on stderr so --json output stays a single line on
     // stdout for parsers like the ico-your-internals dog-food orchestrator.
-    if (globalOpts.json !== true) {
-      process.stdout.write(dim('Generating answer...') + '\n');
-    }
+    // Always stderr — progress belongs there regardless of --json. Gating on
+    // !json would leave a stdout artifact in pretty mode that interactive
+    // shells already render fine via stderr.
+    process.stderr.write(dim('Generating answer...') + '\n');
 
     const generateResult = await generateAnswer(client, question, pagesWithContent, {
       model,

@@ -40,6 +40,22 @@ EOF
 # A dummy ANTHROPIC_API_KEY satisfies preflight without exposing real creds.
 export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-test-key-for-dry-run-only}"
 
+# Stub `ico` so run.sh's preflight passes on CI runners that don't have the
+# global package installed. The stub only needs to handle `ico --version`
+# (the only ico call before --dry exits). All other ico subcommands are
+# unreachable in --dry mode.
+STUB_BIN="$TMP/stub-bin"
+mkdir -p "$STUB_BIN"
+cat > "$STUB_BIN/ico" <<'STUB'
+#!/usr/bin/env bash
+case "$1" in
+  --version) echo "0.0.0-stub" ;;
+  *)         echo "stub ico called with: $*" >&2; exit 2 ;;
+esac
+STUB
+chmod +x "$STUB_BIN/ico"
+export PATH="$STUB_BIN:$PATH"
+
 # test 1: --dry mode runs without invoking ico subcommands beyond version
 echo "test 1: --dry mode completes cleanly without Claude calls"
 DRY_OUT="$("$RUN_SH" --target "$TARGET" --bank "$BANK" --repo-root "$TMP" --dry 2>&1)" || {
