@@ -580,5 +580,236 @@ class TestWikiPathResolution(unittest.TestCase):
             self.assertIn("ICO", entry.get("reason", ""))
 
 
+class TestParaphraseVariance(unittest.TestCase):
+    """v0.2 paraphrase_robustness metric — see ADR-030.
+
+    paraphrase_robustness = (# paraphrases that surfaced ≥1 VERIFIED citation)
+                          / (# paraphrases run in this execution)
+
+    Receipts in v0.2 carry intent_id + paraphrase_idx + paraphrase_text +
+    paraphrase_style. verify.py must group citations by (intent_id,
+    paraphrase_idx) and emit the new aggregate in verify-summary.json
+    side-by-side with verify_rate (NEVER composited)."""
+
+    def test_paraphrase_robustness_appears_in_summary(self):
+        """The new field must be present in verify-summary.json alongside
+        verify_rate. Side-by-side reporting per ADR-030."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = pathlib.Path(tmpdir)
+            target = tmp / "target"
+            target.mkdir()
+            (target / "doc.md").write_text("contains marker_a\n")
+
+            run_id = make_run(
+                tmp,
+                target,
+                [
+                    {
+                        "run_id": "test-run",
+                        "intent_id": "Q01",
+                        "paraphrase_idx": 0,
+                        "paraphrase_text": "What does it do?",
+                        "paraphrase_style": "direct",
+                        "q_id": "Q01",  # carried for v1-compat readers
+                        "question": "What does it do?",
+                        "answer": "",
+                        "citations": [{"source": "doc.md"}],
+                        "expected_substrings": ["marker_a"],
+                    }
+                ],
+            )
+            summary = run_verify(tmp, run_id, target)
+            self.assertIn("paraphrase_robustness", summary)
+            self.assertIn("verify_rate", summary)
+            self.assertNotIn(
+                "combined_score",
+                summary,
+                "ADR-030 forbids compositing the two metrics",
+            )
+
+    def test_all_paraphrases_verified_yields_robustness_1(self):
+        """Two paraphrases, both surface ≥1 VERIFIED citation → 1.0."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = pathlib.Path(tmpdir)
+            target = tmp / "target"
+            target.mkdir()
+            (target / "doc.md").write_text("contains marker_a inside\n")
+
+            receipts = [
+                {
+                    "run_id": "test-run",
+                    "intent_id": "Q01",
+                    "paraphrase_idx": idx,
+                    "paraphrase_text": f"phrasing {idx}",
+                    "paraphrase_style": "direct",
+                    "q_id": "Q01",
+                    "question": f"phrasing {idx}",
+                    "answer": "",
+                    "citations": [{"source": "doc.md"}],
+                    "expected_substrings": ["marker_a"],
+                }
+                for idx in (0, 1)
+            ]
+            run_id = make_run(tmp, target, receipts)
+            summary = run_verify(tmp, run_id, target)
+            self.assertEqual(summary["paraphrase_robustness"], 1.0)
+            self.assertEqual(summary["paraphrases_run"], 2)
+            self.assertEqual(summary["paraphrases_robust"], 2)
+
+    def test_one_of_two_paraphrases_robust(self):
+        """Same intent, two paraphrases — one verifies, one doesn't.
+        Robustness = 0.5. verify_rate is a separate quantity."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = pathlib.Path(tmpdir)
+            target = tmp / "target"
+            target.mkdir()
+            (target / "good.md").write_text("contains marker_a\n")
+            (target / "miss.md").write_text("does not contain it\n")
+
+            receipts = [
+                {
+                    "run_id": "test-run",
+                    "intent_id": "Q01",
+                    "paraphrase_idx": 0,
+                    "paraphrase_text": "good phrasing",
+                    "paraphrase_style": "direct",
+                    "q_id": "Q01",
+                    "question": "?",
+                    "answer": "",
+                    "citations": [{"source": "good.md"}],
+                    "expected_substrings": ["marker_a"],
+                },
+                {
+                    "run_id": "test-run",
+                    "intent_id": "Q01",
+                    "paraphrase_idx": 1,
+                    "paraphrase_text": "bad phrasing",
+                    "paraphrase_style": "leading",
+                    "q_id": "Q01",
+                    "question": "?",
+                    "answer": "",
+                    "citations": [{"source": "miss.md"}],
+                    "expected_substrings": ["marker_a"],
+                },
+            ]
+            run_id = make_run(tmp, target, receipts)
+            summary = run_verify(tmp, run_id, target)
+            self.assertEqual(summary["paraphrase_robustness"], 0.5)
+            self.assertEqual(summary["paraphrases_run"], 2)
+            self.assertEqual(summary["paraphrases_robust"], 1)
+
+    def test_paraphrase_robust_when_any_citation_under_it_verifies(self):
+        """A paraphrase counts as robust if AT LEAST ONE of its citations
+        verifies — not all of them. Numerator semantics per ADR-030."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = pathlib.Path(tmpdir)
+            target = tmp / "target"
+            target.mkdir()
+            (target / "good.md").write_text("contains marker_a\n")
+            (target / "miss.md").write_text("no match\n")
+
+            run_id = make_run(
+                tmp,
+                target,
+                [
+                    {
+                        "run_id": "test-run",
+                        "intent_id": "Q01",
+                        "paraphrase_idx": 0,
+                        "paraphrase_text": "p0",
+                        "paraphrase_style": "direct",
+                        "q_id": "Q01",
+                        "question": "?",
+                        "answer": "",
+                        "citations": [
+                            {"source": "good.md"},
+                            {"source": "miss.md"},
+                            {"source": "ghost.md"},  # unverified
+                        ],
+                        "expected_substrings": ["marker_a"],
+                    }
+                ],
+            )
+            summary = run_verify(tmp, run_id, target)
+            self.assertEqual(summary["paraphrase_robustness"], 1.0)
+            self.assertEqual(summary["paraphrases_robust"], 1)
+            # And the citation-level metric still reports the mixed result.
+            self.assertEqual(summary["verified"], 1)
+            self.assertEqual(summary["challenged"], 1)
+            self.assertEqual(summary["unverified"], 1)
+
+    def test_per_paraphrase_emit_in_verifications_jsonl(self):
+        """Every verification line must carry intent_id + paraphrase_idx +
+        paraphrase_style so render-summary can group by them downstream."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = pathlib.Path(tmpdir)
+            target = tmp / "target"
+            target.mkdir()
+            (target / "doc.md").write_text("contains marker_a\n")
+
+            run_id = make_run(
+                tmp,
+                target,
+                [
+                    {
+                        "run_id": "test-run",
+                        "intent_id": "Q01",
+                        "paraphrase_idx": 2,
+                        "paraphrase_text": "phrasing 2",
+                        "paraphrase_style": "leading",
+                        "q_id": "Q01",
+                        "question": "?",
+                        "answer": "",
+                        "citations": [{"source": "doc.md"}],
+                        "expected_substrings": ["marker_a"],
+                    }
+                ],
+            )
+            run_verify(tmp, run_id, target)
+            entry = json.loads(
+                (tmp / "cache" / run_id / "verifications.jsonl").read_text().strip()
+            )
+            self.assertEqual(entry["intent_id"], "Q01")
+            self.assertEqual(entry["paraphrase_idx"], 2)
+            self.assertEqual(entry["paraphrase_style"], "leading")
+
+
+class TestV1ReceiptCompat(unittest.TestCase):
+    """v1 receipts (no intent_id / paraphrase_idx fields) must produce
+    an equivalent summary to v2 receipts where each q_id maps to a single
+    synthetic paraphrase (idx=0). Backward-compat invariant per the v0.2
+    rollout plan — pre-v0.2 receipts in the field still verify correctly."""
+
+    def test_v1_receipts_produce_equivalent_summary(self):
+        """A v1-shape receipt (no intent_id/paraphrase_idx) is treated as
+        intent_id=q_id, paraphrase_idx=0. Robustness math still works."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = pathlib.Path(tmpdir)
+            target = tmp / "target"
+            target.mkdir()
+            (target / "doc.md").write_text("contains marker_a\n")
+
+            run_id = make_run(
+                tmp,
+                target,
+                [
+                    {
+                        "run_id": "test-run",
+                        # No intent_id, no paraphrase_idx — pure v1 shape.
+                        "q_id": "Q01",
+                        "question": "?",
+                        "answer": "",
+                        "citations": [{"source": "doc.md"}],
+                        "expected_substrings": ["marker_a"],
+                    }
+                ],
+            )
+            summary = run_verify(tmp, run_id, target)
+            self.assertEqual(summary["paraphrase_robustness"], 1.0)
+            self.assertEqual(summary["paraphrases_run"], 1)
+            self.assertEqual(summary["paraphrases_robust"], 1)
+            self.assertEqual(summary["verify_rate"], 1.0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
