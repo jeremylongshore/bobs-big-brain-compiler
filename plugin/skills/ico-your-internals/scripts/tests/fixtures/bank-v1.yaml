@@ -1,0 +1,20 @@
+# Test fixture: v1-shape bank (one question per intent).
+# Used to verify bank.py's backward-compat path: a v1 file loads as
+# "one intent with a single synthetic primary paraphrase".
+
+version: v1
+target: fixture-target
+authored: 2026-05-22
+author: test-fixture
+
+questions:
+  - id: Q01
+    question: |
+      What does the fixture do?
+    expected_substrings:
+      - 'fixture'
+    expected_sources:
+      - README.md
+    verification_mode: strong
+    notes: |
+      Single-question fixture for legacy-shape load tests.
