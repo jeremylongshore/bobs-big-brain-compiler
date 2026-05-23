@@ -7,6 +7,10 @@ Version numbers follow the blueprint version, not the software release.
 
 ## [Unreleased]
 
+### Changed
+
+- **Bead naming convention shifted to plain English** (2026-05-22). The `E{N}-B{NN}` title prefix from 014-OD-BEAD v1.0.0 and the `epic:N` / `type:X` label conventions are retired for all new beads. Titles are full sentences describing the work; labels are 1–3 plain-English topic words; parent epics are full sentences naming the cluster. The six v0.2-era beads with autogen-only titles (`er2`, `ytq`, `7xp`, `p6w`, `nwh`, `x5r`) were retitled or superseded as part of bringing the convention into force. 014-OD-BEAD remains historically valid for the original ~133 beads. Canonical write-up: [033-OD-BEAD-conventions-post-v1-addendum.md](033-OD-BEAD-conventions-post-v1-addendum.md). Global mirror in `~/.claude/CLAUDE.md` § "Bead naming — plain English only".
+
 ## [Standards Freeze v1] — 2026-04-06
 
 ### Added
