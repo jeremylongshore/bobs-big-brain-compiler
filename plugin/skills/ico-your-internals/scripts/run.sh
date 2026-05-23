@@ -16,31 +16,41 @@ set -euo pipefail
 
 usage() {
   cat <<EOF >&2
-usage: $(basename "$0") --target <path> --bank <bank.yaml> [--repo-root <path>] [--dry]
+usage: $(basename "$0") --target <path> --bank <bank.yaml> [--repo-root <path>]
+                       [--paraphrases primary|all] [--dry]
 
-  --target     Absolute or ~-relative path to the project being dog-fooded.
-  --bank       Path to a question-bank YAML.
-  --repo-root  Path to the intentional-cognition-os repo root.
-               Defaults to the parent of this script's plugin/ directory.
-  --dry        Plan + budget estimate only; no Claude calls, no writes.
+  --target        Absolute or ~-relative path to the project being dog-fooded.
+  --bank          Path to a question-bank YAML (v1 or v2 schema).
+  --repo-root     Path to the intentional-cognition-os repo root.
+                  Defaults to the parent of this script's plugin/ directory.
+  --paraphrases   primary (default) — one ask per intent (the primary
+                  paraphrase). Cost-equivalent to v0.1.
+                  all — every declared paraphrase per intent. Cost scales
+                  with paraphrase count. See ADR-032.
+  --dry           Plan + budget estimate only; no Claude calls, no writes.
 EOF
   exit 2
 }
 
 # --- args ---
-TARGET="" BANK="" REPO_ROOT="" DRY=0
+TARGET="" BANK="" REPO_ROOT="" DRY=0 PARAPHRASES="primary"
 while [ $# -gt 0 ]; do
   case "$1" in
-    --target)    TARGET="$2"; shift 2 ;;
-    --bank)      BANK="$2"; shift 2 ;;
-    --repo-root) REPO_ROOT="$2"; shift 2 ;;
-    --dry)       DRY=1; shift ;;
-    -h|--help)   usage ;;
-    *)           echo "unknown arg: $1" >&2; usage ;;
+    --target)       TARGET="$2"; shift 2 ;;
+    --bank)         BANK="$2"; shift 2 ;;
+    --repo-root)    REPO_ROOT="$2"; shift 2 ;;
+    --paraphrases)  PARAPHRASES="$2"; shift 2 ;;
+    --dry)          DRY=1; shift ;;
+    -h|--help)      usage ;;
+    *)              echo "unknown arg: $1" >&2; usage ;;
   esac
 done
 
 [ -n "$TARGET" ] && [ -n "$BANK" ] || usage
+case "$PARAPHRASES" in
+  primary|all) ;;
+  *) echo "--paraphrases must be 'primary' or 'all' (got: $PARAPHRASES)" >&2; exit 2 ;;
+esac
 
 # Resolve script dir / repo root if not given
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -99,12 +109,21 @@ mkdir -p "$CACHE_ROOT" "$PUB_DIR"
 
 # --- budget estimate ---
 echo "[ico-your-internals] estimating budget…" >&2
-BUDGET_JSON="$("$SCRIPT_DIR/estimate-budget.sh" "$TARGET" "$BANK")"
+BUDGET_JSON="$("$SCRIPT_DIR/estimate-budget.sh" "$TARGET" "$BANK" "$PARAPHRASES")"
 echo "$BUDGET_JSON" | tee "$CACHE_ROOT/budget.json" >&2
+
+# ask-loop.py knows how to count paraphrases under each mode — the plan
+# subcommand reads the same bank.py code path the real run uses, so the
+# count surfaced in --dry matches exactly what the real run would execute.
+ASKS_PLANNED="$(python3 "$SCRIPT_DIR/ask-loop.py" plan "$BANK" "$PARAPHRASES")" || {
+  echo "[ico-your-internals] failed to compute asks_planned (bank parse error?)" >&2
+  exit 3
+}
+echo "[ico-your-internals] paraphrases mode='$PARAPHRASES' → asks_planned=$ASKS_PLANNED" >&2
 
 if [ "$DRY" -eq 1 ]; then
   echo "[ico-your-internals] --dry: stopping after budget estimate" >&2
-  echo "{\"run_id\":\"$RUN_ID\",\"target\":\"$TARGET\",\"bank\":\"$BANK\",\"workspace\":\"$WS\",\"dry\":true}"
+  echo "{\"run_id\":\"$RUN_ID\",\"target\":\"$TARGET\",\"bank\":\"$BANK\",\"workspace\":\"$WS\",\"paraphrases_mode\":\"$PARAPHRASES\",\"asks_planned\":$ASKS_PLANNED,\"dry\":true}"
   exit 0
 fi
 
@@ -119,7 +138,9 @@ cat > "$CACHE_ROOT/manifest.json" <<EOF
   "ico_version": "$(ico --version 2>/dev/null || echo unknown)",
   "started_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "workspace": "$WS",
-  "public_dir": "$PUB_DIR"
+  "public_dir": "$PUB_DIR",
+  "paraphrases_mode": "$PARAPHRASES",
+  "asks_planned": $ASKS_PLANNED
 }
 EOF
 cp "$CACHE_ROOT/manifest.json" "$PUB_DIR/manifest.json"
@@ -177,76 +198,17 @@ for pass in sources concepts topics links contradictions gaps; do
 done
 
 # --- ask loop ---
-echo "[ico-your-internals] ask loop…" >&2
+# The ask phase lives in ask-loop.py — extracted from the v0.1 inline
+# heredoc so the v0.2 paraphrase-aware loop is readable and unit-testable.
+# Receipts are written with v0.2 fields (intent_id, paraphrase_idx,
+# paraphrase_text, paraphrase_style) regardless of bank version; v1 banks
+# produce one synthetic primary paraphrase per intent (style=legacy).
+echo "[ico-your-internals] ask loop ($ASKS_PLANNED asks, mode=$PARAPHRASES)…" >&2
 
-python3 - "$BANK" "$WS" "$CACHE_ROOT" "$PUB_DIR" "$RUN_ID" <<'PY'
-import json, pathlib, subprocess, sys, time, yaml
-
-bank_path, ws, cache_root, pub_dir, run_id = sys.argv[1:6]
-bank = yaml.safe_load(pathlib.Path(bank_path).read_text())
-
-receipts_path = pathlib.Path(cache_root) / "receipts.jsonl"
-friction_path = pathlib.Path(pub_dir) / "friction.jsonl"
-
-for q in bank.get("questions", []):
-    q_id = q["id"]
-    question = q["question"]
-    started = time.time()
-    try:
-        # IMPORTANT: --workspace and --json are GLOBAL flags. They go BEFORE
-        # the subcommand. `ico ask "..." --workspace ... --json` silently
-        # drops both flags and falls back to defaults.
-        result = subprocess.run(
-            ["ico", "--workspace", ws, "--json", "ask", question],
-            capture_output=True, text=True, timeout=180,
-        )
-    except subprocess.TimeoutExpired:
-        friction_path.open("a").write(json.dumps({
-            "run_id": run_id, "q_id": q_id, "stage": "ask",
-            "severity": "error", "message": "ico ask timed out (>180s)",
-            "recommend_bead": True,
-        }) + "\n")
-        continue
-    elapsed_ms = int((time.time() - started) * 1000)
-
-    if result.returncode != 0:
-        friction_path.open("a").write(json.dumps({
-            "run_id": run_id, "q_id": q_id, "stage": "ask",
-            "severity": "error",
-            "message": (result.stderr or "ico ask non-zero exit").strip().splitlines()[-1],
-            "exit_code": result.returncode, "recommend_bead": True,
-        }) + "\n")
-        continue
-
-    # Parse the JSON response. The exact shape depends on ico's --json output;
-    # the receipt below is defensive against unknown fields.
-    try:
-        payload = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        friction_path.open("a").write(json.dumps({
-            "run_id": run_id, "q_id": q_id, "stage": "ask",
-            "severity": "error", "message": "ico ask returned non-JSON stdout",
-            "recommend_bead": True,
-        }) + "\n")
-        continue
-
-    receipt = {
-        "run_id": run_id,
-        "q_id": q_id,
-        "question": question,
-        "answer": payload.get("answer", ""),
-        "citations": payload.get("citations", []),
-        "trace_correlation_id": payload.get("correlation_id"),
-        "tokens_in": payload.get("tokens_in"),
-        "tokens_out": payload.get("tokens_out"),
-        "latency_ms": elapsed_ms,
-        "model": payload.get("model"),
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "expected_substrings": q.get("expected_substrings", []),
-        "expected_sources": q.get("expected_sources", []),
-    }
-    receipts_path.open("a").write(json.dumps(receipt) + "\n")
-PY
+python3 "$SCRIPT_DIR/ask-loop.py" "$BANK" "$WS" "$CACHE_ROOT" "$PUB_DIR" "$RUN_ID" "$PARAPHRASES" || {
+  echo "[ico-your-internals] ask-loop.py exited non-zero" >&2
+  exit 1
+}
 
 echo "[ico-your-internals] receipts written → $CACHE_ROOT/receipts.jsonl" >&2
 echo "[ico-your-internals] next: $SCRIPT_DIR/verify.py $RUN_ID" >&2

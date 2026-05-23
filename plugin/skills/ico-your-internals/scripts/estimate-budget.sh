@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
 # estimate-budget.sh — rough token + cost estimate for a dog-food run.
 #
-# Usage: estimate-budget.sh <target-path> <bank.yaml>
+# Usage: estimate-budget.sh <target-path> <bank.yaml> [paraphrases-mode]
+#
+#   paraphrases-mode  primary (default) | all
+#                     'all' multiplies Q-allowance by paraphrase count.
 #
 # Outputs JSON to stdout:
 #   { "md_files": N, "words": N, "input_tokens_est": N, "questions": N,
+#     "paraphrases_mode": "...", "asks_est": N,
 #     "qa_tokens_est": N, "total_tokens_est": N, "dollar_est": "0.XX" }
 #
 # Math (deliberately conservative — meant as an upper bound):
 #   words            = total words across .md files in target
 #   input_tokens_est = words * 1.3                       (1 word ~= 1.3 tokens)
 #   compile_tokens   = input_tokens_est * 6              (six compiler passes)
-#   qa_tokens_est    = questions * 4000                  (4k tokens per Q allowance)
+#   asks_est         = questions (mode=primary) | total paraphrases (mode=all)
+#   qa_tokens_est    = asks_est * 4000                   (4k tokens per ask allowance)
 #   total            = compile_tokens + qa_tokens_est
 #   $ est            = total * $3 / 1M (Sonnet rough avg of input + output)
 #
@@ -20,8 +25,9 @@
 
 set -euo pipefail
 
-target="${1:?usage: estimate-budget.sh <target-path> <bank.yaml>}"
-bank="${2:?usage: estimate-budget.sh <target-path> <bank.yaml>}"
+target="${1:?usage: estimate-budget.sh <target-path> <bank.yaml> [paraphrases-mode]}"
+bank="${2:?usage: estimate-budget.sh <target-path> <bank.yaml> [paraphrases-mode]}"
+paraphrases_mode="${3:-primary}"
 
 [ -d "$target" ] || { echo "target not a directory: $target" >&2; exit 1; }
 [ -f "$bank" ]   || { echo "bank not a file: $bank" >&2; exit 1; }
@@ -50,10 +56,28 @@ questions=$(grep -c "^  - id:" "$bank" 2>/dev/null || echo 0)
 questions="${questions//[^0-9]/}"
 questions="${questions:-0}"
 
+# Paraphrase-aware ask count. Under 'primary' there's exactly one ask per
+# intent. Under 'all' we count every `text:` line under a paraphrases:
+# block. This is a heuristic — bank.py is the source of truth at runtime —
+# but it's enough for an upper-bound budget estimate.
+if [ "$paraphrases_mode" = "all" ]; then
+  paraphrase_lines=$(grep -cE "^      - text:" "$bank" 2>/dev/null || echo 0)
+  paraphrase_lines="${paraphrase_lines//[^0-9]/}"
+  paraphrase_lines="${paraphrase_lines:-0}"
+  if [ "$paraphrase_lines" -gt 0 ]; then
+    asks_est="$paraphrase_lines"
+  else
+    # v1 bank — no paraphrases blocks, fall back to question count.
+    asks_est="$questions"
+  fi
+else
+  asks_est="$questions"
+fi
+
 # Math
 input_tokens_est=$(( words * 13 / 10 ))
 compile_tokens=$(( input_tokens_est * 6 ))
-qa_tokens_est=$(( questions * 4000 ))
+qa_tokens_est=$(( asks_est * 4000 ))
 total_tokens_est=$(( compile_tokens + qa_tokens_est ))
 
 # Sonnet 4.6 rough avg pricing $3 input + $15 output / 1M tokens; assume 80/20 split
@@ -71,6 +95,8 @@ cat <<EOF
   "input_tokens_est": $input_tokens_est,
   "compile_tokens_est": $compile_tokens,
   "questions": $questions,
+  "paraphrases_mode": "$paraphrases_mode",
+  "asks_est": $asks_est,
   "qa_tokens_est": $qa_tokens_est,
   "total_tokens_est": $total_tokens_est,
   "dollar_est": "$dollar_est",
