@@ -450,3 +450,71 @@ None blocking. Surfaced one minor follow-up:
   decide on v0.2 of the bank
 - OR: skip ahead to v0.2 — add paraphrase variance to the bank schema
   per the question-bank-spec, get more granular signal
+
+---
+
+## 2026-05-22 — session 5: v0.2 schema lands (paraphrase variance) — code shipped, real-API run pending
+
+**Target**: `intent-eval-core` (unchanged from sessions 2–4)
+**Question bank**: `intent-eval-core-v2.yaml` (NEW — 5 intents × 5 paraphrases). v1 stays untouched per ADR-031.
+**Run id**: pending — placeholder until the post-PR-review acceptance run lands.
+
+### What changed
+
+The v0.2 work introduces phrasing-sensitivity as a first-class probe. After
+sessions 2–4 surfaced two real bugs (fmo + h99) on the v0.1 5-question bank,
+the next class of bugs to find is phrasing-brittleness — does ICO still
+engage when the same intent is asked differently? Unknown until measured.
+
+Four commits land on `feat/dogfood-v0.2-paraphrases`:
+
+1. `bank.py` schema library + ADRs 029–032. Backward-compatible — v1 banks
+   load as "one synthetic primary paraphrase per intent, style=legacy".
+2. `paraphrase_robustness` metric in `verify.py`. Reported side-by-side with
+   `verify_rate` per ADR-030, never composited.
+3. `ask-loop.py` extraction + `--paraphrases primary|all` flag in `run.sh`.
+   Default `primary` mode preserves v0.1 cost shape ($0.20/run).
+4. Docs (question-bank-spec, receipt-schema, progress.md schema) +
+   production `intent-eval-core-v2.yaml`.
+
+Cumulative script test count: 61 (15 budget + 21 run_sh + 17 verify + 6 bank
+
+- 2 render-summary).
+
+### Acceptance run (pending — placeholder)
+
+The real-API run goes after PR review:
+
+```
+plugin/skills/ico-your-internals/scripts/run.sh \
+    --target ~/000-projects/intent-eval-platform/intent-eval-core \
+    --bank dogfood/question-banks/intent-eval-core-v2.yaml \
+    --paraphrases all
+```
+
+Cost estimate: ~$1 (5 intents × 5 paraphrases × ~4k tokens). Gates:
+
+- `paraphrase_robustness ≥ 60%` — if 5/5 phrasings of every intent
+  hit no-knowledge, fmo regressed.
+- `verify_rate ≥ 30%` — regression gate against the 46.4% post-h99 baseline.
+
+This entry gets a real-numbers commit once the acceptance run completes.
+
+### Bugs filed this session
+
+- `intentional-cognition-os-nwh` (P3) — CI gap: plugin scripts (.sh / .py)
+  have no shellcheck / ruff coverage.
+- `intentional-cognition-os-x5r` (P3) — Test coverage audit: identify obvious
+  test gaps across the repo.
+
+### Bugs fixed this session
+
+None — this is feature work, not a bug fix cycle.
+
+### Next session priorities
+
+- Run the acceptance test (~$1, ~5 min runtime).
+- Inspect any new paraphrase styles that systematically fail.
+- File beads for any fmo-family or new-paradigm bugs surfaced by the v2 bank.
+- Possibly: start a v0.3 design conversation around per-paraphrase
+  `expected_substrings` overrides and `citation_jaccard_across_paraphrases`.

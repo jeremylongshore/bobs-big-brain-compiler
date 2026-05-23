@@ -21,6 +21,15 @@ dog-food signal. Examples of what belongs here: first non-zero verify-
 rate, a step change in friction-count, an ICO bug fix that unblocks a
 class of questions, a new target type successfully exercised.
 
+- **2026-05-22 — v0.2 schema lands (intent + paraphrases-as-list-of-dicts)**:
+  question banks gain paraphrase variance. New headline metric
+  `paraphrase_robustness` joins `verify_rate` side-by-side in the trend
+  table (never composited — per ADR-030). New runtime flag
+  `--paraphrases primary|all` selects cheap-default vs full-probe mode.
+  Production bank `intent-eval-core-v2.yaml` introduces 5 intents × 5
+  paraphrases. ADRs 029–032 record the architectural decisions; bank.py
+  - ask-loop.py + verify.py paraphrase aggregation land alongside.
+    First real-API v2 acceptance run pending.
 - **2026-05-22 — h99 fix lands, first meaningful verify-rate**: re-ran verify.py
   against the post-fmo data after the workspace-rooted citation resolution
   fix. **verify_rate climbed 0% → 46.4%** (13 of 28 citations VERIFIED via
@@ -42,7 +51,7 @@ class of questions, a new target type successfully exercised.
 
 ## Trend
 
-| run_id                                       | target           | qs  | citations | verified | verify_rate | tokens | friction | notes                                                                                                                                                         |
-| -------------------------------------------- | ---------------- | --- | --------- | -------- | ----------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-05-22T0056Z-intent-eval-core-v1         | intent-eval-core | 5   | 0         | 0        | 0.0%        | 0      | 1        | [summary](runs/2026-05-22T0056Z-intent-eval-core-v1/summary.md) — every question hit ICO's no-knowledge fallback (analyzeQuestion retrieval gap)              |
-| 2026-05-22T0257Z-intent-eval-core-v1-postfmo | intent-eval-core | 5   | 28        | 13       | 46.4%       | 48019  | 0        | [summary](runs/2026-05-22T0257Z-intent-eval-core-v1-postfmo/summary.md) — initial 0% was misleading per h99; updated after the workspace-rooted verify.py fix |
+| run_id                                       | target           | intents | paraphrases | citations | verified | verify_rate | paraphrase_robustness | tokens | friction | notes                                                                                                                                                         |
+| -------------------------------------------- | ---------------- | ------- | ----------- | --------- | -------- | ----------- | --------------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-05-22T0056Z-intent-eval-core-v1         | intent-eval-core | 5       | 5           | 0         | 0        | 0.0%        | —                     | 0      | 1        | [summary](runs/2026-05-22T0056Z-intent-eval-core-v1/summary.md) — every question hit ICO's no-knowledge fallback (analyzeQuestion retrieval gap)              |
+| 2026-05-22T0257Z-intent-eval-core-v1-postfmo | intent-eval-core | 5       | 5           | 28        | 13       | 46.4%       | —                     | 48019  | 0        | [summary](runs/2026-05-22T0257Z-intent-eval-core-v1-postfmo/summary.md) — initial 0% was misleading per h99; updated after the workspace-rooted verify.py fix |

@@ -1,0 +1,256 @@
+# Question bank: intent-eval-core v2
+#
+# v0.2 schema — intent + paraphrases-as-list-of-dicts (ADR-029).
+# Each entry probes a single intent across 5 surface phrasings (direct,
+# comparative, negative, open, leading). The point is to measure ICO's
+# robustness to phrasing variance — does it still engage with verified
+# evidence when the same intent is asked a different way?
+#
+# Authored against ~/000-projects/intent-eval-platform/intent-eval-core/
+# at 2026-05-22. Every expected_substring was verified present in at least
+# one expected_source at authoring time. Ground truth (expected_substrings,
+# expected_sources) stays PER-INTENT — paraphrases share it by definition.
+#
+# Strict rule per ADR-031: this file is immutable once it has been cited in
+# a real run. Fix typos by creating intent-eval-core-v3.yaml; never by
+# in-place editing v2.
+#
+# The 5 intents mirror the 5 questions in v1 1:1 so v1↔v2 comparisons stay
+# meaningful — same ground-truth boundary probes, just exercised across
+# 5x more phrasings.
+
+version: v2
+target: intent-eval-core
+target_path_hint: ~/000-projects/intent-eval-platform/intent-eval-core
+authored: 2026-05-22
+author: Jeremy Longshore
+
+questions:
+  - id: Q01
+    intent: |
+      Probe whether ICO can articulate intent-eval-core's foundational
+      role boundary: kernel-only, contracts-only, no runtime execution.
+      This is the load-bearing claim — get it wrong and every other
+      intent-eval-core answer is meaningless.
+    paraphrases:
+      - text: |
+          What is intent-eval-core's role inside the Intent Eval Platform,
+          and what does it explicitly not do?
+        style: direct
+        primary: true
+      - text: |
+          How does intent-eval-core differ from intent-eval-lab in terms
+          of responsibility?
+        style: comparative
+        primary: false
+      - text: |
+          What does intent-eval-core explicitly NOT do? List its
+          out-of-scope responsibilities.
+        style: negative
+        primary: false
+      - text: |
+          Could you walk me through where intent-eval-core fits in the
+          Intent Eval Platform's architecture?
+        style: open
+        primary: false
+      - text: |
+          intent-eval-core is the runtime executor for the platform's
+          evaluation jobs, right?
+        style: leading
+        primary: false
+    expected_substrings:
+      - 'kernel'
+      - 'contracts'
+      - 'no runtime'
+    expected_sources:
+      - CLAUDE.md
+      - 000-docs/002-AT-ARCH-repo-blueprint-2026-05-18.md
+      - 000-docs/003-AT-STND-core-repo-boundaries-2026-05-18.md
+    verification_mode: strong
+    recall_floor: 0.6
+    notes: |
+      The leading paraphrase is deliberately wrong (intent-eval-core is
+      NOT the runtime executor — that's intent-eval-runtime). Probes
+      whether ICO follows the leading question or corrects it from the
+      docs. A correction with citation is the best outcome; agreement
+      with the leading claim is a clear regression.
+
+  - id: Q02
+    intent: |
+      Surface-level fact check: how many canonical platform entities does
+      intent-eval-core define? The number 13 appears in CLAUDE.md and
+      README.md. If ICO hallucinates a different count, that's a clear
+      citation regression.
+    paraphrases:
+      - text: |
+          How many canonical platform entities does intent-eval-core define?
+        style: direct
+        primary: true
+      - text: |
+          What's the count of platform entities defined by intent-eval-core
+          versus the count defined by intent-eval-runtime?
+        style: comparative
+        primary: false
+      - text: |
+          Which entities does intent-eval-core NOT define? (Implies you
+          know the full set.)
+        style: negative
+        primary: false
+      - text: |
+          Tell me about the entities intent-eval-core defines.
+        style: open
+        primary: false
+      - text: |
+          intent-eval-core defines about a dozen platform entities, doesn't it?
+        style: leading
+        primary: false
+    expected_substrings:
+      - '13'
+    expected_sources:
+      - CLAUDE.md
+      - README.md
+    verification_mode: strong
+    recall_floor: 0.6
+    notes: |
+      Open and negative paraphrases test whether ICO surfaces the count
+      unprompted vs only when directly asked. Leading paraphrase ("about
+      a dozen") tests whether ICO sticks to the precise "13" from the
+      docs or rounds toward the leading framing.
+
+  - id: Q03
+    intent: |
+      Cross-doc synthesis: which document carries the NORMATIVE
+      gate-result/v1 predicate contract, and which section is it in?
+      Tests ICO's ability to follow an inherits-from chain (per-repo
+      blueprint → lab's Blueprint B) to the right authoritative source.
+    paraphrases:
+      - text: |
+          Which document carries the NORMATIVE gate-result/v1 predicate
+          contract, and which section is it in?
+        style: direct
+        primary: true
+      - text: |
+          How does intent-eval-core's predicate spec relate to Blueprint B?
+        style: comparative
+        primary: false
+      - text: |
+          Which document is NOT the source of the gate-result/v1
+          predicate spec — the per-repo blueprint or Blueprint B?
+        style: negative
+        primary: false
+      - text: |
+          Tell me about where the gate-result/v1 predicate spec lives.
+        style: open
+        primary: false
+      - text: |
+          The per-repo blueprint is the normative source for the
+          gate-result/v1 predicate, correct?
+        style: leading
+        primary: false
+    expected_substrings:
+      - 'Blueprint B'
+      - '§ 7'
+    expected_sources:
+      - CLAUDE.md
+      - 000-docs/002-AT-ARCH-repo-blueprint-2026-05-18.md
+    verification_mode: strong
+    recall_floor: 0.4
+    notes: |
+      The leading paraphrase is deliberately wrong (per-repo blueprint
+      INHERITS from Blueprint B; Blueprint B is the normative source).
+      Tests whether ICO follows the inherits-from chain even when the
+      operator's framing points elsewhere.
+
+  - id: Q04
+    intent: |
+      License + justification: what license is intent-eval-core published
+      under, and why was that choice made? Tests both surface fact
+      (Apache 2.0) and the why (README's "permissively licensed so every
+      downstream consumer can depend on it without friction").
+    paraphrases:
+      - text: |
+          What license is intent-eval-core published under, and why was
+          that choice made?
+        style: direct
+        primary: true
+      - text: |
+          How does intent-eval-core's license differ from the rest of
+          the Intent Eval Platform's licensing?
+        style: comparative
+        primary: false
+      - text: |
+          What license is intent-eval-core NOT using, and why?
+        style: negative
+        primary: false
+      - text: |
+          Walk me through the licensing decision for intent-eval-core.
+        style: open
+        primary: false
+      - text: |
+          intent-eval-core is MIT-licensed because the team prefers MIT
+          for kernel code, right?
+        style: leading
+        primary: false
+    expected_substrings:
+      - 'Apache'
+      - '2.0'
+      - 'downstream'
+    expected_sources:
+      - README.md
+      - LICENSE
+    verification_mode: strong
+    recall_floor: 0.6
+    notes: |
+      The leading paraphrase is deliberately wrong (Apache 2.0, not MIT,
+      and the rationale is about downstream consumer friction, not
+      kernel-code preference). High-signal probe.
+
+  - id: Q05
+    intent: |
+      Deepest question: articulate the source-of-truth hierarchy
+      intent-eval-core's CLAUDE.md prescribes when sources disagree,
+      listed from highest to lowest authority. Probes ability to extract
+      a 7-tier ordered list from a table inside a single source document.
+      Single-source answer (CLAUDE.md only), so this also tests citation
+      precision.
+    paraphrases:
+      - text: |
+          What is the source-of-truth hierarchy intent-eval-core's
+          CLAUDE.md prescribes when sources disagree, listed from highest
+          to lowest authority?
+        style: direct
+        primary: true
+      - text: |
+          How does the source-of-truth hierarchy in intent-eval-core
+          compare to a typical project's CONTRIBUTING.md?
+        style: comparative
+        primary: false
+      - text: |
+          What is NOT the top of the source-of-truth hierarchy in
+          intent-eval-core?
+        style: negative
+        primary: false
+      - text: |
+          Tell me how intent-eval-core resolves disagreements between
+          documentation sources.
+        style: open
+        primary: false
+      - text: |
+          intent-eval-core's source-of-truth hierarchy starts with the
+          README, doesn't it?
+        style: leading
+        primary: false
+    expected_substrings:
+      - 'bd'
+      - 'DR-010'
+      - 'Blueprint A'
+    expected_sources:
+      - CLAUDE.md
+    verification_mode: strong
+    recall_floor: 0.4
+    notes: |
+      Hardest in the bank. The hierarchy is bd → DR-010 → Blueprint A →
+      … (per CLAUDE.md table). Missing any of those three top tiers is a
+      clear regression. The leading paraphrase claims README is at the
+      top — wrong. Tests whether ICO contradicts the operator framing
+      with citation evidence.
