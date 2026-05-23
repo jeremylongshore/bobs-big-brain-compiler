@@ -383,3 +383,70 @@ the verify pipeline should report both side-by-side.
 - After h99, decide whether to widen the v0.2 bank's target (keep
   intent-eval-core for trend comparability, or jump to intent-eval-lab
   which is ~5x larger).
+
+---
+
+## 2026-05-22 — session 4: h99 fix, first meaningful verify-rate
+
+**Target**: `intent-eval-core` (same compiled workspace as sessions 2 + 3)
+**Question bank**: v1, unchanged
+**Run id**: re-verified the existing `2026-05-22T0257Z-intent-eval-core-v1-postfmo` run
+
+### Headline
+
+**verify_rate: 0% → 46.4%** on the same data. The metric is now real.
+
+### What changed
+
+`plugin/skills/ico-your-internals/scripts/verify.py`:
+
+1. **Wiki-path resolution**: citations with source starting `wiki/` now
+   resolve against the workspace cache (from `manifest.workspace`), not
+   the target tree. ICO emits compiled-wiki paths; verify.py now agrees
+   with ICO's paradigm.
+2. **ICO's `verified` flag as primary signal**: when ICO reports a
+   citation as unverified during answer generation, mark UNVERIFIED
+   immediately — don't bother greping. ICO knows whether the cited
+   title resolved to a real wiki page.
+3. **Backward compatibility**: non-`wiki/`-prefixed citations still
+   resolve against the target tree (older ICO output + other tools).
+
+5 new regression tests in `test_verify.py` under `TestWikiPathResolution`.
+3 RED, 2 pre-passing. All 11 verify.py tests now green.
+
+### Signal granularity
+
+Per-question post-h99:
+
+| Q   | ICO-verified cites | Substring hits in answer |
+| --- | ------------------ | ------------------------ |
+| Q01 | 0/11               | 2/3                      |
+| Q02 | 6/6                | 1/1                      |
+| Q03 | 6/6                | 2/2                      |
+| Q04 | 1/4                | 3/3                      |
+| Q05 | 0/1                | 1/3                      |
+
+The bank now produces TWO useful metrics: citation-verification (46.4%)
+
+- substring-hits-in-answer (9/12 = 75%). The first measures ICO's
+  internal citation integrity; the second measures whether ICO's answers
+  contain ground-truth substrings. Future runs have a real floor to beat.
+
+### Bugs filed
+
+None blocking. Surfaced one minor follow-up:
+
+- render-summary.py APPENDS to progress.md instead of UPDATING when
+  a run_id is re-rendered. Resulted in a duplicate row that I cleaned
+  up manually. Worth filing as a P3.
+
+### Bugs fixed this session
+
+- **`intentional-cognition-os-h99`** (P2) — verify.py paradigm gap.
+
+### Next session priorities
+
+- Either: file the render-summary duplicate-row bead (small P3) +
+  decide on v0.2 of the bank
+- OR: skip ahead to v0.2 — add paraphrase variance to the bank schema
+  per the question-bank-spec, get more granular signal

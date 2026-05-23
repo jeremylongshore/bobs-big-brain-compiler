@@ -54,6 +54,14 @@ def main() -> int:
 
     manifest = json.loads((run_dir / "manifest.json").read_text())
     target_root = pathlib.Path(args.target or manifest["target"]).expanduser().resolve()
+    # Per bead h99: ICO emits citation paths rooted at the compiled wiki
+    # (e.g. `wiki/sources/foo.md`), which lives in the workspace cache,
+    # NOT in the target tree. Resolve those against `manifest.workspace`.
+    # When the manifest predates the workspace field (older runs), fall
+    # back to <target>/wiki/ which is wrong but at least defined.
+    workspace_root = pathlib.Path(
+        manifest.get("workspace") or (target_root / "_no_workspace_in_manifest")
+    ).expanduser().resolve()
 
     verifications_path = run_dir / "verifications.jsonl"
     verifications_path.unlink(missing_ok=True)
@@ -119,21 +127,59 @@ def main() -> int:
                     total += 1
                     continue
 
-                source_path = (target_root / source).resolve()
+                # h99: trust ICO's per-citation `verified` flag as the strong
+                # signal for "did the cited title actually resolve to a wiki
+                # page during answer generation?" If ICO says no, the
+                # citation is UNVERIFIED — don't bother greping.
+                ico_verified = (
+                    cite.get("verified")
+                    if isinstance(cite, dict) and "verified" in cite
+                    else None
+                )
+                if ico_verified is False:
+                    out.write(
+                        json.dumps(
+                            {
+                                "run_id": receipt["run_id"],
+                                "q_id": q_id,
+                                "citation_idx": idx,
+                                "cited_source": source,
+                                "verdict": "UNVERIFIED",
+                                "reason": "ICO marked citation as unverified during answer generation",
+                                "score": 0.0,
+                            }
+                        )
+                        + "\n"
+                    )
+                    unverified += 1
+                    total += 1
+                    continue
 
-                # Try multiple resolution strategies: as-is, basename-only,
-                # and search target tree for matching filename. Skip
-                # high-noise dirs (node_modules, .git, dist, coverage, etc.)
-                # so rglob doesn't slow to a crawl on repos with vendor trees
-                # — addresses Gemini PR #77 review on perf.
-                if not source_path.is_file():
+                # h99: ICO emits citations rooted at the compiled wiki
+                # (e.g. `wiki/sources/foo.md`). Resolve those against the
+                # workspace cache from the manifest, not the target tree.
+                # Non-`wiki/` paths fall through to legacy target-tree
+                # resolution for backward compatibility with older runs +
+                # tools that emit raw source paths.
+                if source.startswith("wiki/") or source.startswith("wiki\\"):
+                    source_path = (workspace_root / source).resolve()
+                    if not source_path.is_file():
+                        source_path = None
+                else:
+                    source_path = (target_root / source).resolve()
+                    if not source_path.is_file():
+                        source_path = None
+
+                # Fallback: search target tree by basename (covers
+                # non-wiki citations + legacy paths). Skip high-noise
+                # dirs (Gemini PR #77 perf finding).
+                if source_path is None:
                     PRUNE_PARTS = {
                         "node_modules", ".git", "dist", "coverage",
                         ".next", ".nuxt", ".cache", ".venv", "venv",
                         "__pycache__", ".stryker-tmp",
                     }
                     target_name = pathlib.Path(source).name
-                    source_path = None
                     for candidate in target_root.rglob(target_name):
                         if any(p in PRUNE_PARTS for p in candidate.parts):
                             continue
@@ -207,13 +253,25 @@ def main() -> int:
                     score = 0.0
                     challenged += 1
 
+                # Report cited_source relative to whichever root it
+                # resolved against (workspace for wiki/-prefixed
+                # citations, target tree otherwise). Falls back to the
+                # absolute path when relative_to fails (defensive).
+                try:
+                    if source.startswith("wiki/") or source.startswith("wiki\\"):
+                        cited_relative = str(source_path.relative_to(workspace_root))
+                    else:
+                        cited_relative = str(source_path.relative_to(target_root))
+                except ValueError:
+                    cited_relative = str(source_path)
+
                 out.write(
                     json.dumps(
                         {
                             "run_id": receipt["run_id"],
                             "q_id": q_id,
                             "citation_idx": idx,
-                            "cited_source": str(source_path.relative_to(target_root)),
+                            "cited_source": cited_relative,
                             "verdict": verdict,
                             "hits": hits,
                             "expected_substring_count": len(expected_substrings),
