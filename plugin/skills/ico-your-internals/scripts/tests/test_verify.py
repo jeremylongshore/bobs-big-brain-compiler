@@ -28,11 +28,23 @@ SCRIPT = (
 )
 
 
-def make_run(tmp: pathlib.Path, target: pathlib.Path, receipts: list[dict]) -> str:
-    """Build a minimal run-cache layout that verify.py can consume."""
+def make_run(
+    tmp: pathlib.Path,
+    target: pathlib.Path,
+    receipts: list[dict],
+    workspace: pathlib.Path | None = None,
+) -> str:
+    """Build a minimal run-cache layout that verify.py can consume.
+
+    If ``workspace`` is provided, the manifest points there (matches how
+    run.sh writes manifest.json with the actual ico workspace path). The
+    workspace is where ICO's compiled wiki lives — verify.py must resolve
+    ``wiki/...`` citation paths against it, NOT the target tree.
+    """
     run_id = "test-run"
     run_dir = tmp / "cache" / run_id
     run_dir.mkdir(parents=True)
+    ws = str(workspace) if workspace is not None else str(tmp / "workspace")
     (run_dir / "manifest.json").write_text(
         json.dumps(
             {
@@ -42,7 +54,7 @@ def make_run(tmp: pathlib.Path, target: pathlib.Path, receipts: list[dict]) -> s
                 "bank_version": "v1",
                 "ico_version": "test",
                 "started_at": "2026-05-21T00:00:00Z",
-                "workspace": str(tmp / "workspace"),
+                "workspace": ws,
                 "public_dir": str(tmp / "pub"),
             }
         )
@@ -344,6 +356,228 @@ class TestNoCitations(unittest.TestCase):
             entry = json.loads(verifications[0])
             self.assertEqual(entry["verdict"], "CHALLENGED")
             self.assertEqual(entry["reason"], "no citations in answer")
+
+
+class TestWikiPathResolution(unittest.TestCase):
+    """h99 regression tests: ICO emits citation paths like
+    'wiki/sources/foo.md' which live in the WORKSPACE cache (per the
+    manifest.json `workspace` field), NOT in the TARGET tree. Pre-fix,
+    verify.py greps the target tree and reports every wiki/-prefixed
+    citation as UNVERIFIED, which makes verify_rate misleading-0% on
+    successful dog-food runs."""
+
+    def test_wiki_prefixed_citation_resolves_against_workspace_not_target(
+        self,
+    ) -> None:
+        """A citation with source='wiki/sources/foo.md' must be looked up
+        inside the workspace's wiki/ subdir. The substring is grepped
+        against that wiki page, not against any target file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = pathlib.Path(tmpdir)
+            target = tmp / "target"
+            target.mkdir()
+            # Target tree intentionally LACKS foo.md — proves the resolver
+            # is hitting the workspace, not falling through to target.
+
+            workspace = tmp / "workspace"
+            wiki_sources = workspace / "wiki" / "sources"
+            wiki_sources.mkdir(parents=True)
+            (wiki_sources / "foo.md").write_text(
+                "# foo\n\nThis page contains the marker_substring evidence.\n"
+            )
+
+            run_id = make_run(
+                tmp,
+                target,
+                [
+                    {
+                        "run_id": "test-run",
+                        "q_id": "Q01",
+                        "question": "What is foo?",
+                        "answer": "...",
+                        "citations": [
+                            {
+                                "source": "wiki/sources/foo.md",
+                                "title": "foo",
+                                "verified": True,
+                            }
+                        ],
+                        "expected_substrings": ["marker_substring"],
+                    }
+                ],
+                workspace=workspace,
+            )
+
+            run_verify(tmp, run_id, target)
+            verifications = (
+                (tmp / "cache" / run_id / "verifications.jsonl")
+                .read_text()
+                .strip()
+                .splitlines()
+            )
+            self.assertEqual(len(verifications), 1)
+            entry = json.loads(verifications[0])
+            self.assertEqual(
+                entry["verdict"],
+                "VERIFIED",
+                f"wiki/-prefixed citation should resolve via workspace, got: {entry}",
+            )
+            self.assertGreater(len(entry["hits"]), 0)
+            self.assertEqual(entry["hits"][0]["substring"], "marker_substring")
+
+    def test_wiki_prefixed_citation_unverified_when_wiki_page_absent(self) -> None:
+        """If wiki/sources/ghost.md doesn't exist in the workspace, the
+        verdict is UNVERIFIED (not CHALLENGED — there's no source to grep)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = pathlib.Path(tmpdir)
+            target = tmp / "target"
+            target.mkdir()
+            workspace = tmp / "workspace"
+            (workspace / "wiki").mkdir(parents=True)
+            # Notice: NO wiki/sources/ghost.md
+
+            run_id = make_run(
+                tmp,
+                target,
+                [
+                    {
+                        "run_id": "test-run",
+                        "q_id": "Q01",
+                        "question": "?",
+                        "answer": "",
+                        "citations": [{"source": "wiki/sources/ghost.md"}],
+                        "expected_substrings": ["anything"],
+                    }
+                ],
+                workspace=workspace,
+            )
+
+            run_verify(tmp, run_id, target)
+            entry = json.loads(
+                (tmp / "cache" / run_id / "verifications.jsonl").read_text().strip()
+            )
+            self.assertEqual(entry["verdict"], "UNVERIFIED")
+
+    def test_wiki_prefixed_citation_challenged_when_substring_missing(
+        self,
+    ) -> None:
+        """Wiki page exists in workspace but doesn't contain the
+        expected_substring. CHALLENGED verdict — citation resolves, evidence
+        is absent."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = pathlib.Path(tmpdir)
+            target = tmp / "target"
+            target.mkdir()
+            workspace = tmp / "workspace"
+            wiki_sources = workspace / "wiki" / "sources"
+            wiki_sources.mkdir(parents=True)
+            (wiki_sources / "foo.md").write_text("# foo\n\nUnrelated content.\n")
+
+            run_id = make_run(
+                tmp,
+                target,
+                [
+                    {
+                        "run_id": "test-run",
+                        "q_id": "Q01",
+                        "question": "?",
+                        "answer": "",
+                        "citations": [{"source": "wiki/sources/foo.md"}],
+                        "expected_substrings": ["marker_substring"],
+                    }
+                ],
+                workspace=workspace,
+            )
+
+            run_verify(tmp, run_id, target)
+            entry = json.loads(
+                (tmp / "cache" / run_id / "verifications.jsonl").read_text().strip()
+            )
+            self.assertEqual(entry["verdict"], "CHALLENGED")
+
+    def test_non_wiki_citation_still_resolves_against_target_tree(self) -> None:
+        """Backward compatibility: citations WITHOUT the `wiki/` prefix
+        keep resolving against the target tree as before (older ICO output
+        + other tools that emit raw source paths)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = pathlib.Path(tmpdir)
+            target = tmp / "target"
+            target.mkdir()
+            (target / "doc.md").write_text("contains marker_substring inline\n")
+            workspace = tmp / "workspace"
+            workspace.mkdir()
+            # No wiki/ — the citation should fall through to target resolution
+
+            run_id = make_run(
+                tmp,
+                target,
+                [
+                    {
+                        "run_id": "test-run",
+                        "q_id": "Q01",
+                        "question": "?",
+                        "answer": "",
+                        "citations": [{"source": "doc.md"}],
+                        "expected_substrings": ["marker_substring"],
+                    }
+                ],
+                workspace=workspace,
+            )
+
+            run_verify(tmp, run_id, target)
+            entry = json.loads(
+                (tmp / "cache" / run_id / "verifications.jsonl").read_text().strip()
+            )
+            self.assertEqual(entry["verdict"], "VERIFIED")
+
+    def test_ico_verified_false_marks_unverified_even_if_path_resolves(
+        self,
+    ) -> None:
+        """If ICO's own citation-verification flag is False, trust ICO's
+        signal: the citation is marked UNVERIFIED regardless of whether
+        the path happens to resolve. ICO's internal check is the strong
+        signal here — it knows whether the title actually mapped to a wiki
+        page during answer generation."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = pathlib.Path(tmpdir)
+            target = tmp / "target"
+            target.mkdir()
+            workspace = tmp / "workspace"
+            wiki_sources = workspace / "wiki" / "sources"
+            wiki_sources.mkdir(parents=True)
+            # Even though we write a file at the cited path, ICO told us
+            # this citation is NOT verified — likely a hallucinated title
+            # that incidentally matches a filename.
+            (wiki_sources / "foo.md").write_text("marker_substring here\n")
+
+            run_id = make_run(
+                tmp,
+                target,
+                [
+                    {
+                        "run_id": "test-run",
+                        "q_id": "Q01",
+                        "question": "?",
+                        "answer": "",
+                        "citations": [
+                            {
+                                "source": "wiki/sources/foo.md",
+                                "title": "foo",
+                                "verified": False,
+                            }
+                        ],
+                        "expected_substrings": ["marker_substring"],
+                    }
+                ],
+                workspace=workspace,
+            )
+
+            run_verify(tmp, run_id, target)
+            entry = json.loads(
+                (tmp / "cache" / run_id / "verifications.jsonl").read_text().strip()
+            )
+            self.assertEqual(entry["verdict"], "UNVERIFIED")
+            self.assertIn("ICO", entry.get("reason", ""))
 
 
 if __name__ == "__main__":
