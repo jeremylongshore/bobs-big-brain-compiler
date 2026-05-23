@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.2.5] - 2026-05-23
+
+- fix(plugin/verify): resolve wiki/ citations against workspace cache (closes h99) (#82) (2ecefc5)
+
+
 ## [v1.2.4] - 2026-05-22
 
 - fix(compiler): analyzeQuestion strict-then-broad + possessive normalization (closes fmo) (#81) (50a0053)
