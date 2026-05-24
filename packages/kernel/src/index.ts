@@ -98,6 +98,18 @@ export {
 // Artifacts
 export { listArtifacts, type ArtifactInfo } from './artifacts.js';
 
+// Spool — ICO → INTKB writer-side boundary
+export {
+  emitSpool,
+  dryRunSpool,
+  SpoolError,
+  type SpoolEmitOptions,
+  type SpoolEmitResult,
+  type SpoolEmitScope,
+  type SpoolSkipReason,
+  type SpoolDryRunSummary,
+} from './spool.js';
+
 // Procfs — computed views over task state
 export {
   computeTaskStatus,
