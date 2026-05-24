@@ -110,6 +110,9 @@ export {
   type SpoolDryRunSummary,
 } from './spool.js';
 
+// Audit-chain verifier
+export { verifyAuditChain, type AuditChainBreak, type AuditVerifyResult } from './audit-verify.js';
+
 // Procfs — computed views over task state
 export {
   computeTaskStatus,

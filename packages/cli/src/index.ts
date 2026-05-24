@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 
 import { register as registerAsk } from './commands/ask.js';
+import { register as registerAudit } from './commands/audit.js';
 import { register as registerCompile } from './commands/compile.js';
 import { register as registerEval } from './commands/eval.js';
 import { register as registerIngest } from './commands/ingest.js';
@@ -92,6 +93,7 @@ export function buildProgram(): Command {
   registerPromote(p);
   registerStatus(p);
   registerSpool(p);
+  registerAudit(p);
   registerEval(p);
   registerInspect(p);
   registerUnpromote(p);
