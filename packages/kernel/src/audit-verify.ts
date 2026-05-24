@@ -155,8 +155,14 @@ export function verifyAuditChain(workspacePath: string): Result<AuditVerifyResul
           excerpt: raw.slice(0, 120),
         });
         fileBroken = true;
-        // Continue walking — we want to count all breaks, not just the first
-        // per file, so future replay tooling can see the full damage report.
+        // Continue walking and re-anchor on the (potentially tampered) raw
+        // line as the new baseline. This means after a mismatch we report
+        // ONE break and then resume clean-chain expectations against the
+        // tampered line as the new prev. Multi-line tampers in adjacent
+        // positions will report only the first break, not every break —
+        // honest accounting of "this file has at least one tamper, here's
+        // the first offset" rather than "complete damage report." For full
+        // forensics, walk the file again starting from the reported break.
       }
       totalEvents++;
       prevLine = raw;

@@ -15,11 +15,12 @@ import { writeTrace } from './traces.js';
 import { initWorkspace } from './workspace.js';
 
 let workspacePath: string;
+let tmpRoot: string;
 let db: Database;
 
 beforeEach(() => {
-  const tmp = mkdtempSync(join(tmpdir(), 'ico-audit-verify-'));
-  const initResult = initWorkspace('workspace', tmp);
+  tmpRoot = mkdtempSync(join(tmpdir(), 'ico-audit-verify-'));
+  const initResult = initWorkspace('workspace', tmpRoot);
   if (!initResult.ok) throw initResult.error;
   workspacePath = initResult.value.root;
   const dbResult = initDatabase(join(workspacePath, '.ico', 'state.db'));
@@ -29,7 +30,11 @@ beforeEach(() => {
 
 afterEach(() => {
   closeDatabase(db);
-  rmSync(workspacePath.split('/').slice(0, -1).join('/'), { recursive: true, force: true });
+  // Use the captured mkdtemp root directly — earlier path arithmetic
+  // (split('/').slice(0,-1).join('/')) was fragile and could leak temp
+  // dirs or delete the wrong directory if initWorkspace's return shape
+  // ever changed. Per code-reviewer subagent finding 2026-05-24.
+  rmSync(tmpRoot, { recursive: true, force: true });
 });
 
 describe('verifyAuditChain', () => {

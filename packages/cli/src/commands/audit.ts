@@ -32,17 +32,22 @@ interface GlobalOptions {
 }
 
 function verifyHandler(options: AuditVerifyOptions, command: Command): void {
+  // Convention check: use `process.exitCode = N; return` rather than
+  // `process.exit(N)` so tests can invoke this handler directly without
+  // tearing the test runner down. Matches packages/cli/src/commands/promote.ts.
   const global = command.optsWithGlobals<GlobalOptions>();
   const wsFlag = options.workspace ?? global.workspace;
   const ws = resolveWorkspace(wsFlag !== undefined ? { workspace: wsFlag } : {});
   if (!ws.ok) {
     process.stderr.write(formatError(`Workspace error: ${ws.error.message}\n`));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   const result = verifyAuditChain(ws.value.root);
   if (!result.ok) {
     process.stderr.write(formatError(`audit verify failed: ${result.error.message}\n`));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   const v = result.value;
   if (v.breaks.length === 0) {
@@ -50,7 +55,8 @@ function verifyHandler(options: AuditVerifyOptions, command: Command): void {
     process.stdout.write(formatInfo(`Files scanned: ${v.filesScanned}\n`));
     process.stdout.write(formatInfo(`Total events:  ${v.totalEvents}\n`));
     process.stdout.write(formatInfo(`Clean files:   ${v.cleanFiles}\n`));
-    process.exit(0);
+    process.exitCode = 0;
+    return;
   }
   process.stderr.write(formatError(`AUDIT_TAMPERED: ${v.breaks.length} chain break(s) detected\n`));
   process.stderr.write(
@@ -62,7 +68,7 @@ function verifyHandler(options: AuditVerifyOptions, command: Command): void {
     );
     process.stderr.write(`    ${dim(b.excerpt)}\n`);
   }
-  process.exit(2);
+  process.exitCode = 2;
 }
 
 export function register(program: Command): void {
