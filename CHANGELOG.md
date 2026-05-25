@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.4.3] - 2026-05-25
+
+- Merge pull request #103 from jeremylongshore/feat/bd-sync-rapid-write-race-55q.4 (bf57454)
+- fix(bd-sync): flush JSONL after every bead-side write (55q.4) (dbb3f87)
+- Merge pull request #102 from jeremylongshore/feat/release-filter-nul-records (880ccbe)
+- ci(release): fix commit-type filter — NUL records + line-anchored regex (19e0d22)
+
 ## [v1.4.2] - 2026-05-25
 
 - Merge pull request #101 from jeremylongshore/feat/release-skip-chore-only (f242602)
