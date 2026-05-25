@@ -1,5 +1,34 @@
 # Changelog
 
+## [v1.3.0] - 2026-05-25
+
+- Merge pull request #83 from jeremylongshore/feat/dogfood-v0.2-paraphrases (de66f09)
+- ci(docs): round 5 — Vale.Repetition off (false positives on APA citations) (4d77dc8)
+- ci(docs): round 4 — disable Vale.Spelling, accept 403 in lychee (ec0df89)
+- ci(docs): round 3 — Vale.Terms off + lychee include is regex, not glob (63b5613)
+- chore(beads): close zcc.3 — quickstart now branches on ANTHROPIC_API_KEY (baeba5d)
+- refactor(kernel,ci): shared sha256Hex helper + drop fragile markdownlint action (zcc.5) (83ac967)
+- ci(audit): wire ico audit verify into CI as a post-test gate (zcc.1) (728b78e)
+- ci(docs): fix Vale + lychee — round 2 of doc-quality gate hardening (66dcb95)
+- fix(audit): address code-reviewer findings from PR #83 (9e3629b)
+- ci(docs): fix CI gate failures from initial doc-quality install (abd9b57)
+- chore(beads): file follow-ups for out-of-scope items deferred from the spool epic (20af8dd)
+- feat(audit): ico audit verify SHA-256 chain verifier (ziz.4) (e22f691)
+- feat(spool): ICO → INTKB writer-side spool boundary (ziz.3 v1) (3776ba8)
+- ci(docs): install 4-tool doc-quality gate (20ab200)
+- docs(council): Phase 5+6 — post-thesis exec council Decision Record + 3 ICO build beads (b89c29c)
+- docs(thesis): Phase 3+4 — land peer-reviewed ecosystem thesis paper as 034-AT-NTRP (c61fa36)
+- docs(thesis): Phase 1+2 — research handoff bundle + cross-repo bead/Plane skeleton (91ab6dd)
+- chore(beads): file bd update rapid-write bug + upstream-contrib epic (71b3868)
+- chore(beads): repair bd-sync cross-refs lost to rapid-write race (18135aa)
+- docs(beads): plain-English bead naming convention + hygiene reset (f0324d1)
+- chore(beads): sync v0.2 bead state (er2/ytq/7xp/p6w closed, nwh/x5r filed) (bc99add)
+- feat(dogfood): v0.2 render-summary, docs, and production v2 bank (040a6b3)
+- feat(plugin/scripts): ask-loop.py extraction + --paraphrases flag (7742467)
+- feat(plugin/scripts): paraphrase_robustness metric in verify.py (3439e07)
+- feat(plugin/scripts): bank.py schema library + ADRs 029-032 (c9a9b92)
+
+
 ## [v1.2.5] - 2026-05-23
 
 - fix(plugin/verify): resolve wiki/ citations against workspace cache (closes h99) (#82) (2ecefc5)
