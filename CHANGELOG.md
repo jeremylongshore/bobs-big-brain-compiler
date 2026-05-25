@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.4.0] - 2026-05-25
+
+- Merge pull request #100 from jeremylongshore/feat/zcc-followup-experiment-and-md036 (20ece87)
+- fix(docs): land the 2 round-2 fixes that missed first commit (d2c0fde)
+- fix(experiments): round-2 Gemini findings — fail-fast + compile warn + stale comments (ab9b192)
+- fix(experiments): address Gemini review findings on run.py (PR #100) (4f71191)
+- chore(docs): tighten markdownlint — enable MD036, fix 8 violations (zcc.2) (70d97f4)
+- feat(experiments): compile-then-govern vs RAG v1 results (zcc.4) (426ed73)
+
+
 ## [v1.3.0] - 2026-05-25
 
 - Merge pull request #83 from jeremylongshore/feat/dogfood-v0.2-paraphrases (de66f09)
