@@ -160,10 +160,22 @@ def setup_ico_workspace() -> pathlib.Path:
     # NOT capture_output=True: this step is slow (5-10 min) and silent
     # capture would make the run appear hung. Stream to the operator's
     # terminal so they can see the per-pass progress in real time.
-    subprocess.run(
+    compile_proc = subprocess.run(
         ["node", str(ICO_CLI), "--workspace", str(workspace), "compile", "all"],
         check=False, timeout=600,
     )
+    # check=False intentionally — a partial compile still produces useful
+    # wiki content for the experiment (e.g. summarise-pass landed but
+    # synthesise-pass failed on a rate-limit). But we MUST surface the
+    # non-zero exit loudly so the operator knows the comparison is being
+    # run against a degraded compile rather than a clean one.
+    if compile_proc.returncode != 0:
+        print(
+            f"[ICO setup] ⚠ compile exited non-zero (rc={compile_proc.returncode}). "
+            f"Experiment will run against whatever wiki content was produced; "
+            f"results.md should note 'partial compile'.",
+            file=sys.stderr,
+        )
     return workspace
 
 
@@ -268,6 +280,20 @@ def main() -> int:
     ap.add_argument("--only", choices=["rag", "ico"], help="Run only one condition")
     ap.add_argument("--ico-workspace", help="Reuse an existing ICO workspace (skip mount/ingest/compile)")
     args = ap.parse_args()
+
+    # Fail-fast on missing API key. BOTH conditions need it:
+    #   - RAG baseline calls Claude directly via the anthropic SDK
+    #   - ICO compile + ask invokes Claude through the kernel
+    # Better to error here than burn time on workspace setup only to fail
+    # at the first per-question call.
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        print(
+            "ANTHROPIC_API_KEY is not set in the environment. "
+            "Both conditions (RAG baseline + ICO compile+ask) require it. "
+            "Set the env var and re-run.",
+            file=sys.stderr,
+        )
+        return 2
 
     if not ICO_CLI.is_file():
         print(f"ICO CLI not built. Run: cd {ICO_CLI.parent.parent.parent} && pnpm build", file=sys.stderr)
