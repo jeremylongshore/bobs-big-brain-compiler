@@ -8,7 +8,11 @@
     "MD025": false, // multiple h1 — allowed (bilingual docs with EN+zh-TW h1)
     "MD033": false, // inline HTML — used in tables and diagrams
     "MD034": false, // bare URLs — used in references
-    "MD036": true, // emphasis-as-heading — used in figure captions
+    // MD036 (emphasis-as-heading) ENABLED in commit 70d97f4 per bead
+    // intentional-cognition-os-zcc.2 (first bite of rolling docs-quality
+    // tightening). The 8 violations in 000-docs/ were converted to proper
+    // #### sub-headings in that same commit.
+    "MD036": true,
     "MD040": false, // fenced-code-language — ASCII diagrams have no language
     "MD041": false, // first line h1 — many docs start with frontmatter
     "MD046": false, // code block style — both fenced and indented appear

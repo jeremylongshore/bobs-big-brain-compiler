@@ -35,10 +35,10 @@ session with a larger eval set and a statistical significance test.
 
 ## Headline
 
-| Condition             | Pass | Partial | Fail | **Score** | Avg latency |                                                       Tokens |
-| --------------------- | ---: | ------: | ---: | --------: | ----------: | -----------------------------------------------------------: |
-| **RAG baseline**      |    2 |       2 |    1 |  **0.60** |       20.4s |                                          ~88K (per question) |
-| **ICO compile + ask** |    3 |       1 |    1 |  **0.70** |    **7.5s** | ~K (per question; compile cost amortised across the session) |
+| Condition             | Pass | Partial | Fail | **Score** | Avg latency |                                                                                                     Tokens |
+| --------------------- | ---: | ------: | ---: | --------: | ----------: | ---------------------------------------------------------------------------------------------------------: |
+| **RAG baseline**      |    2 |       2 |    1 |  **0.60** |       20.4s |                                                                                        ~88K (per question) |
+| **ICO compile + ask** |    3 |       1 |    1 |  **0.70** |    **7.5s** | n/a per question (text-mode `ico ask` output omits token count); compile cost amortised across the session |
 
 Score formula: `(pass + 0.5 × partial) / total`.
 
