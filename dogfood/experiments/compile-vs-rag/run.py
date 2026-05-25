@@ -34,6 +34,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import tempfile
 import time
 from typing import Any
 
@@ -42,13 +43,22 @@ import yaml
 THIS_DIR = pathlib.Path(__file__).resolve().parent
 CORPUS_DIR = THIS_DIR / "corpus"
 EVAL_FILE = THIS_DIR / "eval" / "questions.yaml"
-ICO_CLI = pathlib.Path.home() / "000-projects" / "intentional-cognition-os" / "packages" / "cli" / "dist" / "index.js"
+# Resolve ICO_CLI relative to this script. The script lives at
+# `<repo>/dogfood/experiments/compile-vs-rag/run.py`; the CLI dist lives at
+# `<repo>/packages/cli/dist/index.js` — 3 levels up + into packages/.
+# Override with $ICO_CLI for repo-out-of-tree invocation.
+ICO_CLI = pathlib.Path(
+    os.environ.get(
+        "ICO_CLI",
+        THIS_DIR.parent.parent.parent / "packages" / "cli" / "dist" / "index.js",
+    )
+)
 
 CLAUDE_MODEL = os.environ.get("ICO_MODEL", "claude-sonnet-4-6")
 
 
 def load_eval() -> dict[str, Any]:
-    with EVAL_FILE.open() as f:
+    with EVAL_FILE.open(encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -58,7 +68,7 @@ def load_corpus() -> str:
     parts: list[str] = []
     for fp in files:
         parts.append(f"\n\n=== {fp.name} ===\n")
-        parts.append(fp.read_text())
+        parts.append(fp.read_text(encoding="utf-8"))
     return "".join(parts)
 
 
@@ -116,9 +126,18 @@ def call_ico_ask(workspace: pathlib.Path, question: str) -> tuple[str, int]:
 
 
 def setup_ico_workspace() -> pathlib.Path:
-    """Create a fresh ICO workspace, mount + ingest the corpus, compile."""
-    work_root = pathlib.Path("/tmp") / f"compile-vs-rag-ico-{int(time.time())}"
-    work_root.mkdir(parents=True, exist_ok=True)
+    """Create a fresh ICO workspace, mount + ingest the corpus, compile.
+
+    Uses tempfile.mkdtemp() rather than a hardcoded /tmp prefix for
+    platform independence (Windows tempdir, sandboxed CI runners with
+    custom $TMPDIR, etc.). The slow `ico compile all` step streams
+    stdout/stderr directly to the operator instead of buffering with
+    capture_output=True — this is the 5-10 minute step and silent
+    capture would make the run feel hung.
+    """
+    work_root = pathlib.Path(
+        tempfile.mkdtemp(prefix=f"compile-vs-rag-ico-{int(time.time())}-")
+    )
     print(f"[ICO setup] init workspace at {work_root}")
     subprocess.run(
         ["node", str(ICO_CLI), "init", "experiment", "--path", str(work_root)],
@@ -136,10 +155,14 @@ def setup_ico_workspace() -> pathlib.Path:
             ["node", str(ICO_CLI), "--workspace", str(workspace), "ingest", str(md), "--yes"],
             check=False, capture_output=True, text=True,
         )
-    print(f"[ICO setup] compile all (slow step — runs Claude)")
+    print(f"[ICO setup] compile all (slow step — runs Claude, ~5-10 min)")
+    print("[ICO setup] streaming compile output below:")
+    # NOT capture_output=True: this step is slow (5-10 min) and silent
+    # capture would make the run appear hung. Stream to the operator's
+    # terminal so they can see the per-pass progress in real time.
     subprocess.run(
         ["node", str(ICO_CLI), "--workspace", str(workspace), "compile", "all"],
-        check=False, capture_output=True, text=True, timeout=600,
+        check=False, timeout=600,
     )
     return workspace
 
