@@ -120,36 +120,49 @@ jobs:
           fi
 
           # Commit-type filter: skip releases when ALL commits since the
-          # previous tag are non-release-worthy types. Per conventional
-          # commit conventions, these types do not warrant a published
+          # previous tag are non-release-worthy types. Per Conventional
+          # Commits 1.0.0, these types do not warrant a published
           # artifact on their own:
           #   chore, docs, style, test, ci, build
-          # Anything with a `!:` breaking-change marker OR a `BREAKING
-          # CHANGE` footer always counts as release-worthy regardless of
-          # type. Unknown / non-conventional commit subjects also count
-          # as release-worthy (safer to release-on-doubt than silently
-          # skip a real change). Merge commits (`Merge pull request ...`,
-          # `Merge branch ...`) are ignored — their underlying squashed
-          # commits are what semver should reflect.
+          # Breaking-change signals always count as release-worthy:
+          #   - `<type>!:` marker in the SUBJECT (CC 1.0.0 §6)
+          #   - `^BREAKING[ -]CHANGE:` line-anchored token at start of
+          #     a BODY footer paragraph (CC 1.0.0 §10)
+          # The body scan must be line-anchored — looking for the bare
+          # substring matches commit messages that merely *describe* the
+          # token in prose (e.g., this filter's own docs). Learned the
+          # hard way on v1.4.2.
+          # Unknown / non-conventional commit subjects count as
+          # release-worthy (safer to release-on-doubt than silently
+          # skip a real change). Merge commits are ignored — their
+          # underlying squashed commits are what semver should reflect.
           NON_RELEASE_TYPES_RE='^(chore|docs|style|test|ci|build)(\([^)]*\))?:'
-          BREAKING_RE='(BREAKING CHANGE|^[a-z]+(\([^)]*\))?!:)'
+          SUBJECT_BREAKING_RE='^[a-z]+(\([^)]*\))?!:'
+          BODY_BREAKING_RE='^BREAKING[ -]CHANGE:'
 
-          # Collect every commit subject + body (separator '|', so newlines
-          # in bodies don't fool the per-commit loop). %s = subject, %b =
-          # body, %P = parent count (used to drop merge commits where
-          # parents > 1).
+          # Records are NUL-terminated (`%x00` and `read -d ''`) so
+          # multi-paragraph commit bodies — which contain embedded
+          # newlines — don't fragment into pseudo-records. The earlier
+          # `tr '\0' '\n'` approach reported 25 "commits" for a 3-commit
+          # range; the bug shipped v1.4.2 unintentionally.
           RELEASE_COMMITS=0
           NON_RELEASE_COMMITS=0
           MERGE_COMMITS=0
-          while IFS=$'\t' read -r parents subject body; do
-            # Skip merge commits (parents has more than one SHA).
+          while IFS=$'\t' read -r -d '' parents subject body; do
+            [ -z "$subject" ] && continue
+            # Merge commits (parents has more than one SHA) are ignored.
             wc_p=$(echo "$parents" | wc -w | tr -d ' ')
             if [ "$wc_p" -gt 1 ]; then
               MERGE_COMMITS=$((MERGE_COMMITS + 1))
               continue
             fi
-            # Breaking marker anywhere → release.
-            if echo "$subject"$'\n'"$body" | grep -qE "$BREAKING_RE"; then
+            # Subject `<type>!:` marker → breaking → release.
+            if echo "$subject" | grep -qE "$SUBJECT_BREAKING_RE"; then
+              RELEASE_COMMITS=$((RELEASE_COMMITS + 1))
+              continue
+            fi
+            # Body `^BREAKING[ -]CHANGE:` footer → breaking → release.
+            if echo "$body" | grep -qE "$BODY_BREAKING_RE"; then
               RELEASE_COMMITS=$((RELEASE_COMMITS + 1))
               continue
             fi
@@ -160,7 +173,7 @@ jobs:
             fi
             # Anything else (feat/fix/refactor/perf/unknown) → release.
             RELEASE_COMMITS=$((RELEASE_COMMITS + 1))
-          done < <(git log "${PREV_TAG}..HEAD" --pretty=format:"%P%x09%s%x09%b%x00" | tr '\0' '\n')
+          done < <(git log "${PREV_TAG}..HEAD" --pretty=format:"%P%x09%s%x09%b%x00")
 
           echo "Commits since $PREV_TAG:"
           echo "  release-worthy: $RELEASE_COMMITS"
