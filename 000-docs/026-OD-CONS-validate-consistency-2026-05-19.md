@@ -19,7 +19,7 @@
 
 ### Category 1: Status Drift
 
-**Finding 1.1 — 🔴 Critical — Version drift between root and workspace packages**
+#### Finding 1.1 — 🔴 Critical — Version drift between root and workspace packages
 
 - **What's true:** npm published `intentional-cognition-os@1.0.0` (cli/package.json says 1.0.0)
 - **What root says:** `version.txt` and root `package.json` both report 1.0.1 (auto-release cut on the AAR doc commit, no code change)
@@ -39,7 +39,7 @@ No issues found.
 
 ### Category 3: Capability/Behavior Drift
 
-**Finding 3.1 — 🔵 Info — README features list matches code**
+#### Finding 3.1 — 🔵 Info — README features list matches code
 
 All 14 commands registered in `packages/cli/src/index.ts` are documented in the README's CLI surface table. Every README feature claim (compile, ask, research, render, recall, lint, eval) has a corresponding `commands/*.ts` file. No overclaims.
 
@@ -57,13 +57,13 @@ No issues found. License: MIT consistently across README, LICENSE, all 6 package
 
 ### Category 7: Index/Reference Drift
 
-**Finding 7.1 — 🟡 Warning — README install instructions don't mention npm publish**
+#### Finding 7.1 — 🟡 Warning — README install instructions don't mention npm publish
 
 - **What's true:** Package is now published — `npm install -g intentional-cognition-os` works
 - **What README says (line 46):** `npm pack && npm install -g intentional-cognition-os-*.tgz` (the pre-publish workaround)
 - **Auto-fixable:** Yes — one-line replacement
 
-**Finding 7.2 — 🟡 Warning — No `000-INDEX.md` in `000-docs/`**
+#### Finding 7.2 — 🟡 Warning — No `000-INDEX.md` in `000-docs/`
 
 - **What's there:** 27 files in `000-docs/` (specs, epics, audits, this report, etc.)
 - **What's missing:** An index/TOC file (`000-INDEX.md`) listing them per the Document Filing Standard
