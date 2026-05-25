@@ -33,6 +33,22 @@ fi
 
 echo
 echo "==============================================="
+echo "  test_bank.py"
+echo "==============================================="
+if ! python3 -m unittest "$SCRIPT_DIR/test_bank.py" -v 2>&1; then
+  OVERALL=1
+fi
+
+echo
+echo "==============================================="
+echo "  test_render_summary.py"
+echo "==============================================="
+if ! python3 -m unittest "$SCRIPT_DIR/test_render_summary.py" -v 2>&1; then
+  OVERALL=1
+fi
+
+echo
+echo "==============================================="
 if [ "$OVERALL" -eq 0 ]; then
   echo "  ALL SCRIPT TESTS PASSED"
 else

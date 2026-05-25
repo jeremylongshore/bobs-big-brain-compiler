@@ -38,3 +38,31 @@ export {
 } from './frontmatter.js';
 
 export { type Result, ok, err, isOk, isErr } from './result.js';
+
+export {
+  type SpoolMemorySource,
+  type SpoolTrustLevel,
+  type SpoolMemoryCategory,
+  type SpoolCandidateStatus,
+  type SpoolAuthorType,
+  type SpoolAuthor,
+  type SpoolContentMetadata,
+  type SpoolPrePolicyFlags,
+  type SpoolSchemaVersion,
+  type SpoolMemoryCandidate,
+  SpoolMemorySourceSchema,
+  SpoolTrustLevelSchema,
+  SpoolMemoryCategorySchema,
+  SpoolCandidateStatusSchema,
+  SpoolAuthorTypeSchema,
+  SpoolConfidenceSchema,
+  SpoolSensitivitySchema,
+  SpoolAuthorSchema,
+  SpoolContentMetadataSchema,
+  SpoolPrePolicyFlagsSchema,
+  SpoolSchemaVersionSchema,
+  SpoolMemoryCandidateSchema,
+  ICO_AUTHOR,
+  SPOOL_CONTENT_MAX_BYTES,
+  SPOOL_UUID_NAMESPACE,
+} from './spool.js';

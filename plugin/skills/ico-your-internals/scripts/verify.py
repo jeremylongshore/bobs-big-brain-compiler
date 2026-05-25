@@ -71,6 +71,13 @@ def main() -> int:
     challenged = 0
     unverified = 0
 
+    # paraphrase_robustness aggregation (ADR-030). Key is the unique
+    # (intent_id, paraphrase_idx) tuple. Value is True once any citation
+    # under that paraphrase has VERIFIED. v1 receipts lack these fields —
+    # we default intent_id := q_id and paraphrase_idx := 0 so v1 banks
+    # produce one paraphrase per intent (the synthetic primary).
+    paraphrase_verified: dict[tuple[str, int], bool] = {}
+
     with receipts_path.open() as f, verifications_path.open("w") as out:
         for line in f:
             line = line.strip()
@@ -80,6 +87,29 @@ def main() -> int:
             citations: list[Any] = receipt.get("citations", []) or []
             expected_substrings = receipt.get("expected_substrings", []) or []
             q_id = receipt["q_id"]
+            # v0.2 fields — default for v1 receipts.
+            intent_id = receipt.get("intent_id") or q_id
+            paraphrase_idx = receipt.get("paraphrase_idx")
+            if paraphrase_idx is None:
+                paraphrase_idx = 0
+            paraphrase_style = receipt.get("paraphrase_style") or "legacy"
+
+            # Register this paraphrase as "run". Set robust=False unless a
+            # later citation under it flips it to True.
+            paraphrase_key = (intent_id, int(paraphrase_idx))
+            paraphrase_verified.setdefault(paraphrase_key, False)
+
+            # Common identity envelope written on every verification line.
+            # Carrying intent_id + paraphrase_idx + paraphrase_style on each
+            # line is what lets render-summary group by paraphrase and emit
+            # paraphrase_robustness in metrics.json (ADR-030).
+            identity = {
+                "run_id": receipt["run_id"],
+                "q_id": q_id,
+                "intent_id": intent_id,
+                "paraphrase_idx": int(paraphrase_idx),
+                "paraphrase_style": paraphrase_style,
+            }
 
             if not citations:
                 # ICO produced no citations — that's a CHALLENGED-equivalent
@@ -87,8 +117,7 @@ def main() -> int:
                 out.write(
                     json.dumps(
                         {
-                            "run_id": receipt["run_id"],
-                            "q_id": q_id,
+                            **identity,
                             "citation_idx": -1,
                             "claim_substring": None,
                             "cited_source": None,
@@ -111,8 +140,7 @@ def main() -> int:
                     out.write(
                         json.dumps(
                             {
-                                "run_id": receipt["run_id"],
-                                "q_id": q_id,
+                                **identity,
                                 "citation_idx": idx,
                                 "claim_substring": None,
                                 "cited_source": None,
@@ -140,8 +168,7 @@ def main() -> int:
                     out.write(
                         json.dumps(
                             {
-                                "run_id": receipt["run_id"],
-                                "q_id": q_id,
+                                **identity,
                                 "citation_idx": idx,
                                 "cited_source": source,
                                 "verdict": "UNVERIFIED",
@@ -191,8 +218,7 @@ def main() -> int:
                     out.write(
                         json.dumps(
                             {
-                                "run_id": receipt["run_id"],
-                                "q_id": q_id,
+                                **identity,
                                 "citation_idx": idx,
                                 "claim_substring": None,
                                 "cited_source": source,
@@ -248,6 +274,9 @@ def main() -> int:
                     verdict = "VERIFIED"
                     score = round(len(hits) / max(len(expected_substrings), 1), 2)
                     verified += 1
+                    # ADR-030: a paraphrase counts as robust the moment any
+                    # one of its citations verifies.
+                    paraphrase_verified[paraphrase_key] = True
                 else:
                     verdict = "CHALLENGED"
                     score = 0.0
@@ -268,8 +297,7 @@ def main() -> int:
                 out.write(
                     json.dumps(
                         {
-                            "run_id": receipt["run_id"],
-                            "q_id": q_id,
+                            **identity,
                             "citation_idx": idx,
                             "cited_source": cited_relative,
                             "verdict": verdict,
@@ -284,6 +312,17 @@ def main() -> int:
                 total += 1
 
     rate = (verified / total) if total else 0.0
+
+    # paraphrase_robustness rollup (ADR-030). Reported side-by-side with
+    # verify_rate — NEVER composited. The two answer different questions:
+    # verify_rate is "of all citations, how many stuck?"; robustness is
+    # "of all phrasings exercised, how many surfaced any verified evidence?"
+    paraphrases_run = len(paraphrase_verified)
+    paraphrases_robust = sum(1 for v in paraphrase_verified.values() if v)
+    robustness = (
+        round(paraphrases_robust / paraphrases_run, 4) if paraphrases_run else 0.0
+    )
+
     summary = {
         "run_id": args.run_id,
         "total_citations": total,
@@ -291,6 +330,9 @@ def main() -> int:
         "challenged": challenged,
         "unverified": unverified,
         "verify_rate": round(rate, 4),
+        "paraphrases_run": paraphrases_run,
+        "paraphrases_robust": paraphrases_robust,
+        "paraphrase_robustness": robustness,
     }
     (run_dir / "verify-summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps(summary))

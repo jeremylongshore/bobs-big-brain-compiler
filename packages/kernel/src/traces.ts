@@ -9,7 +9,7 @@
  * All functions return `Result<T, Error>` — never throw.
  */
 
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import {
   appendFileSync,
   existsSync,
@@ -26,6 +26,7 @@ import type { TraceEnvelope } from '@ico/types';
 import { err, ok, type Result } from '@ico/types';
 
 import { redactSecrets } from './config.js';
+import { sha256Hex } from './crypto.js';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -52,13 +53,6 @@ export interface TraceRecord {
 /** Returns `YYYY-MM-DD` for the current UTC date. */
 function utcDateString(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-/**
- * Computes the SHA-256 hex digest of a UTF-8 string (treating it as raw bytes).
- */
-function sha256Hex(line: string): string {
-  return createHash('sha256').update(line, 'utf-8').digest('hex');
 }
 
 /**

@@ -1,0 +1,41 @@
+# Test fixture: deliberately malformed v2 bank.
+# Two violations:
+#   1. Two paraphrases both flagged primary: true (should be exactly one).
+#   2. A second intent has zero paraphrases flagged primary (should be exactly one).
+# Used for negative-path tests in test_bank.py.
+
+version: v2
+target: fixture-target
+authored: 2026-05-22
+author: test-fixture
+
+questions:
+  - id: Q01
+    intent: |
+      First intent — two primaries (invalid).
+    paraphrases:
+      - text: 'First paraphrase claims primary.'
+        style: direct
+        primary: true
+      - text: 'Second paraphrase ALSO claims primary.'
+        style: direct
+        primary: true
+    expected_substrings:
+      - 'fixture'
+    expected_sources:
+      - README.md
+
+  - id: Q02
+    intent: |
+      Second intent — zero primaries (invalid).
+    paraphrases:
+      - text: 'Neither paraphrase claims primary.'
+        style: direct
+        primary: false
+      - text: 'Still no primary.'
+        style: open
+        primary: false
+    expected_substrings:
+      - 'fixture'
+    expected_sources:
+      - README.md

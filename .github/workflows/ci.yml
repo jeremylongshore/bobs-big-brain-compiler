@@ -243,3 +243,83 @@ jobs:
             ls -la "$tmp/smoke-test" || true
             exit 1
           }
+
+  audit-chain-verify:
+    name: Audit chain verify (ico audit verify)
+    runs-on: ubuntu-latest
+    # Post-test gate per CISO seat §2.5(1) of 035-AT-DECR + bead zcc.1.
+    # Builds the CLI, runs commands that emit audit-trail events, and
+    # walks the resulting SHA-256 chain to confirm no in-file tampering.
+    # Exit 2 from `ico audit verify` means AUDIT_TAMPERED — gate fails.
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm build
+      - name: Positive case — fresh workspace, emit traces, verify exit 0
+        run: |
+          set -e
+          tmp=$(mktemp -d)
+          node "$GITHUB_WORKSPACE/packages/cli/dist/index.js" init audit-positive --path "$tmp"
+          ws="$tmp/audit-positive"
+          # Seed a stub wiki page so `ico spool emit` has something to do.
+          # Each spool emit writes 2 trace events (start + complete) via
+          # the kernel's writeTrace path. No Claude compile required.
+          mkdir -p "$ws/wiki/topics"
+          cat > "$ws/wiki/topics/stub.md" <<'STUB'
+          ---
+          type: topic
+          title: Stub for audit-chain CI smoke
+          id: 00000000-0000-4000-8000-000000000001
+          compiled_at: 2026-05-24T00:00:00.000Z
+          model: stub
+          ---
+
+          Body content for the audit-verify smoke test.
+          STUB
+          node "$GITHUB_WORKSPACE/packages/cli/dist/index.js" --workspace "$ws" spool emit --tenant ci-smoke
+          # `ico audit verify` exit 0 = chain intact; exit 2 = tampered.
+          node "$GITHUB_WORKSPACE/packages/cli/dist/index.js" --workspace "$ws" audit verify
+      - name: Tamper-detection case — mutate JSONL, expect exit 2
+        run: |
+          set -e
+          tmp=$(mktemp -d)
+          node "$GITHUB_WORKSPACE/packages/cli/dist/index.js" init audit-tamper --path "$tmp"
+          ws="$tmp/audit-tamper"
+          mkdir -p "$ws/wiki/topics"
+          cat > "$ws/wiki/topics/stub.md" <<'STUB'
+          ---
+          type: topic
+          title: Stub for audit-tamper CI smoke
+          id: 00000000-0000-4000-8000-000000000002
+          compiled_at: 2026-05-24T00:00:00.000Z
+          model: stub
+          ---
+
+          Body content.
+          STUB
+          node "$GITHUB_WORKSPACE/packages/cli/dist/index.js" --workspace "$ws" spool emit --tenant ci-smoke
+          file=$(find "$ws/audit/traces" -name '*.jsonl' | head -1)
+          test -n "$file" || { echo "::error::no trace file produced"; exit 1; }
+          # Mutate line 0 by replacing the first byte of its event_id UUID.
+          # Line 1's prev_hash was computed against the original line 0 bytes,
+          # so the recomputed SHA-256 of the tampered line 0 no longer matches
+          # — verifyAuditChain reports a break on line 1.
+          sed -i '1s/"event_id":"./"event_id":"X/' "$file"
+          set +e
+          node "$GITHUB_WORKSPACE/packages/cli/dist/index.js" --workspace "$ws" audit verify
+          rc=$?
+          set -e
+          if [ "$rc" -ne 2 ]; then
+            echo "::error::expected exit 2 (AUDIT_TAMPERED), got $rc"
+            exit 1
+          fi
+          echo "✓ Tamper detection works: ico audit verify correctly exited 2"

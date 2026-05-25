@@ -53,22 +53,23 @@ When starting a new session on this repo:
 
 All standards are frozen for Phase 1. Changes require an `IDEA-CHANGELOG.md` entry.
 
-| Doc | Standards Document                                                 | Governs                                                      |
-| --- | ------------------------------------------------------------------ | ------------------------------------------------------------ |
-| 008 | [Glossary](000-docs/008-AT-GLOS-glossary.md)                       | Canonical terminology for all docs, code, and prompts        |
-| 009 | [Frontmatter Schemas](000-docs/009-AT-FMSC-frontmatter-schemas.md) | YAML frontmatter for all 7 compiled page types               |
-| 010 | [Database Schema](000-docs/010-AT-DBSC-database-schema.md)         | SQLite DDL, migration strategy, concurrency policy           |
-| 011 | [Trace Schema](000-docs/011-AT-TRSC-trace-schema.md)               | JSONL event envelope, event types, integrity chain           |
-| 012 | [Workspace Policy](000-docs/012-AT-WPOL-workspace-policy.md)       | Directory layout, naming, gitignore, symlink rules           |
-| 013 | [Coding Standards](000-docs/013-AT-CODE-coding-standards.md)       | TypeScript conventions, tsconfig, Result types, SQL safety   |
-| 014 | [Bead Conventions](000-docs/014-OD-BEAD-bead-conventions.md)       | Bead workflow, naming, labels, definition of done            |
-| 015 | [Testing Strategy](000-docs/015-AT-TEST-testing-strategy.md)       | Test layers, fixtures, coverage targets, eval decision tree  |
-| 016 | [CI/CD Pipeline Spec](000-docs/016-OD-CICD-pipeline-spec.md)       | CI job definitions, build order, release workflow            |
-| 017 | [Prompt Templates](000-docs/017-AT-PRMP-prompt-templates.md)       | Claude API prompt structure for all 6 compiler passes        |
-| 018 | [Promotion Rules](000-docs/018-AT-PROM-promotion-spec.md)          | L4→L2 promotion logic, eligibility, audit trail              |
-| 019 | [ADR/AAR Templates](000-docs/019-OD-TMPL-adr-aar-templates.md)     | Architecture Decision Record and After-Action Review formats |
-| 020 | [Diagram Prompts](000-docs/020-AT-DIAG-diagram-prompts.md)         | Mermaid diagram prompts for 6 architectural views            |
-| 021 | [Security & Scope](000-docs/021-AT-SECV-security-and-scope.md)     | Injection defense, redaction, path safety, v1 deferrals      |
+| Doc | Standards Document                                                 | Governs                                                                                                                                                                                                                                                                                             |
+| --- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 008 | [Glossary](000-docs/008-AT-GLOS-glossary.md)                       | Canonical terminology for all docs, code, and prompts                                                                                                                                                                                                                                               |
+| 009 | [Frontmatter Schemas](000-docs/009-AT-FMSC-frontmatter-schemas.md) | YAML frontmatter for all 7 compiled page types                                                                                                                                                                                                                                                      |
+| 010 | [Database Schema](000-docs/010-AT-DBSC-database-schema.md)         | SQLite DDL, migration strategy, concurrency policy                                                                                                                                                                                                                                                  |
+| 011 | [Trace Schema](000-docs/011-AT-TRSC-trace-schema.md)               | JSONL event envelope, event types, integrity chain                                                                                                                                                                                                                                                  |
+| 012 | [Workspace Policy](000-docs/012-AT-WPOL-workspace-policy.md)       | Directory layout, naming, gitignore, symlink rules                                                                                                                                                                                                                                                  |
+| 013 | [Coding Standards](000-docs/013-AT-CODE-coding-standards.md)       | TypeScript conventions, tsconfig, Result types, SQL safety                                                                                                                                                                                                                                          |
+| 014 | [Bead Conventions](000-docs/014-OD-BEAD-bead-conventions.md)       | Bead workflow, naming, labels, definition of done                                                                                                                                                                                                                                                   |
+| 015 | [Testing Strategy](000-docs/015-AT-TEST-testing-strategy.md)       | Test layers, fixtures, coverage targets, eval decision tree                                                                                                                                                                                                                                         |
+| 016 | [CI/CD Pipeline Spec](000-docs/016-OD-CICD-pipeline-spec.md)       | CI job definitions, build order, release workflow                                                                                                                                                                                                                                                   |
+| 017 | [Prompt Templates](000-docs/017-AT-PRMP-prompt-templates.md)       | Claude API prompt structure for all 6 compiler passes                                                                                                                                                                                                                                               |
+| 018 | [Promotion Rules](000-docs/018-AT-PROM-promotion-spec.md)          | L4→L2 promotion logic, eligibility, audit trail                                                                                                                                                                                                                                                     |
+| 019 | [ADR/AAR Templates](000-docs/019-OD-TMPL-adr-aar-templates.md)     | Architecture Decision Record and After-Action Review formats                                                                                                                                                                                                                                        |
+| 020 | [Diagram Prompts](000-docs/020-AT-DIAG-diagram-prompts.md)         | Mermaid diagram prompts for 6 architectural views                                                                                                                                                                                                                                                   |
+| 021 | [Security & Scope](000-docs/021-AT-SECV-security-and-scope.md)     | Injection defense, redaction, path safety, v1 deferrals                                                                                                                                                                                                                                             |
+| 034 | [Ecosystem Thesis](000-docs/034-AT-NTRP-ecosystem-thesis.md)       | Peer-reviewed thesis paper — "Compile, Then Govern" — positioning ICO + INTKB as a downstream-coupled local-first knowledge stack. Byte-identical copy in `qmd-team-intent-kb/000-docs/034-AT-NTRP-ecosystem-thesis.md`. Cross-repo epic `intentional-cognition-os-ziz` ↔ `qmd-team-intent-kb-oaa`. |
 
 ## Tech Stack
 
@@ -268,14 +269,14 @@ This repo participates in the **Intent Solutions Testing SOP** per `~/.claude/CL
 
 We eat our own cooking. Every run of ICO against a real corpus produces a structured receipts trail with deterministic citation verification. The dog-food loop IS the primary bug-discovery channel for ICO.
 
-| Path                                                                                                   | Contents                                                                                                                     | Visibility     |
-| ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| `dogfood/JOURNAL.md`                                                                                   | Narrative log of every dog-food session. Append-only.                                                                        | **Committed**  |
-| `dogfood/progress.md`                                                                                  | Machine-appended one-line-per-run trend table. The citation-verify-rate trend signal lives here.                             | **Committed**  |
-| `dogfood/question-banks/<target>-v<N>.yaml`                                                            | Versioned Q/A pairs per target. `id` is stable across versions; `version` bumps on any content change.                       | **Committed**  |
-| `dogfood/runs/<run-id>/{summary.md,metrics.json,friction.jsonl,manifest.json}`                         | Sanitized per-run artifacts. Counts + bead candidates only, no raw answer text.                                              | **Committed**  |
-| `~/.cache/ico-your-internals/runs/<run-id>/{workspace/,receipts.jsonl,verifications.jsonl,cost.jsonl}` | Raw answer content, the compiled wiki, source-grep evidence, per-API-call cost ledger. Echoes source text — never committed. | **Local only** |
-| `plugin/skills/ico-your-internals/`                                                                    | The plugin skill that orchestrates dog-food runs. v0.1: single-target with hand-authored question banks.                     | **Committed**  |
+| Path                                                                                                   | Contents                                                                                                                                                                                                                      | Visibility     |
+| ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| `dogfood/JOURNAL.md`                                                                                   | Narrative log of every dog-food session. Append-only.                                                                                                                                                                         | **Committed**  |
+| `dogfood/progress.md`                                                                                  | Machine-appended one-line-per-run trend table. The citation-verify-rate trend signal lives here.                                                                                                                              | **Committed**  |
+| `dogfood/question-banks/<target>-v<N>.yaml`                                                            | Versioned Q/A pairs per target. `id` is stable across versions; `version` bumps on any content change. v1 = one question per intent; v2 = intent + paraphrases list-of-dicts for phrasing-sensitivity probing (ADRs 029–032). | **Committed**  |
+| `dogfood/runs/<run-id>/{summary.md,metrics.json,friction.jsonl,manifest.json}`                         | Sanitized per-run artifacts. Counts + bead candidates only, no raw answer text.                                                                                                                                               | **Committed**  |
+| `~/.cache/ico-your-internals/runs/<run-id>/{workspace/,receipts.jsonl,verifications.jsonl,cost.jsonl}` | Raw answer content, the compiled wiki, source-grep evidence, per-API-call cost ledger. Echoes source text — never committed.                                                                                                  | **Local only** |
+| `plugin/skills/ico-your-internals/`                                                                    | The plugin skill that orchestrates dog-food runs. v0.1: single-target with hand-authored question banks.                                                                                                                      | **Committed**  |
 
 ### Hard rules (enforced by the skill)
 
@@ -287,12 +288,24 @@ We eat our own cooking. Every run of ICO against a real corpus produces a struct
 ### Trigger a run
 
 ```bash
+# v1 bank — one question per intent (legacy, still supported)
 plugin/skills/ico-your-internals/scripts/run.sh \
     --target ~/000-projects/intent-eval-platform/intent-eval-core \
     --bank dogfood/question-banks/intent-eval-core-v1.yaml
+
+# v2 bank — paraphrase variance. Default --paraphrases primary is v0.1-cost.
+# --paraphrases all probes every declared phrasing (~5x cost).
+plugin/skills/ico-your-internals/scripts/run.sh \
+    --target ~/000-projects/intent-eval-platform/intent-eval-core \
+    --bank dogfood/question-banks/intent-eval-core-v2.yaml \
+    --paraphrases all
+
 plugin/skills/ico-your-internals/scripts/verify.py <run-id>
 plugin/skills/ico-your-internals/scripts/render-summary.py <run-id> --repo-root .
 ```
+
+Headline metrics include `paraphrase_robustness` (new in v0.2) alongside
+`verify_rate`. Reported side-by-side, never composited — per ADR-030.
 
 Or invoke `/ico-your-internals` via Claude Code once the plugin is loaded.
 

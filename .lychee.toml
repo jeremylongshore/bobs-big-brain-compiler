@@ -1,0 +1,65 @@
+# lychee link-checker config — broken-link gate for the docs corpus.
+# v1: conservative — accepts 429 (rate limited) as success; long retry on transient errors.
+
+# Verbose for CI logs.
+verbose = "info"
+
+# Don't follow link rel=nofollow.
+no_progress = true
+
+# Retry transient failures.
+max_retries = 2
+retry_wait_time = 5
+
+# Treat these HTTP codes as success.
+#  - 429 — rate-limited (not broken)
+#  - 403 — anti-bot blocking from CDN-fronted hosts (DOI redirects,
+#    npm, some publishers). The link itself is not broken; the host
+#    rejects scripted clients. We have no way to distinguish "broken"
+#    from "anti-bot" from a status code alone.
+#  - 401 — auth-walled docs (often docs.anthropic.com sub-paths)
+accept = [200, 206, 301, 302, 303, 304, 307, 308, 401, 403, 429]
+
+# Files to check. `include` takes REGEX patterns, not globs — the earlier
+# `**/*.md` form was interpreted as a regex and triggered 'repetition
+# operator missing expression' because `**` has no preceding expression
+# in a regex. The positional `.` arg passed by the workflow walks all
+# files; `exclude_path` (below) prunes the legacy / generated dirs.
+exclude_path = [
+  "node_modules/",
+  "dist/",
+  ".audit-harness/",
+  "coverage/",
+  "reports/",
+  ".vale/",
+  ".husky/",
+  ".github/",
+  "packages/.*/dist/",
+  "packages/.*/coverage/",
+]
+
+# URL patterns to skip.
+exclude = [
+  # Local/private hosts that lychee can't resolve in CI.
+  "^https?://(localhost|127\\.0\\.0\\.1)",
+  "^https?://intentsolutions(\\.io)?/(internal|admin)",
+  # Workspace placeholder URLs that appear in examples.
+  "^file://",
+  # Private GitHub repos that lychee can't auth into without a token.
+  "^https?://github\\.com/jeremylongshore/.*-private",
+  # Anthropic API docs auth-walled.
+  "^https?://docs\\.anthropic\\.com/internal",
+  # GitHub Discussions — repos that haven't enabled Discussions 404 here.
+  # Our SUPPORT.md and CONTRIBUTING.md may link to /discussions optimistically.
+  "^https?://github\\.com/[^/]+/[^/]+/discussions",
+]
+
+# Authoritative cache for repeated runs.
+cache = true
+max_cache_age = "1d"
+
+# Timeout per link.
+timeout = 20
+
+# Concurrency.
+max_concurrency = 8

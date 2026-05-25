@@ -627,7 +627,7 @@ If `pnpm audit --audit-level=high` fails on a known false positive (e.g., a brow
 GHSA-xxxx-xxxx-xxxx
 ```
 
-3. Commit the `.pnpmauditignore` file with a `chore:` commit message documenting the rationale.
+1. Commit the `.pnpmauditignore` file with a `chore:` commit message documenting the rationale.
 
 ---
 

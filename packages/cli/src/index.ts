@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 
 import { register as registerAsk } from './commands/ask.js';
+import { register as registerAudit } from './commands/audit.js';
 import { register as registerCompile } from './commands/compile.js';
 import { register as registerEval } from './commands/eval.js';
 import { register as registerIngest } from './commands/ingest.js';
@@ -16,6 +17,7 @@ import { register as registerPromote } from './commands/promote.js';
 import { register as registerRecall } from './commands/recall.js';
 import { register as registerRender } from './commands/render.js';
 import { register as registerResearch } from './commands/research.js';
+import { register as registerSpool } from './commands/spool.js';
 import { register as registerStatus } from './commands/status.js';
 import { register as registerUnpromote } from './commands/unpromote.js';
 import { friendlyError } from './lib/friendly-errors.js';
@@ -90,6 +92,8 @@ export function buildProgram(): Command {
   registerRecall(p);
   registerPromote(p);
   registerStatus(p);
+  registerSpool(p);
+  registerAudit(p);
   registerEval(p);
   registerInspect(p);
   registerUnpromote(p);

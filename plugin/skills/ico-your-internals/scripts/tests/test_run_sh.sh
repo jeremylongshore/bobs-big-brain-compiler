@@ -148,14 +148,51 @@ else
 fi
 
 # test 6: ask subprocess call has --workspace + --json BEFORE 'ask'
+# Per v0.2 the ask loop lives in ask-loop.py, not run.sh — check there.
 echo
 echo "test 6: ask subprocess call places --workspace + --json BEFORE 'ask'"
-# Look for the Python subprocess.run line. Should match exactly the
-# global-flags-first pattern.
-if grep -qE '"ico", "--workspace", ws, "--json", "ask"' "$RUN_SH"; then
-  pass "subprocess.run uses correct global-flags-first order"
+ASK_LOOP_FILE="$SCRIPT_DIR/../ask-loop.py"
+if [ -f "$ASK_LOOP_FILE" ] && grep -qE '"ico", "--workspace", ws, "--json", "ask"' "$ASK_LOOP_FILE"; then
+  pass "ask-loop.py subprocess.run uses correct global-flags-first order"
 else
-  fail "subprocess.run does not use --workspace/--json before 'ask'"
+  fail "subprocess.run does not use --workspace/--json before 'ask' (looked in $ASK_LOOP_FILE)"
+fi
+
+# test 7: v0.2 — the inline ask-loop heredoc is gone (extracted to ask-loop.py).
+# Per ADR-029 + ADR-032, the ask loop now consumes paraphrases via bank.py;
+# inlining it as a bash heredoc is incompatible with that. Heredoc must die.
+echo
+echo "test 7: v0.2 — inline 'python3 - ... <<\\'PY\\'' heredoc is removed"
+if grep -qE "python3 - .*<<.PY" "$RUN_SH"; then
+  fail "found inline python3 heredoc — should be extracted to ask-loop.py"
+else
+  pass "no inline 'python3 - <<PY' heredoc"
+fi
+
+# test 8: v0.2 — run.sh delegates the ask loop to ask-loop.py
+echo
+echo "test 8: v0.2 — run.sh invokes ask-loop.py for the ask phase"
+if grep -qE "ask-loop\.py" "$RUN_SH"; then
+  pass "run.sh references ask-loop.py"
+else
+  fail "run.sh does not reference ask-loop.py"
+fi
+ASK_LOOP="$SCRIPT_DIR/../ask-loop.py"
+if [ -f "$ASK_LOOP" ]; then
+  pass "ask-loop.py exists"
+else
+  fail "ask-loop.py does not exist at $ASK_LOOP"
+fi
+
+# test 9: v0.2 — --dry surfaces the planned ask count (intents × paraphrases).
+# Per ADR-032 the default mode is 'primary' so a 1-question v1 fixture is
+# 1 intent × 1 paraphrase = 1 ask planned.
+echo
+echo "test 9: v0.2 — --dry reports planned ask count"
+if echo "$DRY_OUT" | grep -qE '"asks_planned":[[:space:]]*[0-9]+'; then
+  pass "--dry payload reports asks_planned"
+else
+  fail "--dry payload missing asks_planned"
 fi
 
 echo

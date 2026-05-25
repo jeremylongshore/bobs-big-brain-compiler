@@ -1,0 +1,28 @@
+# Test fixture: v2-shape bank (intents + paraphrases-as-list-of-dicts).
+# One intent with two paraphrases — minimum case for round-trip and
+# primary-only filtering tests.
+
+version: v2
+target: fixture-target
+authored: 2026-05-22
+author: test-fixture
+
+questions:
+  - id: Q01
+    intent: |
+      Probe whether ICO can articulate the fixture's purpose.
+    paraphrases:
+      - text: 'What does the fixture do?'
+        style: direct
+        primary: true
+      - text: "Could you describe the fixture's purpose?"
+        style: open
+        primary: false
+    expected_substrings:
+      - 'fixture'
+    expected_sources:
+      - README.md
+    verification_mode: strong
+    recall_floor: 0.5
+    notes: |
+      Two-paraphrase fixture for v2 round-trip + primary-filter tests.
