@@ -28,7 +28,6 @@
 - feat(plugin/scripts): paraphrase_robustness metric in verify.py (3439e07)
 - feat(plugin/scripts): bank.py schema library + ADRs 029-032 (c9a9b92)
 
-
 ## [v1.2.5] - 2026-05-23
 
 - fix(plugin/verify): resolve wiki/ citations against workspace cache (closes h99) (#82) (2ecefc5)

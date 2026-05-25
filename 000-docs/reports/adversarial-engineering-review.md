@@ -159,32 +159,32 @@ Based on the adversarial review, the recommended execution order changes from th
 
 ### Enhanced Order (post-review)
 
-**Phase 1: Fix critical issues (1-2 days)**
+#### Phase 1: Fix critical issues (1-2 days)
 
 - Fix `readLastLine` O(n) → O(1) with backward seek or cached hash
 - Add `db.transaction()` to createTask, transitionTask, promoteArtifact
 - Add integrity chain verification function
 - Wire `materializeStatus()` into `transitionTask()` for auto-refresh
 
-**Phase 2: Build MCP server (2-3 days)**
+#### Phase 2: Build MCP server (2-3 days)
 
 - Ship working code before any publishing
 - Use it yourself for at least a week
 - Discover what workspace operations agents actually need
 
-**Phase 3: Build eval framework (2 days)**
+#### Phase 3: Build eval framework (2 days)
 
 - Create baseline: raw docs in 1M context vs compiled wiki
 - Measure answer quality delta
 - If compilation doesn't beat raw context, simplify the pipeline
 
-**Phase 4: Write essay from experience (1-2 days)**
+#### Phase 4: Write essay from experience (1-2 days)
 
 - Frame as "what we built, what worked, what didn't"
 - Not "paradigm shift" — "convergent insight with honest assessment"
 - Include eval results
 
-**Phase 5: Extract spec from overlap (when second implementation exists)**
+#### Phase 5: Extract spec from overlap (when second implementation exists)
 
 - Not before. A spec with one implementation is a config file.
 

@@ -1,0 +1,50 @@
+# Eval set for the compile-vs-RAG experiment (bead zcc.4).
+# 10 questions over the Anthropic Python SDK docs (non-author corpus).
+# Each question has expected_substrings that the answer must contain.
+# Hand-authored 2026-05-25 — verified each substring exists in at least
+# one corpus file via grep before recording here.
+version: 1
+corpus: anthropic-sdk-python
+question_count: 10
+grading: case_insensitive_substring
+questions:
+  - id: Q01
+    question: How do you make a streaming request with the Anthropic Python SDK?
+    expected_substrings: ['client.messages.stream', 'context manager']
+    source_doc: 02-helpers.md
+  - id: Q02
+    question: Which class do you import to use async/await with the Anthropic API?
+    expected_substrings: ['AsyncAnthropic', 'asyncio']
+    source_doc: 00-README.md
+  - id: Q03
+    question: How does the SDK signal a tool use response from the model?
+    expected_substrings: ['tool_use']
+    source_doc: 03-tools.md
+  - id: Q04
+    question: What does the MessageStreamManager yield, and what events does the stream emit?
+    expected_substrings: ['MessageStream']
+    source_doc: 02-helpers.md
+  - id: Q05
+    question: What is the canonical entry point class for synchronous Anthropic API calls?
+    expected_substrings: ['Anthropic']
+    source_doc: 00-README.md
+  - id: Q06
+    question: How do you contribute a change to the Anthropic Python SDK repo?
+    expected_substrings: ['pull request']
+    source_doc: 04-CONTRIBUTING.md
+  - id: Q07
+    question: What environment variable does the SDK read for the API key by default?
+    expected_substrings: ['ANTHROPIC_API_KEY']
+    source_doc: 00-README.md
+  - id: Q08
+    question: How do you configure tools that the model can call during a Messages API request?
+    expected_substrings: ['tools']
+    source_doc: 03-tools.md
+  - id: Q09
+    question: What helper does the SDK provide for accumulating message events into a final assembled Message?
+    expected_substrings: ['accumulates']
+    source_doc: 02-helpers.md
+  - id: Q10
+    question: Which file in the repo lists the public API surface (classes, methods)?
+    expected_substrings: ['api.md']
+    source_doc: 01-api.md
