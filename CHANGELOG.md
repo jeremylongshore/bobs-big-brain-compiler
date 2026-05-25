@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.4.2] - 2026-05-25
+
+- Merge pull request #101 from jeremylongshore/feat/release-skip-chore-only (f242602)
+- ci(release): emit single trailing newline + clean existing CHANGELOG (6d868d8)
+- ci(release): skip release when commits since last tag are chore-only (0934483)
+
 ## [v1.4.1] - 2026-05-25
 
 - chore(beads): close zcc epic — all 5 children done (af57b3c)
