@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.4.1] - 2026-05-25
+
+- chore(beads): close zcc epic — all 5 children done (af57b3c)
+
+
 ## [v1.4.0] - 2026-05-25
 
 - Merge pull request #100 from jeremylongshore/feat/zcc-followup-experiment-and-md036 (20ece87)
