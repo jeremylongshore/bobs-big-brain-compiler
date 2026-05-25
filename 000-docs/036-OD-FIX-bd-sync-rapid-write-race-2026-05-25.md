@@ -55,7 +55,8 @@ The helper walks up from `$PWD` to the nearest `.beads/` directory
 ```bash
 flush_jsonl() {
   local dir="$PWD"
-  while [ "$dir" != "/" ]; do
+  # Loop guards: empty dir or '.' would make dirname loop forever.
+  while [ -n "$dir" ] && [ "$dir" != "/" ] && [ "$dir" != "." ]; do
     if [ -d "$dir/.beads" ]; then
       bd export -o "$dir/.beads/issues.jsonl" >/dev/null 2>&1 || true
       return 0

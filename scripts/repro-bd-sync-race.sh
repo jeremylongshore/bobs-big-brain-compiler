@@ -33,6 +33,17 @@
 
 set -euo pipefail
 
+# Dependency check — bd-sync lives in ~/bin/ (not in this repo), so a
+# fresh CI runner or new developer machine may be missing it. Fail
+# fast with an actionable message instead of a generic
+# "command not found" mid-loop.
+for cmd in bd bd-sync jq; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "Error: required command '$cmd' not found in PATH." >&2
+    exit 3
+  fi
+done
+
 N="${1:-10}"
 SANDBOX=$(mktemp -d /tmp/bd-sync-race-repro-XXXXXX)
 trap "rm -rf $SANDBOX" EXIT
@@ -45,7 +56,14 @@ for i in $(seq 1 "$N"); do
 done
 
 BEADS=$(bd list --status open --format json 2>/dev/null | jq -r '.[].id' | sort)
-COUNT=$(echo "$BEADS" | wc -l | tr -d ' ')
+# `echo "$BEADS" | wc -l` returns 1 even when BEADS is empty (echo of
+# an empty var prints a single newline). Guard explicitly so N=1 +
+# zero-bead setup doesn't false-positive a "1/1 PASS".
+if [ -z "$BEADS" ]; then
+  COUNT=0
+else
+  COUNT=$(echo "$BEADS" | wc -l | tr -d ' ')
+fi
 if [ "$COUNT" -ne "$N" ]; then
   echo "setup failure: expected $N beads, got $COUNT" >&2
   exit 2
