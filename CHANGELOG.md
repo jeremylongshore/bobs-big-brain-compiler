@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.4.4] - 2026-05-25
+
+- Merge pull request #104 from jeremylongshore/feat/bd-sync-race-gemini-followups (43699e6)
+- fix(bd-sync-repro): address PR #103 Gemini review findings (0e60ba5)
+
 ## [v1.4.3] - 2026-05-25
 
 - Merge pull request #103 from jeremylongshore/feat/bd-sync-rapid-write-race-55q.4 (bf57454)
