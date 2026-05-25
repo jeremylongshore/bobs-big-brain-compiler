@@ -288,7 +288,9 @@ jobs:
             else
               git log "${PREV_TAG}..HEAD" --pretty=format:"- %s (%h)"
             fi
-            echo ""
+            # Single trailing newline — the next `## [version]` heading from
+            # the existing file already carries its own leading blank line
+            # via `tail -n +2`. Two echoes here produced MD012 violations.
             echo ""
           } > /tmp/changelog_entry.md
 
