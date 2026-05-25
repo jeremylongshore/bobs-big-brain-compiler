@@ -1,0 +1,22 @@
+{
+  "experiment": "compile-vs-rag",
+  "version": "v1",
+  "ico_workspace": "/tmp/compile-vs-rag-ico-1779737086/experiment",
+  "question_count": 5,
+  "rag": {
+    "pass": 0,
+    "partial": 0,
+    "fail": 0,
+    "score": 0.0,
+    "total_tokens": 0,
+    "avg_latency_s": 0.0
+  },
+  "ico": {
+    "pass": 3,
+    "partial": 1,
+    "fail": 1,
+    "score": 0.7,
+    "total_tokens": 0,
+    "avg_latency_s": 8.84
+  }
+}

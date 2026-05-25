@@ -1,0 +1,34 @@
+version: 1
+corpus: anthropic-sdk-python
+question_count: 5
+grading: case_insensitive_substring
+questions:
+  - id: Q01
+    question: How do you make a streaming request with the Anthropic Python SDK?
+    expected_substrings:
+      - client.messages.stream
+      - context manager
+    source_doc: 02-helpers.md
+  - id: Q02
+    question: Which class do you import to use async/await with the Anthropic API?
+    expected_substrings:
+      - AsyncAnthropic
+      - asyncio
+    source_doc: 00-README.md
+  - id: Q03
+    question: How does the SDK signal a tool use response from the model?
+    expected_substrings:
+      - tool_use
+    source_doc: 03-tools.md
+  - id: Q04
+    question: What does the MessageStreamManager yield, and what events does the stream
+      emit?
+    expected_substrings:
+      - MessageStream
+    source_doc: 02-helpers.md
+  - id: Q05
+    question: What is the canonical entry point class for synchronous Anthropic API
+      calls?
+    expected_substrings:
+      - Anthropic
+    source_doc: 00-README.md
