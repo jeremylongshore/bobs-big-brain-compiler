@@ -108,6 +108,69 @@ jobs:
           if [ "$COMMIT_COUNT" -eq 0 ]; then
             echo "No new commits since last tag. Skipping release."
             echo "needed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Manual dispatch always releases — operator-intent overrides
+          # the commit-type filter (they ran the workflow on purpose).
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual dispatch — bypassing commit-type filter."
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Commit-type filter: skip releases when ALL commits since the
+          # previous tag are non-release-worthy types. Per conventional
+          # commit conventions, these types do not warrant a published
+          # artifact on their own:
+          #   chore, docs, style, test, ci, build
+          # Anything with a `!:` breaking-change marker OR a `BREAKING
+          # CHANGE` footer always counts as release-worthy regardless of
+          # type. Unknown / non-conventional commit subjects also count
+          # as release-worthy (safer to release-on-doubt than silently
+          # skip a real change). Merge commits (`Merge pull request ...`,
+          # `Merge branch ...`) are ignored — their underlying squashed
+          # commits are what semver should reflect.
+          NON_RELEASE_TYPES_RE='^(chore|docs|style|test|ci|build)(\([^)]*\))?:'
+          BREAKING_RE='(BREAKING CHANGE|^[a-z]+(\([^)]*\))?!:)'
+
+          # Collect every commit subject + body (separator '|', so newlines
+          # in bodies don't fool the per-commit loop). %s = subject, %b =
+          # body, %P = parent count (used to drop merge commits where
+          # parents > 1).
+          RELEASE_COMMITS=0
+          NON_RELEASE_COMMITS=0
+          MERGE_COMMITS=0
+          while IFS=$'\t' read -r parents subject body; do
+            # Skip merge commits (parents has more than one SHA).
+            wc_p=$(echo "$parents" | wc -w | tr -d ' ')
+            if [ "$wc_p" -gt 1 ]; then
+              MERGE_COMMITS=$((MERGE_COMMITS + 1))
+              continue
+            fi
+            # Breaking marker anywhere → release.
+            if echo "$subject"$'\n'"$body" | grep -qE "$BREAKING_RE"; then
+              RELEASE_COMMITS=$((RELEASE_COMMITS + 1))
+              continue
+            fi
+            # Non-release type prefix → skip.
+            if echo "$subject" | grep -qE "$NON_RELEASE_TYPES_RE"; then
+              NON_RELEASE_COMMITS=$((NON_RELEASE_COMMITS + 1))
+              continue
+            fi
+            # Anything else (feat/fix/refactor/perf/unknown) → release.
+            RELEASE_COMMITS=$((RELEASE_COMMITS + 1))
+          done < <(git log "${PREV_TAG}..HEAD" --pretty=format:"%P%x09%s%x09%b%x00" | tr '\0' '\n')
+
+          echo "Commits since $PREV_TAG:"
+          echo "  release-worthy: $RELEASE_COMMITS"
+          echo "  non-release    (chore/docs/style/test/ci/build): $NON_RELEASE_COMMITS"
+          echo "  merge commits  (ignored): $MERGE_COMMITS"
+
+          if [ "$RELEASE_COMMITS" -eq 0 ]; then
+            echo "All non-merge commits are non-release types. Skipping release."
+            echo "(Override: run the workflow via workflow_dispatch to force a release.)"
+            echo "needed=false" >> "$GITHUB_OUTPUT"
           else
             echo "needed=true" >> "$GITHUB_OUTPUT"
           fi
@@ -225,7 +288,9 @@ jobs:
             else
               git log "${PREV_TAG}..HEAD" --pretty=format:"- %s (%h)"
             fi
-            echo ""
+            # Single trailing newline — the next `## [version]` heading from
+            # the existing file already carries its own leading blank line
+            # via `tail -n +2`. Two echoes here produced MD012 violations.
             echo ""
           } > /tmp/changelog_entry.md
 
