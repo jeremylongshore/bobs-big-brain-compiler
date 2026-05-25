@@ -21,11 +21,12 @@
  * @module audit-verify
  */
 
-import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
 import { err, ok, type Result } from '@ico/types';
+
+import { sha256Hex } from './crypto.js';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -59,10 +60,6 @@ export interface AuditVerifyResult {
 // ---------------------------------------------------------------------------
 // Internal
 // ---------------------------------------------------------------------------
-
-function sha256Hex(line: string): string {
-  return createHash('sha256').update(line, 'utf-8').digest('hex');
-}
 
 interface ParsedLine {
   /** Raw text of the JSONL line (no trailing newline). */
