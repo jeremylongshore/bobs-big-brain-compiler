@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.5.1] - 2026-05-26
+
+- chore(beads): file P4 sweep bead for doc 037 prose polish (GFM table-cell escape semantics) (d870d64)
+- Merge pull request #108 from jeremylongshore/fix/codeql-triage-corrections (2974682)
+- fix(docs/security): correct CodeQL triage — hash-chain race is real, alert #13 reopened (fb11fb1)
+- chore(beads): close 0wy.3 (CodeQL triage), file lhm (reliability follow-up) (d98b0d6)
+- Merge pull request #107 from jeremylongshore/feat/codeql-triage-0wy.3 (96f69e0)
+- docs(security): CodeQL alert triage — 31 dismissed, 1 follow-up bead (1613593)
+- chore(beads): nhj.1 + 0wy.1 closed, 2v4 filed (compiler mutation deferral) (8e14ed8)
+
 ## [v1.5.0] - 2026-05-26
 
 - Merge pull request #106 from jeremylongshore/feat/stryker-baseline-lock-0wy.1 (01490d8)
