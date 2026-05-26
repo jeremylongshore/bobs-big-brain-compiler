@@ -1,23 +1,39 @@
 name: Mutation Testing
 
-# L3 mutation-survival measurement via Stryker. Targets kernel + compiler
-# (highest-value modules) per stryker.config.json. Decoupled from the PR
-# critical path because mutation runs are slow — runs nightly + on-demand.
-# Once a baseline mutation score is recorded in tests/TESTING.md, wire the
-# `mutation` job here into the required-checks set.
+# L3 mutation-survival measurement via Stryker. Targets kernel
+# (highest-value module) per stryker.config.json.
+#
+# Triggers (post-baseline lock 2026-05-25, bead 0wy.1):
+#   - pull_request: gates merges. Job name `mutation-test` is the
+#     required check. stryker.config.json `thresholds.break` defines
+#     the floor; PRs that drop the kill rate below the floor fail
+#     this job. Floor is `(baseline - 5)` per the tolerance band
+#     defined in tests/TESTING.md.
+#   - workflow_dispatch / schedule: on-demand + nightly for trend data.
+#
+# Scope (kernel-only, not compiler) is intentional for v1: kernel has
+# the deterministic-state-machine surface where mutation testing has
+# the highest signal-to-noise. The compiler talks to Claude through a
+# mockable interface (ClaudeClient) but a meaningful mutation score
+# there would need a coverage-of-mocked-paths story we don't have yet.
+# Compiler scope is the natural successor bead.
 
 on:
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
   schedule:
-    # Nightly at 04:00 UTC.
+    # Nightly at 04:00 UTC for trend data.
     - cron: '0 4 * * *'
 
 permissions:
   contents: read
 
 jobs:
-  stryker:
-    name: Stryker (kernel + compiler)
+  mutation-test:
+    # Job name must match the required-check name in branch protection.
+    name: mutation-test
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:

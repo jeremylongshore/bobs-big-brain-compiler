@@ -17,20 +17,20 @@
 
 ## Thresholds (engineer-owned, hash-pinned)
 
-| Gate                          | Floor | Rationale                                                                                      |
-| ----------------------------- | ----- | ---------------------------------------------------------------------------------------------- |
-| `coverage.line.types`         | 80%   | Already enforced (vitest.config.ts)                                                            |
-| `coverage.line.kernel`        | 80%   | Already enforced (vitest.config.ts)                                                            |
-| `coverage.branch.kernel`      | 70%   | Already enforced (vitest.config.ts)                                                            |
-| `coverage.line.compiler`      | 60%   | Initial floor at current measured (~62%) − 2% to halt regression. Climb plan tracked in beads. |
-| `coverage.line.cli`           | 43%   | Initial floor at current measured (~45%) − 2%. Climb plan tracked in beads.                    |
-| `coverage.line.benchmarks`    | n/a   | Benchmark harness — coverage not a meaningful metric for scenario runners.                     |
-| `mutation.killed.kernel`      | TBD   | Set after first Stryker baseline. Recommend `current_score − 5%`.                              |
-| `mutation.killed.compiler`    | TBD   | Set after first Stryker baseline.                                                              |
-| `crap.max.prod`               | 30    | Halt threshold per audit-harness defaults.                                                     |
-| `crap.max.test`               | 15    | Halt threshold per audit-harness defaults.                                                     |
-| `crap.project_average.max`    | 10    | Halt threshold per audit-harness defaults.                                                     |
-| `architecture.violations.max` | 0     | Zero-tolerance once dependency-cruiser is wired.                                               |
+| Gate                          | Floor | Rationale                                                                                                                                                                                        |
+| ----------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `coverage.line.types`         | 80%   | Already enforced (vitest.config.ts)                                                                                                                                                              |
+| `coverage.line.kernel`        | 80%   | Already enforced (vitest.config.ts)                                                                                                                                                              |
+| `coverage.branch.kernel`      | 70%   | Already enforced (vitest.config.ts)                                                                                                                                                              |
+| `coverage.line.compiler`      | 60%   | Initial floor at current measured (~62%) − 2% to halt regression. Climb plan tracked in beads.                                                                                                   |
+| `coverage.line.cli`           | 43%   | Initial floor at current measured (~45%) − 2%. Climb plan tracked in beads.                                                                                                                      |
+| `coverage.line.benchmarks`    | n/a   | Benchmark harness — coverage not a meaningful metric for scenario runners.                                                                                                                       |
+| `mutation.killed.kernel`      | 55%   | Locked 2026-05-25 (bead 0wy.1). Baseline 60.25% (1800 killed of 2989 mutants, ignoreStatic=true, ~11:36 runtime). Floor = baseline − 5. Re-baseline + bump when kernel tests materially improve. |
+| `mutation.killed.compiler`    | n/a   | Compiler scope deferred. ClaudeClient is mocked in tests, so a meaningful mutation score there needs a mock-coverage story we don't have yet. Tracked as follow-up bead.                         |
+| `crap.max.prod`               | 30    | Halt threshold per audit-harness defaults.                                                                                                                                                       |
+| `crap.max.test`               | 15    | Halt threshold per audit-harness defaults.                                                                                                                                                       |
+| `crap.project_average.max`    | 10    | Halt threshold per audit-harness defaults.                                                                                                                                                       |
+| `architecture.violations.max` | 0     | Zero-tolerance once dependency-cruiser is wired.                                                                                                                                                 |
 
 ### Machine-readable floors (audit-harness contract)
 
@@ -43,14 +43,14 @@ the harness will REFUSE diffs against.
 ```
 coverage.line: 43
 coverage.branch: 40
-mutation.kill_rate: 0
+mutation.kill_rate: 55
 ```
 
 The conservative `coverage.line: 43` matches the lowest enforced per-package
 floor (`packages/cli/src`). Once compiler + cli climb past 60%, raise this
-line in lock-step. `mutation.kill_rate: 0` is the initial value while
-Stryker baseline is being recorded; bump to `(baseline − 5)` after the
-first run.
+line in lock-step. `mutation.kill_rate: 55` reflects the locked kernel
+baseline minus the 5-point tolerance band (baseline 60.25%, measured
+2026-05-25, bead 0wy.1).
 
 ## Waived layers
 
@@ -65,43 +65,44 @@ first run.
 
 State as of 2026-05-19 after the `/implement-tests` install pass.
 
-| Layer | Tool                                              | Status    | Wired                                          |
-| ----- | ------------------------------------------------- | --------- | ---------------------------------------------- |
-| L0    | `@intentsolutions/audit-harness@0.1.0`            | installed | devDep + `scripts/audit-harness` wrapper       |
-| L1    | husky                                             | installed | `.husky/`                                      |
-| L1    | commitlint + `@commitlint/config-conventional`    | installed | `.husky/commit-msg`                            |
-| L1    | lint-staged                                       | installed | `package.json#lint-staged` + pre-commit        |
-| L1    | `audit-harness escape-scan --staged` (pre-commit) | installed | `.husky/pre-commit`                            |
-| L1    | `audit-harness verify` (pre-push)                 | installed | `.husky/pre-push`                              |
-| L2    | ESLint + typescript-eslint                        | installed | CI (Lint job)                                  |
-| L2    | `tsc --noEmit`                                    | installed | CI (Typecheck job)                             |
-| L2    | OSV scanner (SCA)                                 | installed | CI (Security Audit job)                        |
-| L2    | prettier                                          | installed | CI (Format Check job) + pre-commit             |
-| L2    | gitleaks                                          | installed | CI (Secret Scan job)                           |
-| L2    | `audit-harness verify` (CI)                       | installed | CI (Audit Harness Verify job)                  |
-| L3    | vitest                                            | installed | CI (Test job)                                  |
-| L3    | coverage (`@vitest/coverage-v8`)                  | installed | thresholds: types/kernel/compiler/cli          |
-| L3    | Stryker (mutation, kernel + compiler)             | installed | `.github/workflows/mutation.yml` (nightly)     |
-| L3    | dependency-cruiser (architecture)                 | installed | CI (Architecture Rules job)                    |
-| L3    | fast-check (property-based)                       | absent    | n/a — P2 follow-up                             |
-| L4    | `tests/integration/**`                            | installed | 1 starter (cross-package-boundary.test.ts)     |
-| L5    | OSV scanner (SCA)                                 | installed | CI (Security Audit job)                        |
-| L5    | CodeQL (SAST)                                     | installed | `.github/workflows/codeql.yml` (PR+weekly)     |
-| L5    | `evals/` framework (functional quality)           | installed | manual + CI-eligible                           |
-| L5    | `packages/benchmarks/` (perf + degradation gate)  | installed | manual                                         |
-| L6    | post-build CLI smoke                              | installed | CI (CLI Smoke job, against built dist/)        |
-| L6    | `.feature` files                                  | absent    | n/a — eval YAML serves equivalent role here    |
-| L7    | `RTM.md`                                          | installed | n/a — engineer-owned                           |
-| L7    | `PERSONAS.md`                                     | installed | n/a — engineer-owned                           |
-| L7    | `JOURNEYS.md`                                     | installed | n/a — engineer-owned                           |
-| L7    | hash manifest                                     | installed | `.harness-hash` pins `.dependency-cruiser.cjs` |
+| Layer | Tool                                              | Status    | Wired                                                                           |
+| ----- | ------------------------------------------------- | --------- | ------------------------------------------------------------------------------- |
+| L0    | `@intentsolutions/audit-harness@0.1.0`            | installed | devDep + `scripts/audit-harness` wrapper                                        |
+| L1    | husky                                             | installed | `.husky/`                                                                       |
+| L1    | commitlint + `@commitlint/config-conventional`    | installed | `.husky/commit-msg`                                                             |
+| L1    | lint-staged                                       | installed | `package.json#lint-staged` + pre-commit                                         |
+| L1    | `audit-harness escape-scan --staged` (pre-commit) | installed | `.husky/pre-commit`                                                             |
+| L1    | `audit-harness verify` (pre-push)                 | installed | `.husky/pre-push`                                                               |
+| L2    | ESLint + typescript-eslint                        | installed | CI (Lint job)                                                                   |
+| L2    | `tsc --noEmit`                                    | installed | CI (Typecheck job)                                                              |
+| L2    | OSV scanner (SCA)                                 | installed | CI (Security Audit job)                                                         |
+| L2    | prettier                                          | installed | CI (Format Check job) + pre-commit                                              |
+| L2    | gitleaks                                          | installed | CI (Secret Scan job)                                                            |
+| L2    | `audit-harness verify` (CI)                       | installed | CI (Audit Harness Verify job)                                                   |
+| L3    | vitest                                            | installed | CI (Test job)                                                                   |
+| L3    | coverage (`@vitest/coverage-v8`)                  | installed | thresholds: types/kernel/compiler/cli                                           |
+| L3    | Stryker (mutation, kernel)                        | installed | `.github/workflows/mutation.yml` (PR + nightly, `mutation-test` job, floor 55%) |
+| L3    | dependency-cruiser (architecture)                 | installed | CI (Architecture Rules job)                                                     |
+| L3    | fast-check (property-based)                       | absent    | n/a — P2 follow-up                                                              |
+| L4    | `tests/integration/**`                            | installed | 1 starter (cross-package-boundary.test.ts)                                      |
+| L5    | OSV scanner (SCA)                                 | installed | CI (Security Audit job)                                                         |
+| L5    | CodeQL (SAST)                                     | installed | `.github/workflows/codeql.yml` (PR+weekly)                                      |
+| L5    | `evals/` framework (functional quality)           | installed | manual + CI-eligible                                                            |
+| L5    | `packages/benchmarks/` (perf + degradation gate)  | installed | manual                                                                          |
+| L6    | post-build CLI smoke                              | installed | CI (CLI Smoke job, against built dist/)                                         |
+| L6    | `.feature` files                                  | absent    | n/a — eval YAML serves equivalent role here                                     |
+| L7    | `RTM.md`                                          | installed | n/a — engineer-owned                                                            |
+| L7    | `PERSONAS.md`                                     | installed | n/a — engineer-owned                                                            |
+| L7    | `JOURNEYS.md`                                     | installed | n/a — engineer-owned                                                            |
+| L7    | hash manifest                                     | installed | `.harness-hash` pins `.dependency-cruiser.cjs`                                  |
 
 ### Known limits in the current install
 
-- **Stryker config not hash-pinned**: the harness `PATTERNS` list matches `stryker.conf.json` and `stryker.config.js` but not `stryker.config.json` (our extension). Once a mutation baseline is recorded and `break: N` is set, manually rename to `stryker.config.js` (CommonJS) or wait for an upstream harness patch. Until then, the break threshold can be lowered silently.
-- **Stryker `timeoutMS: 30000`** may inflate the kill rate via false timeouts on compiler mutants that touch the full ingest → compile pipeline. Watch the first baseline run for timeout-heavy results before locking a `break` threshold.
+- **Stryker config not hash-pinned**: the harness `PATTERNS` list matches `stryker.conf.json` and `stryker.config.js` but not `stryker.config.json` (our extension). Manually rename to `stryker.config.js` (CommonJS) or wait for an upstream harness patch. Until then, the break threshold can be lowered silently. Tracked as a sub-bead under epic `0wy`.
+- **Stryker `timeoutMS: 30000`** is appropriate for kernel (only 1 timeout in 2989 mutants). If compiler scope is added later, watch for timeout-heavy results.
 - **CodeQL** runs the `security-and-quality` query pack — strict by default. First PR may surface advisory findings that need triage before the gate is locked as required-check.
-- **Mutation job** is currently `workflow_dispatch + schedule` (nightly), NOT in the required-check set. Wire to required only after a baseline + floor are recorded in this doc.
+- **Mutation job is now `pull_request` + nightly** (2026-05-25, bead 0wy.1). Job name `mutation-test` must be added to branch-protection required checks via GitHub UI (operator action; cannot be done by CI). The break threshold of 55% guards the kernel kill rate; PR drop below that fails the build.
+- **Compiler mutation scope deferred**: `packages/compiler/` talks to Claude through `ClaudeClient`, mocked in tests with `vi.fn()`. A naive Stryker run on compiler would score against mock behavior, not real model interaction — meaningless gate. Real signal needs either a contract-test approach against mock paths, or an integration-test arm against a fixture-recorded model. Tracked as the natural successor bead.
 
 ## Frameworks (observational)
 

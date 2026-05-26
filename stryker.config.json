@@ -1,25 +1,29 @@
 {
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
-  "_comment": "Initial Stryker config — targets kernel + compiler (highest-value modules) first. Add cli/types/benchmarks once baseline scores are recorded.",
+  "_comment": "Stryker config scoped to kernel (deterministic state-machine surface — highest mutation-test signal). Compiler scope deferred to a follow-up bead: compiler talks to Claude through ClaudeClient which is mocked in tests, so mutation score there reflects mock-coverage not real behavior. See bead 0wy.1 closing notes + tests/TESTING.md.",
   "packageManager": "pnpm",
   "testRunner": "vitest",
+  "plugins": ["@stryker-mutator/vitest-runner"],
   "coverageAnalysis": "perTest",
+  "_ignoreStatic_note": "Static mutants (string constants, etc.) are 10% of mutants but 60% of runtime in this codebase. CI feasibility requires ignoring them. They have low kill-signal anyway — surviving a static mutant only means no test ran the file at all.",
+  "ignoreStatic": true,
   "mutate": [
     "packages/kernel/src/**/*.ts",
-    "packages/compiler/src/**/*.ts",
-    "!packages/*/src/**/*.test.ts",
-    "!packages/*/src/**/__tests__/**",
-    "!packages/*/src/**/*.d.ts"
+    "!packages/kernel/src/**/*.test.ts",
+    "!packages/kernel/src/**/__tests__/**",
+    "!packages/kernel/src/**/*.d.ts"
   ],
+  "_vitest_dir_note": "Stryker invokes vitest at the package root (packages/kernel) not the monorepo root — vitest configs use cwd-relative include patterns (src/**/*.test.ts). The explicit plugins entry is required because pnpm's symlink layout breaks Stryker's default '@stryker-mutator/*' plugin glob.",
   "vitest": {
-    "configFile": "vitest.config.ts"
+    "configFile": "packages/kernel/vitest.config.ts",
+    "dir": "packages/kernel"
   },
   "thresholds": {
     "high": 80,
     "low": 60,
-    "break": 0
+    "break": 55
   },
-  "_break_note": "Initial floor = 0 (no break). Set engineer-owned floor in tests/TESTING.md once first baseline lands, then bump `break` here to (baseline - 5).",
+  "_break_note": "Baseline measured 2026-05-25: 60.25% total mutation kill rate (1800 killed of 2989 mutants, 11:36 wall-clock, ignoreStatic=true). Floor = baseline - 5 = 55. PRs that drop below this fail the mutation-test job. Re-baseline + bump floor any time the kernel test suite materially improves. See tests/TESTING.md.",
   "concurrency": 4,
   "timeoutMS": 30000,
   "reporters": ["progress", "clear-text", "html", "json"],
