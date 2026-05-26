@@ -2,7 +2,7 @@
 
 ## Beads (bd) Issue Tracking
 
-This project uses [beads](https://github.com/steveyegge/beads) for AI-friendly task tracking.
+This project uses [beads](https://github.com/gastownhall/beads) for AI-friendly task tracking.
 Tasks are stored in `.beads/` and tracked via the `bd` CLI.
 
 ## Quick Reference
