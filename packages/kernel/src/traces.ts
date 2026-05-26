@@ -188,13 +188,18 @@ export function writeTrace(
 
       const jsonLine = JSON.stringify(envelope);
 
+      // statSync throws ENOENT if the file doesn't exist yet (first event
+      // of the day). Catching the error and leaving line_offset at 0 is
+      // correct — that's the right value for "we are about to write the
+      // first line of a new file." Removing the prior existsSync+statSync
+      // pair also eliminates the CodeQL js/file-system-race check-then-use
+      // pattern; CodeQL doesn't model the surrounding SQLite EXCLUSIVE
+      // transaction's locking semantics.
       let line_offset = 0;
-      if (existsSync(absoluteFilePath)) {
-        try {
-          line_offset = statSync(absoluteFilePath).size;
-        } catch {
-          line_offset = 0;
-        }
+      try {
+        line_offset = statSync(absoluteFilePath).size;
+      } catch {
+        // ENOENT or other stat failure — treat as new file at offset 0.
       }
 
       appendFileSync(absoluteFilePath, jsonLine + '\n', 'utf-8');
