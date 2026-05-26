@@ -11,7 +11,8 @@
   },
   "scripts": {
     "build": "pnpm -r --workspace-concurrency=1 build",
-    "test": "pnpm -r test",
+    "test": "pnpm -r test && pnpm test:integration",
+    "test:integration": "pnpm -F @ico/kernel build && vitest run --config vitest.config.ts tests/integration/",
     "test:coverage": "vitest run --coverage --config vitest.config.ts",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",

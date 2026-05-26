@@ -12,11 +12,15 @@
 import { randomUUID } from 'node:crypto';
 import {
   appendFileSync,
+  closeSync,
+  constants as fsConstants,
   existsSync,
+  fstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
-  statSync,
   writeFileSync,
+  writeSync,
 } from 'node:fs';
 import { join } from 'node:path';
 
@@ -157,54 +161,80 @@ export function writeTrace(
     const tracesDir = join(workspacePath, 'audit', 'traces');
     mkdirSync(tracesDir, { recursive: true });
 
-    // Compute prev_hash from the last line of today's file.
-    const lastLine = readLastLine(absoluteFilePath);
-    const prev_hash = lastLine !== null ? sha256Hex(lastLine) : null;
-
-    // Build the envelope with fields in the specified order.
-    const envelope: TraceEnvelope = {
-      timestamp,
-      event_type: eventType,
-      event_id,
-      correlation_id,
-      payload: safePayload,
-      prev_hash,
-    };
-
-    const jsonLine = JSON.stringify(envelope);
-
-    // Capture byte offset before write.
-    let line_offset = 0;
-    if (existsSync(absoluteFilePath)) {
-      try {
-        line_offset = statSync(absoluteFilePath).size;
-      } catch {
-        line_offset = 0;
-      }
-    }
-
-    // Append to the JSONL file.
-    appendFileSync(absoluteFilePath, jsonLine + '\n', 'utf-8');
-
-    // Index in SQLite.
-    const stmt = db.prepare<
+    // Critical section: prev_hash computation + JSONL append + SQL index
+    // insert must be serialized across processes. Without this, two concurrent
+    // writers read the same last line, compute identical prev_hash, and both
+    // append — the hash chain breaks and `verifyAuditChain` flags the
+    // discontinuity. SQLite's EXCLUSIVE transaction acquires a cross-process
+    // file lock for the duration of the wrapped function (better-sqlite3
+    // holds the lock for ALL work inside, not just the SQL ops). See bead
+    // intentional-cognition-os-lhm + the audit-chain correctness note in
+    // 000-docs/037 § "Correction (2026-05-26)".
+    const insertStmt = db.prepare<
       [string, string, string | null, string, string, number, string | null],
       void
     >(
       `INSERT INTO traces (id, event_type, correlation_id, timestamp, file_path, line_offset, summary)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     );
-    stmt.run(
-      event_id,
-      eventType,
-      correlation_id,
-      timestamp,
-      relativeFilePath,
-      line_offset,
-      summary,
-    );
+    const writeAndIndex = db.transaction((): TraceEnvelope => {
+      const lastLine = readLastLine(absoluteFilePath);
+      const prev_hash = lastLine !== null ? sha256Hex(lastLine) : null;
 
-    // Append to the human-readable audit log (best-effort).
+      const envelope: TraceEnvelope = {
+        timestamp,
+        event_type: eventType,
+        event_id,
+        correlation_id,
+        payload: safePayload,
+        prev_hash,
+      };
+
+      const jsonLine = JSON.stringify(envelope);
+
+      // FD-based open + fstat + write — the canonical defense against
+      // check-then-use (CodeQL js/file-system-race) and the right pattern
+      // even without CodeQL: stat + write on the SAME open file descriptor
+      // guarantees we never operate on a "different file" mid-operation.
+      // O_APPEND makes the write kernel-atomic relative to the FD's offset
+      // (the kernel sets the write position to EOF immediately before each
+      // write). O_CREAT handles the first-event-of-day case (creates with
+      // 0o600 if absent). Combined with the surrounding SQLite EXCLUSIVE
+      // transaction, this is multi-process safe.
+      const fd = openSync(
+        absoluteFilePath,
+        fsConstants.O_CREAT | fsConstants.O_APPEND | fsConstants.O_WRONLY,
+        0o600,
+      );
+      let line_offset: number;
+      try {
+        line_offset = fstatSync(fd).size;
+        writeSync(fd, jsonLine + '\n');
+      } finally {
+        closeSync(fd);
+      }
+
+      insertStmt.run(
+        event_id,
+        eventType,
+        correlation_id,
+        timestamp,
+        relativeFilePath,
+        line_offset,
+        summary,
+      );
+
+      return envelope;
+    });
+
+    // `.exclusive()` is a method on the transaction object that runs the
+    // wrapped function under SQLite's EXCLUSIVE lock (vs default DEFERRED).
+    // It returns the function's return value directly.
+    const envelope = writeAndIndex.exclusive();
+
+    // Best-effort: the markdown audit log lives in a separate file and is
+    // not part of the integrity chain. Append outside the critical section
+    // to keep the lock short.
     appendToAuditLog(workspacePath, timestamp, eventType, summary);
 
     return ok(envelope);
