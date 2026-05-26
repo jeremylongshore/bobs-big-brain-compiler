@@ -94,4 +94,16 @@ export default tseslint.config(
       '@typescript-eslint/no-floating-promises': 'off',
     },
   },
+
+  // --- .mjs Node scripts (e.g., integration-test workers) ---
+  // Node globals (process, console, Buffer, etc.) need explicit declaration
+  // under ESLint 10+ which removed legacy `/* eslint-env node */` support.
+  {
+    files: ['**/*.mjs'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
 );
