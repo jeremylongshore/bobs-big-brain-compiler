@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.5.2] - 2026-05-26
+
+- Merge pull request #109 from jeremylongshore/feat/audit-chain-race-fix-lhm (312c2e0)
+- fix(kernel/audit): use FD-based open+fstat+write (CodeQL canonical safe pattern) (d32460a)
+- fix(kernel/audit): drop existsSync check-then-use pattern in writeTrace (ad08dac)
+- fix(kernel/audit): serialize writeTrace under SQLite EXCLUSIVE lock (lhm) (d09d62c)
+
 ## [v1.5.1] - 2026-05-26
 
 - chore(beads): file P4 sweep bead for doc 037 prose polish (GFM table-cell escape semantics) (d870d64)
