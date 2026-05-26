@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.5.0] - 2026-05-26
+
+- Merge pull request #106 from jeremylongshore/feat/stryker-baseline-lock-0wy.1 (01490d8)
+- feat(mutation): lock Stryker kernel baseline at 55% floor + wire to PR gate (e083c51)
+- chore(beads): nhj.1 — upstream comment posted on gastownhall/beads#4135 (b03a2f0)
+- chore(beads): close nhj.1 — dossier + candidate staged for upstream beads (4f6f6f0)
+- Merge pull request #105 from jeremylongshore/chore/steveyegge-to-gastownhall-and-nhj.1-dossier (eda7f63)
+- chore(beads): update upstream repo references steveyegge → gastownhall (b590258)
+- chore(beads): sync state — close 55q.4 + cross-layer mirror evidence (916b005)
+
 ## [v1.4.4] - 2026-05-25
 
 - Merge pull request #104 from jeremylongshore/feat/bd-sync-race-gemini-followups (43699e6)
