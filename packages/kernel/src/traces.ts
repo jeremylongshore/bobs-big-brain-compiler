@@ -12,11 +12,15 @@
 import { randomUUID } from 'node:crypto';
 import {
   appendFileSync,
+  closeSync,
+  constants as fsConstants,
   existsSync,
+  fstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
-  statSync,
   writeFileSync,
+  writeSync,
 } from 'node:fs';
 import { join } from 'node:path';
 
@@ -188,21 +192,27 @@ export function writeTrace(
 
       const jsonLine = JSON.stringify(envelope);
 
-      // statSync throws ENOENT if the file doesn't exist yet (first event
-      // of the day). Catching the error and leaving line_offset at 0 is
-      // correct — that's the right value for "we are about to write the
-      // first line of a new file." Removing the prior existsSync+statSync
-      // pair also eliminates the CodeQL js/file-system-race check-then-use
-      // pattern; CodeQL doesn't model the surrounding SQLite EXCLUSIVE
-      // transaction's locking semantics.
-      let line_offset = 0;
+      // FD-based open + fstat + write — the canonical defense against
+      // check-then-use (CodeQL js/file-system-race) and the right pattern
+      // even without CodeQL: stat + write on the SAME open file descriptor
+      // guarantees we never operate on a "different file" mid-operation.
+      // O_APPEND makes the write kernel-atomic relative to the FD's offset
+      // (the kernel sets the write position to EOF immediately before each
+      // write). O_CREAT handles the first-event-of-day case (creates with
+      // 0o600 if absent). Combined with the surrounding SQLite EXCLUSIVE
+      // transaction, this is multi-process safe.
+      const fd = openSync(
+        absoluteFilePath,
+        fsConstants.O_CREAT | fsConstants.O_APPEND | fsConstants.O_WRONLY,
+        0o600,
+      );
+      let line_offset: number;
       try {
-        line_offset = statSync(absoluteFilePath).size;
-      } catch {
-        // ENOENT or other stat failure — treat as new file at offset 0.
+        line_offset = fstatSync(fd).size;
+        writeSync(fd, jsonLine + '\n');
+      } finally {
+        closeSync(fd);
       }
-
-      appendFileSync(absoluteFilePath, jsonLine + '\n', 'utf-8');
 
       insertStmt.run(
         event_id,
