@@ -16,7 +16,8 @@ hygiene cleanup"). GH `#86`, Plane `ICOS-9`.
 ## What ran
 
 CodeQL `security-and-quality` query pack against
-`packages/{kernel,compiler,cli}/src/**/*.ts` on every PR + nightly. At
+`packages/{kernel,compiler,cli}/src/**/*.ts` on every PR + weekly
+(Monday 06:00 UTC cron per `.github/workflows/codeql.yml`). At
 2026-05-26 the open-alert backlog was 31 across 5 rule classes. The bead's
 acceptance criteria called for each alert to be either fixed, deferred
 with a bead, or dismissed with a documented reason; CodeQL workflow then
@@ -31,8 +32,10 @@ promoted to a required check.
 | `js/incomplete-sanitization`        |      4 | dismiss (false positive) | Per-format escapers (markdown table pipes, YAML string quotes) — correct char sets      |
 | `js/insecure-temporary-file` (test) |      7 | dismiss (used in tests)  | Test fixtures using `mkdtempSync(join(tmpdir(), ...))` — harness setup, not user-facing |
 | `js/insecure-temporary-file` (prod) |      6 | dismiss (false positive) | Workspace-internal paths after path-traversal validation; not OS-tempdir surface        |
-| `js/file-system-race`               |     10 | dismiss (false positive) | Benign idempotent init races; one follow-up reliability bead filed                      |
-| **Total**                           | **31** | **dismiss**              |                                                                                         |
+| `js/file-system-race`               |      9 | dismiss (false positive) | Benign idempotent init races; one follow-up reliability bead filed                      |
+| `js/file-system-race` (hash chain)  |      1 | **REOPENED 2026-05-26**  | traces.ts:187 — read-compute-write race on `prev_hash` breaks audit chain (bead `lhm`)  |
+| **Total dismissed**                 | **30** |                          |                                                                                         |
+| **Total reopened**                  |  **1** |                          | Tracked in bead `lhm` (P2)                                                              |
 
 All dismissals applied via `gh api PATCH /repos/.../code-scanning/alerts/N`
 with categorical comments referencing this bead.
@@ -85,17 +88,28 @@ Four "incomplete" escapers across three files:
 | `report.ts:190`   | `"` → `\"`               | YAML quoted string  |
 
 CodeQL flags these as "incomplete" because they don't escape backslash
-itself. But the formats being targeted **don't escape backslash**:
+itself. The dismissal stands for the current Linux-only deployment, but
+the rationale needs to be explicit about the assumption:
 
-- Markdown table cells: `|` is the row separator; newlines break the row.
-  Backslash is literal.
-- YAML quoted strings: only `"` and `\` need escaping inside a `"..."`
-  literal, AND the inputs here are not user-controlled YAML — they're
-  trusted compile-time strings (filenames, task IDs, brief text already
-  sanitized for control chars upstream).
+- **Markdown table cells** (`audit-log.ts:30/31`): `|` is the row
+  separator; newlines break the row. Backslash is literal — the
+  markdown spec doesn't recognize backslash as an escape inside table
+  cells.
+- **YAML quoted strings** (`procfs.ts:159`, `report.ts:190`): YAML
+  _does_ require `\\` to escape backslash inside `"..."` literals.
+  The dismissal relies on input provenance: inputs here are
+  workspace-internal IDs, filenames, and brief text from operator
+  input — POSIX paths only (no Windows `\` separators), control chars
+  pre-sanitized upstream, no YAML-reserved metacharacters in the
+  domain. A future Windows port OR a feature that lets users supply
+  raw paths verbatim would invalidate this — flag for revisit if
+  either lands. Single-quoted YAML (`'...'`) would be a safer general
+  encoding (only single-quote-doubling required) and is the
+  recommended migration when scope changes.
 
-Each escaper is per-format-correct. A "complete" sanitizer (XSS-style)
-would over-escape and produce broken output.
+Each escaper is per-format-correct for the current input domain. A
+"complete" sanitizer (XSS-style) would over-escape and produce broken
+output.
 
 ### `js/insecure-temporary-file` — test fixtures (#20–#26)
 
@@ -122,16 +136,52 @@ symlink attack could redirect a privileged write; nothing here matches.
 
 Ten `existsSync` → `writeFile`/`mkdir` TOCTOU patterns across four files:
 
-| Location                      | Init scope                         | Failure mode if race triggers                                        |
-| ----------------------------- | ---------------------------------- | -------------------------------------------------------------------- |
-| `workspace.ts:99/106/127/144` | gitkeep + index.md + wiki template | Two processes write the same fixed-content template; idempotent      |
-| `traces.ts:104/106/187`       | JSONL header + append              | Duplicate header (one extra line in JSONL); recoverable on next read |
-| `promotion.ts:255/354`        | Read source → parse → write target | Fails closed: parse error or write error if target moved             |
-| `audit-log.ts:35`             | Markdown table header init         | Same as traces — duplicate header                                    |
+| Location                      | Init scope                                                                                     | Failure mode if race triggers                                                                                                                                                          |
+| ----------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `workspace.ts:99/106/127/144` | gitkeep + index.md + wiki template                                                             | Two processes write the same fixed-content template; idempotent                                                                                                                        |
+| `traces.ts:104/106`           | `audit/log.md` Markdown table header (not JSONL — separate file)                               | Duplicate Markdown header (extra lines at top of log.md); recoverable on next read                                                                                                     |
+| `traces.ts:187`               | Append to today's JSONL trace file via `appendFileSync`, prev_hash from prior last line        | **CORRECTION (2026-05-26 Gemini PR #107 review):** This was originally dismissed but the dismissal was wrong. See "Correction" section below.                                          |
+| `promotion.ts:255/354`        | Read source → parse → write target                                                             | Fails closed: parse error or write error if target moved                                                                                                                               |
+| `audit-log.ts:35`             | `appendAuditLog` — appends a row to `log.md`; the file is expected to exist (errors otherwise) | If race deletes the file between `existsSync` and `appendFileSync`, the file is silently recreated with a row but no header. Cosmetic only — header recoverable; the row is preserved. |
 
 **Security framing**: none of these allow privilege escalation, data
 exfiltration, or arbitrary write. Worst case is a corrupted-but-recoverable
-file from concurrent init.
+file from concurrent init OR the audit-trace integrity issue captured in
+the correction below.
+
+#### Correction (2026-05-26 — Gemini PR #107 review)
+
+The original triage dismissed CodeQL alert #13 (traces.ts:187) with
+"Append-only JSONL appends use atomic appendFileSync (single syscall,
+kernel-atomic per append)." That's true about the syscall but missed
+the read-compute-write race:
+
+```
+writeTrace flow:
+  1. const lastLine = readLastLine(absoluteFilePath);
+  2. const prev_hash = lastLine !== null ? sha256Hex(lastLine) : null;
+  3. ... build envelope with prev_hash ...
+  4. appendFileSync(absoluteFilePath, jsonLine + '\n', 'utf-8');
+```
+
+Two concurrent writers will both read the same last line at step 1,
+compute the identical `prev_hash` at step 2, and append at step 4.
+Result: two events claim `prev_hash → evt_N` but the actual chain is
+`evt_N → evt_N+1 → evt_N+2`. `verifyAuditChain` fails on the break —
+this is the core tamper-detection mechanism documented in
+`011-AT-TRSC-trace-schema.md`.
+
+**Action taken**:
+
+1. CodeQL alert #13 re-opened (`gh api PATCH ... state=open`).
+2. Bead `intentional-cognition-os-lhm` upgraded P3 → P2 and reframed
+   from "robustness" to audit-integrity. Fix candidates: flock around
+   the read-compute-write critical section, single-writer queue, or
+   SQLite advisory lock keyed on (workspace, date). Multi-process
+   integration test required.
+3. The other 9 file-system-race dismissals (workspace.ts, promotion.ts,
+   audit-log.ts:35, traces.ts:104/106) stand — those have benign
+   failure modes (idempotent rewrites or fail-closed errors).
 
 **Reliability framing**: real concern. Two ICO processes initializing the
 same workspace concurrently could race on workspace.ts writes; two
