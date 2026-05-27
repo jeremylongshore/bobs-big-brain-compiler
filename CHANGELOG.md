@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.6.0] - 2026-05-27
+
+- Merge pull request #110 from jeremylongshore/feat/test-hygiene-quickwins-0wy.2-wie (b910839)
+- feat(test-hygiene): rename stryker config to ESM + extract scenario helper (491292d)
+- chore(beads): close 7xp — paraphrase_robustness metric verified end-to-end (9e7af64)
+
 ## [v1.5.2] - 2026-05-26
 
 - Merge pull request #109 from jeremylongshore/feat/audit-chain-race-fix-lhm (312c2e0)
