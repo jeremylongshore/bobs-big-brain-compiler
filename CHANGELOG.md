@@ -1,5 +1,16 @@
 # Changelog
 
+## [v1.6.1] - 2026-05-27
+
+- Merge pull request #113 from jeremylongshore/docs/readme-tagline-version-align (78082c5)
+- docs(readme): add v1.6.0 version suffix + align tagline with gist (8470685)
+- chore(beads): final state — nwh closed, three epics closed, 11 deferred (e7e8c62)
+- Merge pull request #112 from jeremylongshore/feat/plugin-scripts-lint-nwh (246b801)
+- chore(beads): defer 11 P3 beads to 2026-07-01 + close 3 epics (39ee882)
+- ci(plugin-lint): add shellcheck + ruff CI job for plugin scripts (nwh) (7ecebc7)
+- Merge pull request #111 from jeremylongshore/feat/docs-sweep-dsn-55q.3 (1965501)
+- docs(037): tighten GFM table-cell + YAML escape rationale (closes dsn) (19577e1)
+
 ## [v1.6.0] - 2026-05-27
 
 - Merge pull request #110 from jeremylongshore/feat/test-hygiene-quickwins-0wy.2-wie (b910839)
