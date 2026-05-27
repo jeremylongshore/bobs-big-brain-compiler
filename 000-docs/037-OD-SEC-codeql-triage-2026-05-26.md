@@ -89,23 +89,33 @@ Four "incomplete" escapers across three files:
 
 CodeQL flags these as "incomplete" because they don't escape backslash
 itself. The dismissal stands for the current Linux-only deployment, but
-the rationale needs to be explicit about the assumption:
+the rationale depends on per-format escape semantics. **Each format
+this code targets escapes a different set of characters; backslash is
+not always required.**
 
-- **Markdown table cells** (`audit-log.ts:30/31`): `|` is the row
-  separator; newlines break the row. Backslash is literal — the
-  markdown spec doesn't recognize backslash as an escape inside table
-  cells.
+- **GFM table cells** (`audit-log.ts:30/31`): `|` is the row separator;
+  newlines break the row. The existing code escapes `\|` to encode a
+  literal pipe — this is the **GFM-defined escape sequence for table
+  cells** (GFM spec §6.10 "Tables") and is exactly what the existing
+  encoders write. Backslash itself doesn't need a separate escape
+  inside a GFM table cell unless it precedes a pipe (the only
+  meta-character GFM treats specially in this context). The original
+  prose called backslash "literal" which was imprecise; the correct
+  framing is "GFM table cells escape only the pipe via `\|`, which
+  this code does."
 - **YAML quoted strings** (`procfs.ts:159`, `report.ts:190`): YAML
-  _does_ require `\\` to escape backslash inside `"..."` literals.
-  The dismissal relies on input provenance: inputs here are
-  workspace-internal IDs, filenames, and brief text from operator
-  input — POSIX paths only (no Windows `\` separators), control chars
-  pre-sanitized upstream, no YAML-reserved metacharacters in the
-  domain. A future Windows port OR a feature that lets users supply
-  raw paths verbatim would invalidate this — flag for revisit if
-  either lands. Single-quoted YAML (`'...'`) would be a safer general
-  encoding (only single-quote-doubling required) and is the
-  recommended migration when scope changes.
+  _does_ require `\\` to escape backslash inside `"..."` literals
+  (YAML 1.2 §7.3.2). The dismissal relies on input provenance: inputs
+  here are workspace-internal IDs, filenames (POSIX-only — no Windows
+  `\` separators), and brief text where control chars are
+  pre-sanitized upstream and no YAML-reserved metacharacters appear in
+  the domain. **Revisit conditions**: (a) a Windows port lands and
+  paths now contain backslashes verbatim; (b) a feature lets users
+  supply raw paths through this code path; (c) any input source
+  changes to one that can contain `\`, `"`, or control chars unescaped.
+  Single-quoted YAML (`'...'`) would be a safer general encoding —
+  only requires doubling single quotes, never interprets backslash —
+  and is the recommended migration if any revisit condition triggers.
 
 Each escaper is per-format-correct for the current input domain. A
 "complete" sanitizer (XSS-style) would over-escape and produce broken
