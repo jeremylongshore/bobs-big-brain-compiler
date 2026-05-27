@@ -323,3 +323,47 @@ jobs:
             exit 1
           fi
           echo "✓ Tamper detection works: ico audit verify correctly exited 2"
+
+  plugin-scripts-lint:
+    # Static analysis for plugin/skills/**/*.{sh,py} (bead nwh). TS/JS/JSON
+    # are covered by pnpm lint; this job adds shellcheck for bash + ruff for
+    # python so quoting / unused-imports / quote-injection bugs in the
+    # plugin scripts can't land silently.
+    name: Plugin Scripts Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python (for ruff)
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install ruff
+        run: python3 -m pip install --quiet --upgrade ruff
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: shellcheck
+        # --severity=warning so info-level findings don't fail CI; raise to
+        # `style` if you want maximum nit coverage. Current code is clean at
+        # the default `style` level (see PR introducing this job).
+        run: |
+          shopt -s globstar nullglob
+          files=(plugin/skills/**/*.sh)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "no .sh files under plugin/skills — skipping"
+            exit 0
+          fi
+          shellcheck "${files[@]}"
+
+      - name: ruff check
+        run: |
+          shopt -s globstar nullglob
+          files=(plugin/skills/**/*.py)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "no .py files under plugin/skills — skipping"
+            exit 0
+          fi
+          ruff check "${files[@]}"
