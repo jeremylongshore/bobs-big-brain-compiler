@@ -46,7 +46,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ -n "$TARGET" ] && [ -n "$BANK" ] || usage
+if [ -z "$TARGET" ] || [ -z "$BANK" ]; then usage; fi
 case "$PARAPHRASES" in
   primary|all) ;;
   *) echo "--paraphrases must be 'primary' or 'all' (got: $PARAPHRASES)" >&2; exit 2 ;;

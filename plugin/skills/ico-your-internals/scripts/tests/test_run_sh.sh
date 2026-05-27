@@ -139,9 +139,12 @@ done
 # test 5: WS path matches ico init's actual creation pattern (bug 2)
 echo
 echo "test 5: WS path equals \$CACHE_ROOT/\$TARGET_SLUG (matches ico init)"
-if grep -qE 'WS="\$CACHE_ROOT/\$TARGET_SLUG"' "$RUN_SH"; then
+# Patterns use double-quotes + \$ to write literal $CACHE_ROOT/... that
+# grep matches against the source. Escaping with \$ avoids SC2016 (which
+# only fires on $VAR inside single quotes) without changing the regex.
+if grep -qE "WS=\"\\\$CACHE_ROOT/\\\$TARGET_SLUG\"" "$RUN_SH"; then
   pass "WS=\$CACHE_ROOT/\$TARGET_SLUG (correct — matches ico init output)"
-elif grep -qE 'WS="\$CACHE_ROOT/workspace"' "$RUN_SH"; then
+elif grep -qE "WS=\"\\\$CACHE_ROOT/workspace\"" "$RUN_SH"; then
   fail "WS=\$CACHE_ROOT/workspace (wrong — ico init doesn't put it there)"
 else
   fail "WS assignment not found in expected form"
@@ -162,7 +165,7 @@ fi
 # Per ADR-029 + ADR-032, the ask loop now consumes paraphrases via bank.py;
 # inlining it as a bash heredoc is incompatible with that. Heredoc must die.
 echo
-echo "test 7: v0.2 — inline 'python3 - ... <<\\'PY\\'' heredoc is removed"
+printf "test 7: v0.2 — inline 'python3 - ... <<%s' heredoc is removed\n" "'PY'"
 if grep -qE "python3 - .*<<.PY" "$RUN_SH"; then
   fail "found inline python3 heredoc — should be extracted to ask-loop.py"
 else

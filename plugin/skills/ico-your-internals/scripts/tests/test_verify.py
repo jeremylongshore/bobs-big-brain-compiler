@@ -14,9 +14,7 @@ Or directly:
     python3 plugin/skills/ico-your-internals/scripts/tests/test_verify.py
 """
 import json
-import os
 import pathlib
-import shutil
 import subprocess
 import sys
 import tempfile
