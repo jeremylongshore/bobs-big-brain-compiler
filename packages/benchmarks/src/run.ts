@@ -105,6 +105,34 @@ function buildScenarioRecord(
 }
 
 /**
+ * Format-and-record one ungated scenario. Centralises the print → blank
+ * line → record.scenarios.push dance that was duplicated four times
+ * (moderate ingest, moderate lint, large ingest, large lint) before
+ * bead `wie`. Callers normalise their bench shape at the call site:
+ * ingest scenarios pass `ingest.perFile`, lint scenarios pass
+ * `lint.result` — both are `BenchResult` instances.
+ */
+function reportAndRecordScenario(
+  record: RunRecord,
+  name: string,
+  bench: import('./utils/timer.js').BenchResult,
+  context: Record<string, number | string | boolean>,
+  options: { summaryLine: string; batchTotalMs?: number },
+): void {
+  console.log(formatBenchResult(bench));
+  console.log(options.summaryLine);
+  console.log('');
+  record.scenarios.push(
+    buildScenarioRecord(
+      name,
+      bench,
+      context,
+      options.batchTotalMs !== undefined ? { batchTotalMs: options.batchTotalMs } : {},
+    ),
+  );
+}
+
+/**
  * Format + record a Claude-gated scenario. Logs the appropriate
  * one-liner (SKIPPED or formatted bench result) and pushes a
  * ScenarioRecord onto the run record. Centralised here so the
@@ -159,34 +187,32 @@ async function main(): Promise<void> {
 
   // ---- ingest -----------------------------------------------------------
   const ingest = await runIngestScenario();
-  console.log(formatBenchResult(ingest.perFile));
-  console.log(
-    `  batchTotal=${ingest.batchTotalMs.toFixed(0)}ms over ${ingest.sourceCount} sources`,
-  );
-  console.log('');
-  record.scenarios.push(
-    buildScenarioRecord(
-      'ingest',
-      ingest.perFile,
-      { sourceCount: ingest.sourceCount, scale: 'moderate' },
-      { batchTotalMs: ingest.batchTotalMs },
-    ),
+  reportAndRecordScenario(
+    record,
+    'ingest',
+    ingest.perFile,
+    { sourceCount: ingest.sourceCount, scale: 'moderate' },
+    {
+      summaryLine: `  batchTotal=${ingest.batchTotalMs.toFixed(0)}ms over ${ingest.sourceCount} sources`,
+      batchTotalMs: ingest.batchTotalMs,
+    },
   );
 
   // ---- lint -------------------------------------------------------------
   const lint = await runLintScenario();
-  console.log(formatBenchResult(lint.result));
-  console.log(
-    `  context: ${lint.sourceCount} sources, ${lint.conceptCount} concepts, ${lint.topicCount} topics`,
-  );
-  console.log('');
-  record.scenarios.push(
-    buildScenarioRecord('lint', lint.result, {
+  reportAndRecordScenario(
+    record,
+    'lint',
+    lint.result,
+    {
       sourceCount: lint.sourceCount,
       conceptCount: lint.conceptCount,
       topicCount: lint.topicCount,
       scale: 'moderate',
-    }),
+    },
+    {
+      summaryLine: `  context: ${lint.sourceCount} sources, ${lint.conceptCount} concepts, ${lint.topicCount} topics`,
+    },
   );
 
   // ---- compile (Claude-gated) ------------------------------------------
@@ -244,18 +270,15 @@ async function main(): Promise<void> {
     console.log('');
 
     const ingestLarge = await runIngestScenario({ sourceCount: 500 });
-    console.log(formatBenchResult(ingestLarge.perFile));
-    console.log(
-      `  batchTotal=${ingestLarge.batchTotalMs.toFixed(0)}ms over ${ingestLarge.sourceCount} sources`,
-    );
-    console.log('');
-    record.scenarios.push(
-      buildScenarioRecord(
-        'ingest',
-        ingestLarge.perFile,
-        { sourceCount: ingestLarge.sourceCount, scale: 'large' },
-        { batchTotalMs: ingestLarge.batchTotalMs },
-      ),
+    reportAndRecordScenario(
+      record,
+      'ingest',
+      ingestLarge.perFile,
+      { sourceCount: ingestLarge.sourceCount, scale: 'large' },
+      {
+        summaryLine: `  batchTotal=${ingestLarge.batchTotalMs.toFixed(0)}ms over ${ingestLarge.sourceCount} sources`,
+        batchTotalMs: ingestLarge.batchTotalMs,
+      },
     );
 
     const lintLarge = await runLintScenario({
@@ -263,18 +286,19 @@ async function main(): Promise<void> {
       conceptCount: 250,
       topicCount: 50,
     });
-    console.log(formatBenchResult(lintLarge.result));
-    console.log(
-      `  context: ${lintLarge.sourceCount} sources, ${lintLarge.conceptCount} concepts, ${lintLarge.topicCount} topics`,
-    );
-    console.log('');
-    record.scenarios.push(
-      buildScenarioRecord('lint', lintLarge.result, {
+    reportAndRecordScenario(
+      record,
+      'lint',
+      lintLarge.result,
+      {
         sourceCount: lintLarge.sourceCount,
         conceptCount: lintLarge.conceptCount,
         topicCount: lintLarge.topicCount,
         scale: 'large',
-      }),
+      },
+      {
+        summaryLine: `  context: ${lintLarge.sourceCount} sources, ${lintLarge.conceptCount} concepts, ${lintLarge.topicCount} topics`,
+      },
     );
 
     // ---- degradation gate ------------------------------------------------
