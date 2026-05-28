@@ -9,7 +9,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Runtime**: TypeScript, Node.js 22+, pnpm 10.x
 - **CLI**: `ico`
 - **License**: MIT
-- **Current state** (v1.0.0): All 10 epics complete. Test suite 1210 passing across 5 workspace packages (types, kernel, compiler, cli, benchmarks). CLI publishes as `intentional-cognition-os` on npm. Eval framework: four handler types — `smoke` + `retrieval` (recall@k + precision@k with per-metric floors) + `citation` (offline hallucination check on any markdown artifact) in kernel, `compilation` (Claude-scored 1–5 rubric) in compiler. Benchmark suite (E10-B06) covers all 5 operator commands (ingest, lint, render, compile, ask) with a 500-source large-corpus run + 3× degradation gate. Audit-harness v0.1.0 vendored.
+- **Current state** (v1.6.1): All 10 epics complete + post-v1 hardening. Test suite passing across 5 workspace packages (types, kernel, compiler, cli, benchmarks). CLI publishes as `intentional-cognition-os` on npm. Eval framework: four handler types — `smoke` + `retrieval` (recall@k + precision@k with per-metric floors) + `citation` (offline hallucination check on any markdown artifact) in kernel, `compilation` (Claude-scored 1–5 rubric) in compiler. Benchmark suite (E10-B06) covers all 5 operator commands (ingest, lint, render, compile, ask) with a 500-source large-corpus run + 3× degradation gate. Audit-harness v0.1.0 vendored.
+- **Post-v1 changes worth knowing about** before touching code:
+  - **v1.5.1–v1.5.2**: `kernel/src/audit/writeTrace.ts` is now FD-based (`openSync(O_CREAT|O_APPEND|O_WRONLY) → fstatSync → writeSync`) — CodeQL's canonical safe form for the hash-chain append race. Do not regress to `existsSync → statSync → appendFileSync`; CodeQL `js/file-system-race` will fire.
+  - **v1.6.0**: dog-food v0.2 paraphrase robustness — `dogfood/question-banks/intent-eval-core-v2.yaml` carries `paraphrases:` lists per intent; `verify.py` + `render-summary.py` emit `paraphrase_robustness` alongside `verify_rate`. Reported side-by-side, never composited (ADR-030).
+  - **v1.6.0**: plugin scripts (`plugin/skills/ico-your-internals/scripts/`) have a CI lint job (shellcheck + ruff) on every PR. Don't disable.
+  - **v1.6.1**: docs-only release patching README tagline + version suffix to match the canonical gist.
 
 ## Current State
 
@@ -48,6 +53,8 @@ When starting a new session on this repo:
 3. Read the relevant epic file in `000-docs/epics/` for current scope
 4. Review the standards docs below for conventions before writing code
 5. Use canonical terminology from the glossary (008-AT-GLOS)
+
+**Multi-bead state changes (close/defer/update in a loop):** bd ≤1.0.4 has a documented rapid-write race (gastownhall/beads#4135 failure mode 6) that silently reverts state changes. ICOS observed this three times during the 2026-05-26/27 rotation. Always pair every raw `bd close`/`defer`/`update` with `bd export -o .beads/issues.jsonl` between calls, then verify final state with `bd show`. Full safe pattern: `~/.claude/skills/beads/SKILL.md` § "Rapid-write race".
 
 ## Standards Reference
 
