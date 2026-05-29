@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.8.0] - 2026-05-29
+
+- feat(cli/audit): add --json mode + CLI handler tests + wire into demo (bvf) (#119) (7c551d5)
+
 ## [v1.7.0] - 2026-05-29
 
 - feat(demo): add scripts/demo-e2e.sh — cross-repo proof-of-work orchestrator (1at) (#118) (aaca71b)
