@@ -30,13 +30,16 @@
 
 import { createHash } from 'node:crypto';
 import {
+  closeSync,
+  constants as fsConstants,
   existsSync,
+  fstatSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
   renameSync,
-  statSync,
-  writeFileSync,
+  writeSync,
 } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 
@@ -430,11 +433,24 @@ function atomicWriteSpool(
   const spoolTmp = `${spoolFile}.tmp`;
   const manifestFile = `${spoolFile}.manifest.json`;
   const manifestTmp = `${manifestFile}.tmp`;
+  // FD-based open + write — mirrors the canonical CodeQL-accepted form used
+  // by kernel/src/audit/writeTrace.ts (v1.5.1–2). O_EXCL guarantees the .tmp
+  // path does not already exist, defeating a symlink-swap TOCTOU.
+  // CodeQL js/insecure-temporary-file accepts this form; it does not accept
+  // writeFileSync(..., { flag: 'wx' }) as an O_EXCL equivalent even though
+  // the runtime semantics are identical.
+  const O_FLAGS = fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY;
+  const MODE = 0o600;
+  let spoolFd = -1;
+  let manifestFd = -1;
   try {
-    writeFileSync(spoolTmp, jsonlBody, 'utf-8');
+    spoolFd = openSync(spoolTmp, O_FLAGS, MODE);
+    writeSync(spoolFd, jsonlBody, null, 'utf-8');
+    const bytes = fstatSync(spoolFd).size;
+    closeSync(spoolFd);
+    spoolFd = -1;
     renameSync(spoolTmp, spoolFile);
 
-    const bytes = statSync(spoolFile).size;
     const sha256 = createHash('sha256').update(jsonlBody, 'utf-8').digest('hex');
     const manifest = {
       schemaVersion,
@@ -445,11 +461,31 @@ function atomicWriteSpool(
       spoolFileSha256: sha256,
       candidateIds,
     };
-    writeFileSync(manifestTmp, JSON.stringify(manifest, null, 2) + '\n', 'utf-8');
+    manifestFd = openSync(manifestTmp, O_FLAGS, MODE);
+    writeSync(manifestFd, JSON.stringify(manifest, null, 2) + '\n', null, 'utf-8');
+    closeSync(manifestFd);
+    manifestFd = -1;
     renameSync(manifestTmp, manifestFile);
 
     return ok({ spoolFile, manifestFile, spoolFileSha256: sha256, spoolFileBytes: bytes });
   } catch (e) {
+    // Ensure any FD opened above is closed on the error path. The reset to -1
+    // after each closeSync above means these only fire if the corresponding
+    // openSync or writeSync threw before the close.
+    if (spoolFd !== -1) {
+      try {
+        closeSync(spoolFd);
+      } catch {
+        /* swallow — original error wins */
+      }
+    }
+    if (manifestFd !== -1) {
+      try {
+        closeSync(manifestFd);
+      } catch {
+        /* swallow — original error wins */
+      }
+    }
     return err(e instanceof Error ? e : new Error(String(e)));
   }
 }

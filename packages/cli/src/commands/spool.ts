@@ -216,7 +216,13 @@ function parseScope(raw: string | undefined): SpoolEmitScope | null {
 // Command handler
 // ---------------------------------------------------------------------------
 
-function emitHandler(options: SpoolEmitOptions, command: Command): void {
+/**
+ * Exported for unit testing. Wraps `emitSpool` / `dryRunSpool` from the kernel
+ * with operator-side concerns: workspace resolution, tenantId enforcement,
+ * --out path-safety, --scope validation, dry-run rendering, and friendly
+ * error/exit-code mapping.
+ */
+export function runSpoolEmit(options: SpoolEmitOptions, command: Command): void {
   const global = command.optsWithGlobals<GlobalOptions>();
   const workspaceFlag = options.workspace ?? global.workspace;
   const ws = resolveWorkspace(workspaceFlag !== undefined ? { workspace: workspaceFlag } : {});
@@ -352,6 +358,6 @@ export function register(program: Command): void {
     .option('--dry-run', 'Print what would be emitted, structure only; no writes', false)
     .option('-w, --workspace <path>', 'Workspace path (defaults to ICO_WORKSPACE or cwd)')
     .action((options: SpoolEmitOptions, command: Command) => {
-      emitHandler(options, command);
+      runSpoolEmit(options, command);
     });
 }
