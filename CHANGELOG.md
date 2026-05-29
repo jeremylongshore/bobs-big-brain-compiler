@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.7.0] - 2026-05-29
+
+- feat(demo): add scripts/demo-e2e.sh — cross-repo proof-of-work orchestrator (1at) (#118) (aaca71b)
+- ci(codecov): add Test Analytics + Components baseline customization (#117) (a1b79b8)
+- ci(codecov): wire up Codecov coverage upload + project + patch gates (#116) (062e295)
+- test(cli/spool): add handler tests for ico spool emit (zp6) (#115) (6d4ebc5)
+- chore(beads,docs): file Q1 cross-repo proof-of-work demo epic + CLAUDE.md pointer (832ca87)
+- docs(claude-md): refresh project state to v1.6.1 + bd race warning (b2c3403)
+- chore(beads): re-close lhm (rapid-write race clobbered prior close) (d380fdc)
+
 ## [v1.6.1] - 2026-05-27
 
 - Merge pull request #113 from jeremylongshore/docs/readme-tagline-version-align (78082c5)
