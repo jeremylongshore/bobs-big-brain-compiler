@@ -23,6 +23,7 @@ import { resolveWorkspace } from '../lib/workspace-resolver.js';
 
 interface AuditVerifyOptions {
   workspace?: string;
+  json?: boolean;
 }
 
 interface GlobalOptions {
@@ -31,25 +32,62 @@ interface GlobalOptions {
   workspace?: string;
 }
 
-function verifyHandler(options: AuditVerifyOptions, command: Command): void {
+/**
+ * Exported for unit testing. Wraps `verifyAuditChain` from the kernel
+ * with operator-side concerns: workspace resolution, --json output
+ * shaping, friendly error mapping, and exit-code semantics.
+ */
+export function runAuditVerify(options: AuditVerifyOptions, command: Command): void {
   // Convention check: use `process.exitCode = N; return` rather than
   // `process.exit(N)` so tests can invoke this handler directly without
   // tearing the test runner down. Matches packages/cli/src/commands/promote.ts.
   const global = command.optsWithGlobals<GlobalOptions>();
+  // --json on the subcommand wins over the global --json (so an operator
+  // can run a non-json global session and still ask audit verify for
+  // machine-readable output explicitly).
+  const wantJson = options.json === true || global.json === true;
   const wsFlag = options.workspace ?? global.workspace;
   const ws = resolveWorkspace(wsFlag !== undefined ? { workspace: wsFlag } : {});
   if (!ws.ok) {
-    process.stderr.write(formatError(`Workspace error: ${ws.error.message}\n`));
+    if (wantJson) {
+      process.stdout.write(
+        JSON.stringify({ ok: false, error: ws.error.message, code: 'WORKSPACE_ERROR' }) + '\n',
+      );
+    } else {
+      process.stderr.write(formatError(`Workspace error: ${ws.error.message}\n`));
+    }
     process.exitCode = 1;
     return;
   }
   const result = verifyAuditChain(ws.value.root);
   if (!result.ok) {
-    process.stderr.write(formatError(`audit verify failed: ${result.error.message}\n`));
+    if (wantJson) {
+      process.stdout.write(
+        JSON.stringify({ ok: false, error: result.error.message, code: 'VERIFY_FAILED' }) + '\n',
+      );
+    } else {
+      process.stderr.write(formatError(`audit verify failed: ${result.error.message}\n`));
+    }
     process.exitCode = 1;
     return;
   }
   const v = result.value;
+  if (wantJson) {
+    // Machine-readable envelope: orchestrators (e.g. scripts/demo-e2e.sh
+    // stage 7) consume this and surface per-break detail without parsing
+    // human-formatted stderr. Exit code semantics unchanged.
+    process.stdout.write(
+      JSON.stringify({
+        ok: v.breaks.length === 0,
+        filesScanned: v.filesScanned,
+        totalEvents: v.totalEvents,
+        cleanFiles: v.cleanFiles,
+        breaks: v.breaks,
+      }) + '\n',
+    );
+    process.exitCode = v.breaks.length === 0 ? 0 : 2;
+    return;
+  }
   if (v.breaks.length === 0) {
     process.stdout.write(formatSuccess(`audit chain OK\n`));
     process.stdout.write(formatInfo(`Files scanned: ${v.filesScanned}\n`));
@@ -77,7 +115,8 @@ export function register(program: Command): void {
     .command('verify')
     .description('Walk the audit JSONL hash chain and exit 2 if AUDIT_TAMPERED')
     .option('-w, --workspace <path>', 'Workspace path (defaults to ICO_WORKSPACE or cwd)')
+    .option('--json', 'Emit a machine-readable JSON envelope to stdout (no formatted output)')
     .action((options: AuditVerifyOptions, command: Command) => {
-      verifyHandler(options, command);
+      runAuditVerify(options, command);
     });
 }

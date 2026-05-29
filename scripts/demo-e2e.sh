@@ -266,7 +266,8 @@ echo "[demo-e2e] stage 6: DEFERRED (downstream of stage 5)"
 # ---------------------------------------------------------------------------
 
 run_stage 7 "ico audit verify (hash chain intact)" "
-  $ICO --workspace '$WS_PATH' audit verify >/dev/null
+  $ICO --workspace '$WS_PATH' audit verify --json > '$RUN_DIR/stage7-audit-verify.json'
+  test \"\$(jq -r .ok '$RUN_DIR/stage7-audit-verify.json')\" = 'true'
 "
 
 # ---------------------------------------------------------------------------
