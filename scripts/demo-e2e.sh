@@ -11,7 +11,7 @@
 #   1. ICO init + mount + ingest sample corpus
 #   2. ICO compile all (6 compiler passes)
 #   3. ICO spool emit (writes JSONL to spool dir)
-#   4. INTKB curator.ingestFromSpool (cross-repo wire)
+#   4. INTKB curator-cli ingest (ingest → policy → promote, cross-repo wire)
 #   5. INTKB edge-daemon sync to qmd index
 #   6. qmd MCP query returns curated memory with source citation
 #   7. ICO audit verify confirms hash chain intact
@@ -214,44 +214,31 @@ run_stage 3 "ico spool emit" "
 "
 
 # ---------------------------------------------------------------------------
-# Stage 4 — INTKB curator.ingestFromSpool via node helper
-# Exercises the cross-repo wire by importing INTKB's curator package and
-# calling ingestFromSpool against the spool dir ICO just wrote.
+# Stage 4 — INTKB curator CLI: ingest → policy → promote (cross-repo wire)
+# Drives the full curator pipeline via the curator-cli binary that ships with
+# INTKB (bead 9jx). Replaces the v1 inline node helper that only exercised
+# ingestFromSpool; this stage now closes ingest + policy + promote in one
+# call and emits a structured JSON envelope of the batch results.
 # ---------------------------------------------------------------------------
 
-INGEST_HELPER="$WORKSPACE/ingest-helper.mjs"
-cat > "$INGEST_HELPER" <<EOF
-import { ingestFromSpool } from '$INTKB_REPO/apps/curator/dist/index.js';
-import { CandidateRepository, createTestDatabase } from '$INTKB_REPO/packages/store/dist/index.js';
+CURATOR_CLI="node $INTKB_REPO/apps/curator/dist/main.js"
 
-const db = createTestDatabase();
-const repo = new CandidateRepository(db);
-const result = await ingestFromSpool(repo, '$SPOOL_DIR');
-
-if (!result.ok) {
-  console.error('ingestFromSpool failed:', result.error?.message ?? result.error);
-  process.exit(1);
-}
-const candidates = result.value;
-console.log(JSON.stringify({
-  ingested: candidates.length,
-  ids: candidates.map((c) => c.id),
-  tenant_ids: [...new Set(candidates.map((c) => c.tenantId))],
-}));
-EOF
-
-run_stage 4 "INTKB curator.ingestFromSpool (cross-repo wire)" "
-  node '$INGEST_HELPER' > '$RUN_DIR/stage4-ingest.json'
-  test -s '$RUN_DIR/stage4-ingest.json'
+run_stage 4 "INTKB curator-cli ingest (ingest → policy → promote, cross-repo wire)" "
+  $CURATOR_CLI ingest '$SPOOL_DIR' --tenant '$TENANT_ID' --json > '$RUN_DIR/stage4-curator.json'
+  test \"\$(jq -r .ok '$RUN_DIR/stage4-curator.json')\" = 'true'
 "
 
 # ---------------------------------------------------------------------------
-# Stage 5 — DEFERRED (depends on bead 9jx — INTKB curator CLI)
+# Stage 5 — DEFERRED (depends on git-exporter + edge-daemon orchestration)
+# Curator now writes curated_memories into the in-memory SQLite. To reach
+# the qmd index we'd need a running edge-daemon (apps/edge-daemon) plus the
+# git-exporter to mirror curated memories to kb-export/ where qmd can pick
+# them up. Wiring that into an unattended demo run is a follow-on bead.
 # ---------------------------------------------------------------------------
 
 record_stage 5 "INTKB edge-daemon sync to qmd index" "deferred" 0 \
-  "blocked on bead 9jx (INTKB curator CLI); v1 demo exercises curator via node helper only"
-echo "[demo-e2e] stage 5: DEFERRED (waiting on bead 9jx)"
+  "needs edge-daemon + git-exporter orchestration in the demo runner; 9jx unblocked the curator pipeline but the qmd-index hand-off requires a separate harness"
+echo "[demo-e2e] stage 5: DEFERRED (edge-daemon + git-exporter harness still TODO)"
 
 # ---------------------------------------------------------------------------
 # Stage 6 — DEFERRED (depends on stage 5)
