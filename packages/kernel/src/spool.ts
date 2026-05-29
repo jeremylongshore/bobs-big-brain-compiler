@@ -431,7 +431,12 @@ function atomicWriteSpool(
   const manifestFile = `${spoolFile}.manifest.json`;
   const manifestTmp = `${manifestFile}.tmp`;
   try {
-    writeFileSync(spoolTmp, jsonlBody, 'utf-8');
+    // `flag: 'wx'` = O_CREAT | O_EXCL | O_WRONLY — creation fails if the
+    // .tmp file already exists, defeating a symlink-swap TOCTOU on the
+    // .tmp path (CodeQL js/insecure-temporary-file). Atomic rename below
+    // is the actual publish; the .tmp is intermediate state and must be
+    // exclusively created.
+    writeFileSync(spoolTmp, jsonlBody, { encoding: 'utf-8', flag: 'wx' });
     renameSync(spoolTmp, spoolFile);
 
     const bytes = statSync(spoolFile).size;
@@ -445,7 +450,10 @@ function atomicWriteSpool(
       spoolFileSha256: sha256,
       candidateIds,
     };
-    writeFileSync(manifestTmp, JSON.stringify(manifest, null, 2) + '\n', 'utf-8');
+    writeFileSync(manifestTmp, JSON.stringify(manifest, null, 2) + '\n', {
+      encoding: 'utf-8',
+      flag: 'wx',
+    });
     renameSync(manifestTmp, manifestFile);
 
     return ok({ spoolFile, manifestFile, spoolFileSha256: sha256, spoolFileBytes: bytes });
