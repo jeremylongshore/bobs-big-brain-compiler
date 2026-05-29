@@ -16,6 +16,10 @@ export default defineConfig({
     exclude: ['evals/**', '**/dist/**', '**/node_modules/**'],
     testTimeout: 10_000,
     hookTimeout: 10_000,
+    // JUnit XML for Codecov Test Analytics (flaky-test detection, slow-test
+    // ranking, failure trends). 'default' keeps the human-readable terminal
+    // output the rest of the toolchain expects.
+    reporters: ['default', ['junit', { outputFile: './test-results.junit.xml' }]],
     coverage: {
       provider: 'v8',
       include: ['packages/*/src/**/*.ts'],
