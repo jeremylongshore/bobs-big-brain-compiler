@@ -15,6 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - **v1.6.0**: dog-food v0.2 paraphrase robustness — `dogfood/question-banks/intent-eval-core-v2.yaml` carries `paraphrases:` lists per intent; `verify.py` + `render-summary.py` emit `paraphrase_robustness` alongside `verify_rate`. Reported side-by-side, never composited (ADR-030).
   - **v1.6.0**: plugin scripts (`plugin/skills/ico-your-internals/scripts/`) have a CI lint job (shellcheck + ruff) on every PR. Don't disable.
   - **v1.6.1**: docs-only release patching README tagline + version suffix to match the canonical gist.
+- **Current cross-repo build** (next milestone, no version cut yet): proof-of-work end-to-end demo driving ICO → INTKB → qmd with audit verification. Tracked as epic `intentional-cognition-os-73m` ↔ INTKB twin `qmd-team-intent-kb-66t`; GH `#114` ↔ INTKB `#149`. Child beads `zp6` (`ico produce-spool`), `1at` (`scripts/demo-e2e.sh`), `bvf` (audit-verify wiring) — dep chain `zp6 → 1at → bvf`. When this ships, the thesis §6.2 honesty note about the wire being partial closes out fully.
 
 ## Current State
 
