@@ -59,6 +59,34 @@ flag_management:
       paths:
         - packages/cli/
 
+# Codecov components — semantic groupings used for status checks and PR
+# comment breakdown. Components are the newer alternative to flags for
+# monorepo grouping; we keep both because flags are needed for per-package
+# carryforward in the lcov upload while components give clean status checks.
+component_management:
+  default_rules:
+    statuses:
+      - type: project
+        target: auto
+        threshold: 1%
+  individual_components:
+    - component_id: kernel
+      name: Kernel (deterministic state)
+      paths:
+        - packages/kernel/**
+    - component_id: compiler
+      name: Compiler (Claude passes + agents)
+      paths:
+        - packages/compiler/**
+    - component_id: cli
+      name: CLI (operator surface)
+      paths:
+        - packages/cli/**
+    - component_id: types
+      name: Shared types + schemas
+      paths:
+        - packages/types/**
+
 comment:
   layout: 'header, diff, flags, components, files, footer'
   behavior: default

@@ -15,6 +15,7 @@ out/
 # Testing / coverage
 coverage/
 .nyc_output/
+test-results.junit.xml
 
 # Mutation testing (Stryker)
 .stryker-tmp/
