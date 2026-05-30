@@ -61,7 +61,7 @@ interface GlobalOptions {
   verbose?: boolean;
 }
 
-interface CompileContext {
+export interface CompileContext {
   workspacePath: string;
   dbPath: string;
   db: Database;
@@ -89,10 +89,38 @@ function collectSummaryPaths(workspacePath: string): string[] {
 // ---------------------------------------------------------------------------
 
 /**
+ * Detect Claude API authentication / authorization failures by error message.
+ * `sanitizeApiError` (claude-client.ts) wraps every API error with the
+ * category string and HTTP status, so this is a stable substring match.
+ *
+ * Auth failures are configuration errors — the same bad key fails every
+ * subsequent request, so the pass fast-aborts rather than burning through
+ * the whole source list with identical errors and exiting 0 (bead `u0j`).
+ */
+export function isAuthError(message: string): boolean {
+  return (
+    message.includes('authentication_error') ||
+    message.includes('HTTP 401') ||
+    message.includes('invalid_api_key') ||
+    message.includes('permission_error') ||
+    message.includes('HTTP 403')
+  );
+}
+
+/**
  * Run the summarize pass: read uncompiled sources from the DB and call
  * summarizeSource for each one.
+ *
+ * Exit-code contract (per bead `u0j`):
+ *   0 — at least one source compiled OR nothing to do (zero uncompiled sources)
+ *   1 — all sources failed for non-auth reasons (likely transient or content-level)
+ *   2 — Claude API authentication failed (fast-fail on first 401/403)
+ *
+ * The previous behavior was to log per-source failures as warnings and exit 0
+ * regardless of total failure count — masked bad API keys as silent success
+ * with empty wiki dirs.
  */
-async function runSummarize(ctx: CompileContext): Promise<void> {
+export async function runSummarize(ctx: CompileContext): Promise<void> {
   const uncompiledResult = getUncompiledSources(ctx.db);
   if (!uncompiledResult.ok) {
     process.stderr.write(
@@ -146,10 +174,21 @@ async function runSummarize(ctx: CompileContext): Promise<void> {
     );
 
     if (!result.ok) {
-      process.stderr.write(
-        formatWarning(`  Failed: ${source.path}: ${result.error.message}`) + '\n',
-      );
+      const errMsg = result.error.message;
+      process.stderr.write(formatWarning(`  Failed: ${source.path}: ${errMsg}`) + '\n');
       failed++;
+
+      // Auth/permission errors fast-fail — the same bad key will fail every
+      // remaining source identically. Exit 2 distinguishes config failures
+      // from per-source content failures (exit 1).
+      if (isAuthError(errMsg)) {
+        process.stderr.write(
+          formatError(
+            'Claude API authentication failed. Check ANTHROPIC_API_KEY in your .env or environment.',
+          ) + '\n',
+        );
+        process.exit(2);
+      }
       continue;
     }
 
@@ -164,6 +203,20 @@ async function runSummarize(ctx: CompileContext): Promise<void> {
   rebuildWikiIndex(ctx.workspacePath);
 
   process.stdout.write('\n');
+
+  // All-failed sentinel — if no source compiled and at least one failed,
+  // the pass produced no usable output. Exit 1 so callers (CI, demo
+  // orchestrator, operators) see the failure instead of cascading
+  // "no input found" warnings through the rest of the pipeline.
+  if (compiled === 0 && failed > 0) {
+    process.stderr.write(
+      formatError(
+        `Summarize pass: ALL ${failed} source(s) failed. Workspace produced no compiled output.`,
+      ) + '\n',
+    );
+    process.exit(1);
+  }
+
   process.stdout.write(
     formatSuccess(
       `Summarize pass complete: ${compiled} compiled, ${failed} failed, ${totalTokens} tokens used.`,
