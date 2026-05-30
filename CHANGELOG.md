@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.8.1] - 2026-05-30
+
+- fix(cli/compile): fail loudly on auth errors + all-source failures (u0j) (#121) (bb15953)
+- chore(beads): file u0j — ico compile silent-fail on bad ANTHROPIC_API_KEY (23db8bd)
+- chore(demo): wire scripts/demo-e2e.sh stage 4 to INTKB curator-cli (#120) (9b0bb58)
+
 ## [v1.8.0] - 2026-05-29
 
 - feat(cli/audit): add --json mode + CLI handler tests + wire into demo (bvf) (#119) (7c551d5)
