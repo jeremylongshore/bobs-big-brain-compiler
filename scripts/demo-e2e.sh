@@ -12,15 +12,19 @@
 #   2. ICO compile all (6 compiler passes)
 #   3. ICO spool emit (writes JSONL to spool dir)
 #   4. INTKB curator-cli ingest (ingest → policy → promote, cross-repo wire)
-#   5. INTKB edge-daemon sync to qmd index
-#   6. qmd MCP query returns curated memory with source citation
+#   5. INTKB export curated memories → qmd index (exporter-cli + qmd)
+#   6. qmd search returns curated memory with source citation
 #   7. ICO audit verify confirms hash chain intact
 #
-# Stages 5 and 6 are currently DEFERRED — they depend on bead 9jx (INTKB
-# curator CLI) shipping a clean entry point. v1 of this demo exercises
-# stages 1-4 + 7 end-to-end and reports 5-6 as `deferred` in the JSON
-# summary. When 9jx lands, those stages get wired and this comment block
-# updates accordingly.
+# All 7 stages run end-to-end. Stages 5-6 drive the real qmd binary directly
+# (exporter-cli writes a kb-export markdown tree; qmd indexes + searches it)
+# under a per-run isolated XDG_CACHE_HOME, so the demo never touches any real
+# knowledge bank. The edge-daemon's production qmd-adapter still has 2.0.1
+# drift tracked in bead e3q — the demo proves the FLOW; e3q hardens the daemon.
+#
+# Full green requires a real ANTHROPIC_API_KEY: stages 1-2 (compile) produce
+# empty content under a placeholder key, so stages 3-6 would have nothing to
+# carry. With a real key the whole chain is exercised.
 #
 # Usage:
 #   scripts/demo-e2e.sh                              # run with defaults
@@ -77,6 +81,22 @@ mkdir -p "$RUN_DIR"
 WORKSPACE="$(mktemp -d -t ico-demo-ws-XXXXXX)"
 WS_PATH="$WORKSPACE/demo"
 SPOOL_DIR="$WS_PATH/spool"
+
+# INTKB side: a file-backed store (so stage-5 export reads what stage-4 wrote),
+# a kb-export markdown tree, and an ISOLATED qmd cache. Per the per-project
+# separation model — this demo run gets its own TEAMKB_HOME + XDG_CACHE_HOME
+# under the throwaway workspace and never touches any real knowledge bank.
+TEAMKB_DB="$WORKSPACE/teamkb.db"
+KB_EXPORT_DIR="$WORKSPACE/kb-export"
+QMD_CACHE_DIR="$WORKSPACE/qmd-cache"
+QMD_CONFIG_DIR="$WORKSPACE/qmd-config"
+QMD_COLLECTION="kb-demo-$TENANT_ID"
+
+# qmd isolation REQUIRES both XDG vars: XDG_CACHE_HOME relocates the index
+# (~/.cache/qmd/index.sqlite) AND XDG_CONFIG_HOME relocates the collection
+# registry (~/.config/qmd/index.yml). Setting only the cache var leaks
+# `qmd collection add` entries into the operator's real global registry.
+# Pointing both at per-run dirs keeps the demo fully sandboxed.
 
 # Cleanup unless --keep
 cleanup() {
@@ -170,9 +190,13 @@ preflight() {
   if [[ ! -d "$INTKB_REPO" ]]; then
     missing+=("INTKB repo not found: $INTKB_REPO (set INTKB_REPO env var)")
   fi
-  if [[ ! -f "$INTKB_REPO/apps/curator/dist/index.js" ]]; then
-    missing+=("INTKB curator not built — run 'pnpm -F @qmd-team-intent-kb/curator build' in $INTKB_REPO")
+  if [[ ! -f "$INTKB_REPO/apps/curator/dist/main.js" ]]; then
+    missing+=("INTKB curator-cli not built — run 'pnpm -F @qmd-team-intent-kb/curator build' in $INTKB_REPO")
   fi
+  if [[ ! -f "$INTKB_REPO/apps/git-exporter/dist/main.js" ]]; then
+    missing+=("INTKB exporter-cli not built — run 'pnpm -F @qmd-team-intent-kb/git-exporter build' in $INTKB_REPO")
+  fi
+  command -v qmd >/dev/null 2>&1 || missing+=("qmd binary not on PATH (needed for stages 5-6; install qmd 2.0.1+)")
   if [[ ${#missing[@]} -gt 0 ]]; then
     echo "[demo-e2e] preflight failed:" >&2
     printf '  - %s\n' "${missing[@]}" >&2
@@ -222,31 +246,55 @@ run_stage 3 "ico spool emit" "
 # ---------------------------------------------------------------------------
 
 CURATOR_CLI="node $INTKB_REPO/apps/curator/dist/main.js"
+EXPORTER_CLI="node $INTKB_REPO/apps/git-exporter/dist/main.js"
 
+# Stage 4 persists to a FILE-backed store (--db) so stage 5's exporter reads
+# exactly what the curator promoted. (Default in-memory db wouldn't survive
+# the process boundary between curator-cli and exporter-cli.)
 run_stage 4 "INTKB curator-cli ingest (ingest → policy → promote, cross-repo wire)" "
-  $CURATOR_CLI ingest '$SPOOL_DIR' --tenant '$TENANT_ID' --json > '$RUN_DIR/stage4-curator.json'
+  $CURATOR_CLI ingest '$SPOOL_DIR' --tenant '$TENANT_ID' --db '$TEAMKB_DB' --json > '$RUN_DIR/stage4-curator.json'
   test \"\$(jq -r .ok '$RUN_DIR/stage4-curator.json')\" = 'true'
 "
 
 # ---------------------------------------------------------------------------
-# Stage 5 — DEFERRED (depends on git-exporter + edge-daemon orchestration)
-# Curator now writes curated_memories into the in-memory SQLite. To reach
-# the qmd index we'd need a running edge-daemon (apps/edge-daemon) plus the
-# git-exporter to mirror curated memories to kb-export/ where qmd can pick
-# them up. Wiring that into an unattended demo run is a follow-on bead.
+# Stage 5 — INTKB export curated memories → qmd index
+# exporter-cli materializes curated_memories from the shared store into a
+# kb-export markdown tree (category-routed), then the real qmd binary indexes
+# that tree as an isolated collection under a per-run XDG_CACHE_HOME. This is
+# the curated-memory → searchable-index hand-off, driven against qmd 2.0.1.
+#
+# NOTE: the edge-daemon's qmd-adapter still carries pre-2.0.1 drift (the
+# --data-dir flag + collection-path mismatch) tracked in bead e3q; this demo
+# proves the end-to-end FLOW by driving qmd directly. Bringing the production
+# daemon's adapter in line with 2.0.1 is the remaining e3q hardening.
 # ---------------------------------------------------------------------------
 
-record_stage 5 "INTKB edge-daemon sync to qmd index" "deferred" 0 \
-  "needs edge-daemon + git-exporter orchestration in the demo runner; 9jx unblocked the curator pipeline but the qmd-index hand-off requires a separate harness"
-echo "[demo-e2e] stage 5: DEFERRED (edge-daemon + git-exporter harness still TODO)"
+run_stage 5 "INTKB export → qmd index (curated memory → searchable)" "
+  $EXPORTER_CLI export --db '$TEAMKB_DB' --out '$KB_EXPORT_DIR' --tenant '$TENANT_ID' --json > '$RUN_DIR/stage5-export.json'
+  test \"\$(jq -r .ok '$RUN_DIR/stage5-export.json')\" = 'true'
+  export XDG_CACHE_HOME='$QMD_CACHE_DIR' XDG_CONFIG_HOME='$QMD_CONFIG_DIR'
+  qmd collection add '$KB_EXPORT_DIR' --name '$QMD_COLLECTION' >/dev/null
+  qmd update >/dev/null
+"
 
 # ---------------------------------------------------------------------------
-# Stage 6 — DEFERRED (depends on stage 5)
+# Stage 6 — qmd query returns curated memory with citation
+# Searches the indexed curated memory by a keyword from the corpus and
+# confirms qmd returns a hit whose qmd:// URI is the source citation. Uses
+# `qmd search` (BM25, offline — no LLM/API) for a hermetic, deterministic
+# assertion. The query term is overridable via DEMO_QUERY (default 'the',
+# a stopword-ish high-recall term so the stage proves retrieval works for
+# whatever corpus was compiled, not a corpus-specific keyword).
 # ---------------------------------------------------------------------------
 
-record_stage 6 "qmd MCP query returns curated memory with citation" "deferred" 0 \
-  "blocked on stage 5; will exercise once 9jx ships and curated memories reach qmd index"
-echo "[demo-e2e] stage 6: DEFERRED (downstream of stage 5)"
+DEMO_QUERY="${DEMO_QUERY:-the}"
+
+run_stage 6 "qmd search returns curated memory with citation" "
+  export XDG_CACHE_HOME='$QMD_CACHE_DIR' XDG_CONFIG_HOME='$QMD_CONFIG_DIR'
+  qmd search '$DEMO_QUERY' --json > '$RUN_DIR/stage6-search.json' 2>/dev/null || qmd search '$DEMO_QUERY' > '$RUN_DIR/stage6-search.txt' 2>/dev/null
+  # Assert at least one qmd:// citation came back referencing our collection.
+  grep -q 'qmd://$QMD_COLLECTION/' '$RUN_DIR/stage6-search.json' '$RUN_DIR/stage6-search.txt' 2>/dev/null
+"
 
 # ---------------------------------------------------------------------------
 # Stage 7 — ICO audit verify
