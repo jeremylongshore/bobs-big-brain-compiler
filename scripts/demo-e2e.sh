@@ -26,10 +26,16 @@
 # empty content under a placeholder key, so stages 3-6 would have nothing to
 # carry. With a real key the whole chain is exercised.
 #
+# SMOKE mode (--from-spool <dir>) skips stages 1-3 + 7 and drives stages 4-6
+# (curator → export → qmd search) off a committed spool fixture. It makes NO
+# Claude API calls and needs NO ANTHROPIC_API_KEY — this is what the nightly CI
+# smoke runs. The fixture's candidate tenantId must equal --tenant.
+#
 # Usage:
-#   scripts/demo-e2e.sh                              # run with defaults
+#   scripts/demo-e2e.sh                              # full chain (needs real key)
 #   scripts/demo-e2e.sh --corpus /path/to/corpus     # override sample corpus
 #   scripts/demo-e2e.sh --intkb-repo /path/to/intkb  # override INTKB clone
+#   scripts/demo-e2e.sh --from-spool dogfood/fixtures/smoke-spool  # key-free smoke (stages 4-6)
 #   scripts/demo-e2e.sh --keep                       # keep workspace/spool tmpdirs
 #
 # Exit codes:
@@ -51,15 +57,21 @@ CORPUS="${DEMO_CORPUS:-$DEFAULT_CORPUS}"
 INTKB_REPO="${INTKB_REPO:-$DEFAULT_INTKB}"
 TENANT_ID="${TENANT_ID:-demo-e2e}"
 KEEP_TMP=0
+# When set, run in key-free SMOKE mode: skip stages 1-3 (compile — the only
+# stages that call Claude) + stage 7, and drive stages 4-6 off this committed
+# spool fixture dir instead. Used by the nightly CI smoke; no ANTHROPIC_API_KEY
+# required. The fixture's candidate tenantId must equal TENANT_ID.
+FROM_SPOOL="${DEMO_FROM_SPOOL:-}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --corpus)       CORPUS="$2"; shift 2 ;;
     --intkb-repo)   INTKB_REPO="$2"; shift 2 ;;
     --tenant)       TENANT_ID="$2"; shift 2 ;;
+    --from-spool)   FROM_SPOOL="$2"; shift 2 ;;
     --keep)         KEEP_TMP=1; shift ;;
     -h|--help)
-      sed -n '3,28p' "${BASH_SOURCE[0]}"
+      sed -n '3,44p' "${BASH_SOURCE[0]}"
       exit 0
       ;;
     *)
@@ -142,6 +154,16 @@ record_stage() {
   fi
 }
 
+# Mark a stage as intentionally skipped (does NOT set FAILED_STAGE, so
+# downstream stages still run). Used by SMOKE mode to skip the API-touching
+# compile stages + the workspace-dependent audit-verify stage.
+#   $1 — stage_id  $2 — stage_name  $3 — detail
+skip_stage() {
+  local id="$1" name="$2" detail="$3"
+  record_stage "$id" "$name" "skip" 0 "$detail"
+  echo "[demo-e2e] stage $id ($name): skip ($detail)"
+}
+
 # Run a stage. Args:
 #   $1 — stage_id
 #   $2 — stage_name
@@ -181,11 +203,19 @@ preflight() {
   command -v node >/dev/null 2>&1 || missing+=("node")
   command -v pnpm >/dev/null 2>&1 || missing+=("pnpm")
 
-  if [[ ! -f "$REPO_ROOT/packages/cli/dist/index.js" ]]; then
-    missing+=("ICO CLI not built — run 'pnpm build' first")
-  fi
-  if [[ ! -d "$CORPUS" ]]; then
-    missing+=("corpus dir not found: $CORPUS")
+  # In SMOKE mode (stages 4-6 only) the ICO CLI + corpus are not used — the
+  # input is the committed spool fixture. Require the fixture instead.
+  if [[ -n "$FROM_SPOOL" ]]; then
+    if [[ -z "$(ls "$FROM_SPOOL"/spool-*.jsonl 2>/dev/null)" ]]; then
+      missing+=("--from-spool dir has no spool-*.jsonl: $FROM_SPOOL")
+    fi
+  else
+    if [[ ! -f "$REPO_ROOT/packages/cli/dist/index.js" ]]; then
+      missing+=("ICO CLI not built — run 'pnpm build' first")
+    fi
+    if [[ ! -d "$CORPUS" ]]; then
+      missing+=("corpus dir not found: $CORPUS")
+    fi
   fi
   if [[ ! -d "$INTKB_REPO" ]]; then
     missing+=("INTKB repo not found: $INTKB_REPO (set INTKB_REPO env var)")
@@ -208,34 +238,40 @@ preflight
 ICO="node $REPO_ROOT/packages/cli/dist/index.js"
 
 # ---------------------------------------------------------------------------
-# Stage 1 — ICO init + mount + ingest
+# Stages 1-3 — ICO init/compile/spool (the API-touching half).
+#
+# In SMOKE mode these are skipped and the committed spool fixture is used as
+# the stage-4 input — so the nightly CI run needs no ANTHROPIC_API_KEY. In
+# full mode they run normally (compile makes real Claude calls).
 # ---------------------------------------------------------------------------
 
-run_stage 1 "ico init + mount + ingest" "
-  $ICO init demo --path '$WORKSPACE' >/dev/null
-  $ICO --workspace '$WS_PATH' mount add sample '$CORPUS' >/dev/null
-  $ICO --workspace '$WS_PATH' ingest '$CORPUS' --yes >/dev/null
-"
+if [[ -n "$FROM_SPOOL" ]]; then
+  SPOOL_DIR="$FROM_SPOOL"
+  skip_stage 1 "ico init + mount + ingest" "smoke mode — using committed spool fixture"
+  skip_stage 2 "ico compile (6 passes)" "smoke mode — compile skipped (no API key)"
+  skip_stage 3 "ico spool emit" "smoke mode — fixture spool at $FROM_SPOOL"
+else
+  # Stage 1 — ICO init + mount + ingest
+  run_stage 1 "ico init + mount + ingest" "
+    $ICO init demo --path '$WORKSPACE' >/dev/null
+    $ICO --workspace '$WS_PATH' mount add sample '$CORPUS' >/dev/null
+    $ICO --workspace '$WS_PATH' ingest '$CORPUS' --yes >/dev/null
+  "
 
-# ---------------------------------------------------------------------------
-# Stage 2 — ICO compile all 6 passes
-# ---------------------------------------------------------------------------
+  # Stage 2 — ICO compile all 6 passes
+  run_stage 2 "ico compile (6 passes)" "
+    for pass in sources concepts topics links contradictions gaps; do
+      $ICO --workspace '$WS_PATH' compile \$pass >/dev/null
+    done
+  "
 
-run_stage 2 "ico compile (6 passes)" "
-  for pass in sources concepts topics links contradictions gaps; do
-    $ICO --workspace '$WS_PATH' compile \$pass >/dev/null
-  done
-"
-
-# ---------------------------------------------------------------------------
-# Stage 3 — ICO spool emit
-# ---------------------------------------------------------------------------
-
-run_stage 3 "ico spool emit" "
-  $ICO --workspace '$WS_PATH' spool emit \
-    --out '$SPOOL_DIR' --scope all --tenant '$TENANT_ID' >/dev/null
-  test -n \"\$(ls '$SPOOL_DIR'/spool-*.jsonl 2>/dev/null)\"
-"
+  # Stage 3 — ICO spool emit
+  run_stage 3 "ico spool emit" "
+    $ICO --workspace '$WS_PATH' spool emit \
+      --out '$SPOOL_DIR' --scope all --tenant '$TENANT_ID' >/dev/null
+    test -n \"\$(ls '$SPOOL_DIR'/spool-*.jsonl 2>/dev/null)\"
+  "
+fi
 
 # ---------------------------------------------------------------------------
 # Stage 4 — INTKB curator CLI: ingest → policy → promote (cross-repo wire)
@@ -298,12 +334,21 @@ run_stage 6 "qmd search returns curated memory with citation" "
 
 # ---------------------------------------------------------------------------
 # Stage 7 — ICO audit verify
+#
+# Verifies the demo workspace's audit hash chain. In SMOKE mode there is no
+# compiled workspace (stages 1-3 were skipped), so this is skipped too — the
+# audit-chain invariant is covered separately by the `audit-chain-intact`
+# eval + the "Audit chain verify" CI job.
 # ---------------------------------------------------------------------------
 
-run_stage 7 "ico audit verify (hash chain intact)" "
-  $ICO --workspace '$WS_PATH' audit verify --json > '$RUN_DIR/stage7-audit-verify.json'
-  test \"\$(jq -r .ok '$RUN_DIR/stage7-audit-verify.json')\" = 'true'
-"
+if [[ -n "$FROM_SPOOL" ]]; then
+  skip_stage 7 "ico audit verify (hash chain intact)" "smoke mode — no compiled workspace to verify"
+else
+  run_stage 7 "ico audit verify (hash chain intact)" "
+    $ICO --workspace '$WS_PATH' audit verify --json > '$RUN_DIR/stage7-audit-verify.json'
+    test \"\$(jq -r .ok '$RUN_DIR/stage7-audit-verify.json')\" = 'true'
+  "
+fi
 
 # ---------------------------------------------------------------------------
 # Emit summary
