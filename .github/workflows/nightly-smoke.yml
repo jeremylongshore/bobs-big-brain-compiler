@@ -27,6 +27,10 @@ concurrency:
   group: nightly-smoke-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Let corepack download the per-repo pnpm version non-interactively.
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+
 jobs:
   deterministic-smoke:
     name: Deterministic chain smoke (no API key)
@@ -42,15 +46,15 @@ jobs:
           repository: jeremylongshore/qmd-team-intent-kb
           path: intkb
 
-      - name: Install pnpm (matches INTKB packageManager)
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.15.4
-
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '22'
+
+      - name: Enable corepack (resolves pnpm per-repo from packageManager)
+        # ICO pins pnpm@10.x and INTKB pins pnpm@9.15.4; corepack picks the
+        # right one per working directory, avoiding the action-setup conflict.
+        run: corepack enable
 
       - name: Set up Bun (for qmd)
         uses: oven-sh/setup-bun@v2
