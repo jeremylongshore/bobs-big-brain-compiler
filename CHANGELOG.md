@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.9.0] - 2026-05-31
+
+- feat(demo): wire stages 5-6 (export → qmd index → search citation) in demo-e2e.sh (#122) (87c9231)
+
 ## [v1.8.1] - 2026-05-30
 
 - fix(cli/compile): fail loudly on auth errors + all-source failures (u0j) (#121) (bb15953)
