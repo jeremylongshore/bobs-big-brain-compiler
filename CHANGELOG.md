@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.10.0] - 2026-05-31
+
+- chore(beads): close lz2 — key-free nightly smoke merged (#124) (20902f8)
+- feat(ci): key-free nightly smoke of the deterministic cross-repo chain (lz2) (#124) (c81483a)
+- docs(dogfood): record first full-green demo-e2e run (real key) (#123) (96a3d92)
+
 ## [v1.9.0] - 2026-05-31
 
 - feat(demo): wire stages 5-6 (export → qmd index → search citation) in demo-e2e.sh (#122) (87c9231)
