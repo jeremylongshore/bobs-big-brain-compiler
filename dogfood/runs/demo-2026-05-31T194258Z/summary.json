@@ -1,0 +1,62 @@
+{
+  "run_id": "demo-2026-05-31T194258Z",
+  "timestamp": "2026-05-31T19:49:05Z",
+  "corpus": "/home/jeremy/000-projects/intentional-cognition-os/dogfood/experiments/compile-vs-rag/corpus",
+  "intkb_repo": "/home/jeremy/000-projects/qmd-team-intent-kb",
+  "tenant_id": "demo-e2e",
+  "overall": "pass",
+  "stages": [
+    {
+      "id": "1",
+      "name": "ico init + mount + ingest",
+      "status": "pass",
+      "duration_ms": 3357,
+      "detail": "ok"
+    },
+    {
+      "id": "2",
+      "name": "ico compile (6 passes)",
+      "status": "pass",
+      "duration_ms": 358365,
+      "detail": "ok"
+    },
+    {
+      "id": "3",
+      "name": "ico spool emit",
+      "status": "pass",
+      "duration_ms": 1015,
+      "detail": "ok"
+    },
+    {
+      "id": "4",
+      "name": "INTKB curator-cli ingest (ingest → policy → promote, cross-repo wire)",
+      "status": "pass",
+      "duration_ms": 457,
+      "detail": "ok"
+    },
+    {
+      "id": "5",
+      "name": "INTKB export → qmd index (curated memory → searchable)",
+      "status": "pass",
+      "duration_ms": 1798,
+      "detail": "ok"
+    },
+    {
+      "id": "6",
+      "name": "qmd search returns curated memory with citation",
+      "status": "pass",
+      "duration_ms": 635,
+      "detail": "ok"
+    },
+    {
+      "id": "7",
+      "name": "ico audit verify (hash chain intact)",
+      "status": "pass",
+      "duration_ms": 979,
+      "detail": "ok"
+    }
+  ],
+  "deferred_count": 0,
+  "pass_count": 7,
+  "fail_count": 0
+}

@@ -1,0 +1,142 @@
+[
+  {
+    "docid": "#f25a1e",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/guides/2daed212-15fd-4005-97f1-4c0fd5116dcf.md",
+    "title": "Open question: What are the semantics, lifecycle, and retention policy of the Beta Files API?",
+    "snippet": "@@ -2,4 @@ (1 before, 45 after)\nid: \"2daed212-15fd-4005-97f1-4c0fd5116dcf\"\ntitle: \"Open question: What are the semantics, lifecycle, and retention policy of the Beta Files API?\"\ncategory: \"reference\"\nlifecycle: \"active\""
+  },
+  {
+    "docid": "#99526c",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/guides/4048225a-b33c-4eb3-b79f-35d745c17f6b.md",
+    "title": "Open question: What are the concrete performance characteristics and trade-offs of the aiohttp backend versus the default httpx backend?",
+    "snippet": "@@ -2,4 @@ (1 before, 37 after)\nid: \"4048225a-b33c-4eb3-b79f-35d745c17f6b\"\ntitle: \"Open question: What are the concrete performance characteristics and trade-offs of the aiohttp backend versus the default httpx backend?\"\ncategory: \"reference\"\nlifecycle: \"active\""
+  },
+  {
+    "docid": "#1fa593",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/guides/ece57acd-79f3-494e-97e1-7e66dd907193.md",
+    "title": "Open question: What is the exact behaviour of the pre-flight ValueError guard for non-streaming requests projected to exceed the timeout?",
+    "snippet": "@@ -2,4 @@ (1 before, 24 after)\nid: \"ece57acd-79f3-494e-97e1-7e66dd907193\"\ntitle: \"Open question: What is the exact behaviour of the pre-flight ValueError guard for non-streaming requests projected to exceed the timeout?\"\ncategory: \"reference\"\nlifecycle: \"active\""
+  },
+  {
+    "docid": "#506cd7",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/guides/beb9282c-60d9-483c-b6fd-778291e90447.md",
+    "title": "Open question: What are the expanded beta content block types (MCP tool use, web fetch, memory tool, container, context management) and how are they used?",
+    "snippet": "@@ -2,4 @@ (1 before, 49 after)\nid: \"beb9282c-60d9-483c-b6fd-778291e90447\"\ntitle: \"Open question: What are the expanded beta content block types (MCP tool use, web fetch, memory tool, container, context management) and how are they used?\"\ncategory: \"reference\"\nlifecycle: \"active\""
+  },
+  {
+    "docid": "#acef1a",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/guides/63bdc71e-18dc-4424-a44d-49c7711cb4a7.md",
+    "title": "Open question: What are the Beta Skills and Skills Versions resources, and what problem do they solve?",
+    "snippet": "@@ -2,4 @@ (1 before, 44 after)\nid: \"63bdc71e-18dc-4424-a44d-49c7711cb4a7\"\ntitle: \"Open question: What are the Beta Skills and Skills Versions resources, and what problem do they solve?\"\ncategory: \"reference\"\nlifecycle: \"active\""
+  },
+  {
+    "docid": "#394d94",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/b01c3017-2f96-4369-a75a-dc787493d2bd.md",
+    "title": "Streaming Responses in the Anthropic Python SDK",
+    "snippet": "@@ -2,4 @@ (1 before, 59 after)\nid: \"b01c3017-2f96-4369-a75a-dc787493d2bd\"\ntitle: \"Streaming Responses in the Anthropic Python SDK\"\ncategory: \"architecture\"\nlifecycle: \"active\""
+  },
+  {
+    "docid": "#b5d704",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/b42c6974-cbd5-4893-8385-7e9a718457ea.md",
+    "title": "Tool Use and Agentic Workflows",
+    "snippet": "@@ -26,4 @@ (25 before, 28 after)\n\nTool use — also referred to as function calling — enables a language model to emit structured tool call content blocks within a response, signalling that a caller-defined function should be invoked with specified arguments. The caller executes the function and returns results in a subsequent mes..."
+  },
+  {
+    "docid": "#59a6b0",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/guides/ec77de40-6a37-4ca3-97ee-ef5c3b2f3578.md",
+    "title": "Open question: What introspection limitations exist for @beta_tool schema generation, and how are edge cases handled?",
+    "snippet": "@@ -23,4 @@ (22 before, 21 after)\n\n## The Gap\n\nThe knowledge base asserts that `@beta_tool` derives a JSON schema from a function's type annotations and docstring, but provides no information about what happens in edge cases or unsupported scenarios. Specifically, the following questions are unanswered:"
+  },
+  {
+    "docid": "#181360",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/0cb9c0a1-ad42-46e2-ab25-7b4a3ab5b6c4.md",
+    "title": "JSON Schema Generation from Python Functions",
+    "snippet": "@@ -22,4 @@ (21 before, 1 after)\n\nThe `@beta_tool` decorator applies static introspection to a Python function, extracting argument names, type annotations, and the docstring to produce a structured JSON schema conforming to the tool definition format expected by the Anthropic API. The generated schema includes a `name`, `descri..."
+  },
+  {
+    "docid": "#deb3a3",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/cab4fd29-1e26-4d0b-bfc7-961d6d458cec.md",
+    "title": "Server-Sent Events (SSE)",
+    "snippet": "@@ -21,4 @@ (20 before, 1 after)\n\nServer-Sent Events is the transport mechanism underlying streaming responses in the Anthropic API. When a caller requests a streaming response, the server holds the HTTP connection open and emits a sequence of SSE frames, each carrying a typed event and associated JSON payload, until the respons..."
+  },
+  {
+    "docid": "#617e1c",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/d326ce54-f624-465a-8812-b9ef270ed17a.md",
+    "title": "Tool Use (Function Calling)",
+    "snippet": "@@ -22,4 @@ (21 before, 1 after)\n\nTool use enables the model to emit tool call content blocks within a response, signalling that a specific named function should be invoked with provided arguments. The caller is responsible for executing the function and returning results in a subsequent message. The Anthropic Python SDK automat..."
+  },
+  {
+    "docid": "#978f38",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/8a2ef1f8-7688-4fec-9c77-4cd2d9a82426.md",
+    "title": "Error Handling and Resilience Mechanisms",
+    "snippet": "@@ -26,4 @@ (25 before, 32 after)\n\nProduction API integrations must handle transient network failures, rate limiting, and server-side errors without requiring callers to implement bespoke recovery logic. The Anthropic Python SDK addresses this through three complementary mechanisms: a structured exception hierarchy that allows er..."
+  },
+  {
+    "docid": "#24c3b9",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/de21a5c8-ca7f-4370-991b-842142ecb940.md",
+    "title": "Asynchronous API Client",
+    "snippet": "@@ -22,4 @@ (21 before, 1 after)\n\nThe `AsyncAnthropic` class is the asynchronous client provided by the Anthropic Python SDK, powered by `httpx`. All API calls must be awaited inside an `async` function, enabling concurrent execution within an event loop. An optional `aiohttp` backend can be substituted via the `anthropic[aiohtt..."
+  },
+  {
+    "docid": "#433178",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/ef876aad-91f3-4d98-b272-290df86ad413.md",
+    "title": "Message Batches API",
+    "snippet": "@@ -21,4 @@ (20 before, 1 after)\n\nThe Message Batches API is accessible under `client.messages.batches` and accepts the same parameters as the standard Messages API, with each request identified by a caller-supplied `custom_id`. Batch creation returns a `MessageBatch` object; callers poll the batch's `processing_status` field an..."
+  },
+  {
+    "docid": "#5f9270",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/63807180-5739-4bf0-8f31-c8cac76c63d4.md",
+    "title": "Request Timeout",
+    "snippet": "@@ -21,4 @@ (20 before, 1 after)\n\nThe Anthropic Python SDK sets a default request timeout of 10 minutes. For non-streaming requests that are projected to exceed this threshold, the SDK raises a `ValueError` as a pre-flight guard. Streaming requests and requests with explicit timeout overrides bypass this guard. The timeout value..."
+  },
+  {
+    "docid": "#c7bf37",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/8f7ed71f-9da4-4bbc-958b-0f3187e0fd31.md",
+    "title": "Synchronous API Client",
+    "snippet": "@@ -21,4 @@ (20 before, 1 after)\n\nThe `Anthropic` class is the synchronous client provided by the Anthropic Python SDK. It exposes methods such as `client.messages.create()`, `client.messages.count_tokens()`, and `client.messages.batches.*` that block the calling thread until a response is received. It is powered by `httpx` and ..."
+  },
+  {
+    "docid": "#cf4a39",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/2f416265-e75f-4c18-9cf2-8b0fb75d026d.md",
+    "title": "Automatic Retry with Exponential Backoff",
+    "snippet": "@@ -21,4 @@ (20 before, 1 after)\n\nThe Anthropic Python SDK applies automatic retries with exponential backoff to connection errors and HTTP responses with status codes 408, 409, 429, and any code ≥ 500. The default retry count is 2 and is configurable via the `max_retries` parameter on the client constructor or per-request via `..."
+  },
+  {
+    "docid": "#693ce9",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/a8b5c08a-8c73-45b1-a47f-fa20aae05799.md",
+    "title": "Pagination",
+    "snippet": "@@ -21,4 @@ (20 before, 1 after)\n\nList endpoints in the Anthropic Python SDK return auto-paginating iterators that transparently fetch subsequent pages as the caller iterates. Manual pagination control is available via `.has_next_page()`, `.next_page_info()`, `.get_next_page()`, and `.last_id` methods on the response object.\n\nPa..."
+  },
+  {
+    "docid": "#c343ea",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/288d946c-e076-49f0-8693-48e3875e8349.md",
+    "title": "Error Hierarchy",
+    "snippet": "@@ -21,4 @@ (20 before, 1 after)\n\nThe Anthropic Python SDK organises all API-related exceptions under `anthropic.APIError` as the root base class. Specific subtypes include `APIConnectionError` for network-level failures, `RateLimitError` for HTTP 429 responses, and `APIStatusError` for other HTTP error codes. The SDK also expor..."
+  },
+  {
+    "docid": "#e6f5da",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/c3c16e76-603d-4dd0-9e1f-fd55577797ce.md",
+    "title": "Streaming Response",
+    "snippet": "@@ -21,4 @@ (20 before, 1 after)\n\nStreaming responses are delivered via Server-Sent Events (SSE), allowing callers to process output tokens as they arrive. The Anthropic Python SDK exposes two consumption paths: `client.messages.create(..., stream=True)`, which returns a low-memory iterable of raw stream events without accumulat..."
+  }
+]

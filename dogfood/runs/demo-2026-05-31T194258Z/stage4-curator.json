@@ -1,0 +1,248 @@
+{
+  "ok": true,
+  "spool_dir": "/tmp/claude-1000/ico-demo-ws-U0SK9a/demo/spool",
+  "tenant_id": "demo-e2e",
+  "ingested_count": 21,
+  "tampered_count": 0,
+  "tampered": [],
+  "batch": {
+    "processed": 21,
+    "promoted": 21,
+    "rejected": 0,
+    "flagged": 0,
+    "duplicates": 0,
+    "results": [
+      {
+        "candidateId": "c639f0ca-47a8-51df-af06-736f03cbffc4",
+        "outcome": "promoted",
+        "memoryId": "de21a5c8-ca7f-4370-991b-842142ecb940",
+        "pipelineResult": {
+          "candidateId": "c639f0ca-47a8-51df-af06-736f03cbffc4",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      },
+      {
+        "candidateId": "3e95d548-cadb-5632-a0ab-3a55b0e50cf8",
+        "outcome": "promoted",
+        "memoryId": "2f416265-e75f-4c18-9cf2-8b0fb75d026d",
+        "pipelineResult": {
+          "candidateId": "3e95d548-cadb-5632-a0ab-3a55b0e50cf8",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      },
+      {
+        "candidateId": "c456de0c-37d6-57f2-8e92-91f6de984882",
+        "outcome": "promoted",
+        "memoryId": "288d946c-e076-49f0-8693-48e3875e8349",
+        "pipelineResult": {
+          "candidateId": "c456de0c-37d6-57f2-8e92-91f6de984882",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      },
+      {
+        "candidateId": "f4c8021c-8e0a-5e6b-95bb-11e498782783",
+        "outcome": "promoted",
+        "memoryId": "0cb9c0a1-ad42-46e2-ab25-7b4a3ab5b6c4",
+        "pipelineResult": {
+          "candidateId": "f4c8021c-8e0a-5e6b-95bb-11e498782783",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      },
+      {
+        "candidateId": "9b7e6e51-cb02-54b5-8051-24ca89bdf609",
+        "outcome": "promoted",
+        "memoryId": "ef876aad-91f3-4d98-b272-290df86ad413",
+        "pipelineResult": {
+          "candidateId": "9b7e6e51-cb02-54b5-8051-24ca89bdf609",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      },
+      {
+        "candidateId": "de116581-1931-5763-99de-bda598ed2a74",
+        "outcome": "promoted",
+        "memoryId": "a8b5c08a-8c73-45b1-a47f-fa20aae05799",
+        "pipelineResult": {
+          "candidateId": "de116581-1931-5763-99de-bda598ed2a74",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      },
+      {
+        "candidateId": "f9eb7059-a756-5d0c-8c8c-35b8458b7afb",
+        "outcome": "promoted",
+        "memoryId": "63807180-5739-4bf0-8f31-c8cac76c63d4",
+        "pipelineResult": {
+          "candidateId": "f9eb7059-a756-5d0c-8c8c-35b8458b7afb",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      },
+      {
+        "candidateId": "5f5277e6-e2f2-5128-a83a-3cc4d31138c0",
+        "outcome": "promoted",
+        "memoryId": "cab4fd29-1e26-4d0b-bfc7-961d6d458cec",
+        "pipelineResult": {
+          "candidateId": "5f5277e6-e2f2-5128-a83a-3cc4d31138c0",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      },
+      {
+        "candidateId": "19c8752b-bad9-555e-8a5e-aa44581f1428",
+        "outcome": "promoted",
+        "memoryId": "c3c16e76-603d-4dd0-9e1f-fd55577797ce",
+        "pipelineResult": {
+          "candidateId": "19c8752b-bad9-555e-8a5e-aa44581f1428",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      },
+      {
+        "candidateId": "561e18ec-f0a1-554c-9ca0-d8070af4f23d",
+        "outcome": "promoted",
+        "memoryId": "8f7ed71f-9da4-4bbc-958b-0f3187e0fd31",
+        "pipelineResult": {
+          "candidateId": "561e18ec-f0a1-554c-9ca0-d8070af4f23d",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      },
+      {
+        "candidateId": "c5d89951-4da8-5e00-928b-c3400a65c474",
+        "outcome": "promoted",
+        "memoryId": "d326ce54-f624-465a-8812-b9ef270ed17a",
+        "pipelineResult": {
+          "candidateId": "c5d89951-4da8-5e00-928b-c3400a65c474",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      },
+      {
+        "candidateId": "7a30cfea-85b9-564e-ac03-4c0c7e63c23a",
+        "outcome": "promoted",
+        "memoryId": "8a2ef1f8-7688-4fec-9c77-4cd2d9a82426",
+        "pipelineResult": {
+          "candidateId": "7a30cfea-85b9-564e-ac03-4c0c7e63c23a",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      },
+      {
+        "candidateId": "ad79e092-2cde-5fa6-b361-ecbca3910795",
+        "outcome": "promoted",
+        "memoryId": "b01c3017-2f96-4369-a75a-dc787493d2bd",
+        "pipelineResult": {
+          "candidateId": "ad79e092-2cde-5fa6-b361-ecbca3910795",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      },
+      {
+        "candidateId": "fd1f9ae2-4eb9-59fe-b541-4b91f2c056fd",
+        "outcome": "promoted",
+        "memoryId": "dfda42df-7bd9-4c93-a4a7-fce3e2366537",
+        "pipelineResult": {
+          "candidateId": "fd1f9ae2-4eb9-59fe-b541-4b91f2c056fd",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      },
+      {
+        "candidateId": "42229884-36cc-587c-8e09-1c03db3d334b",
+        "outcome": "promoted",
+        "memoryId": "b42c6974-cbd5-4893-8385-7e9a718457ea",
+        "pipelineResult": {
+          "candidateId": "42229884-36cc-587c-8e09-1c03db3d334b",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      },
+      {
+        "candidateId": "1dbf2067-5b76-5b17-b7ac-1379e5926f61",
+        "outcome": "promoted",
+        "memoryId": "63bdc71e-18dc-4424-a44d-49c7711cb4a7",
+        "pipelineResult": {
+          "candidateId": "1dbf2067-5b76-5b17-b7ac-1379e5926f61",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      },
+      {
+        "candidateId": "32cc47d1-316d-5c6e-bb26-f8732d909bf4",
+        "outcome": "promoted",
+        "memoryId": "4048225a-b33c-4eb3-b79f-35d745c17f6b",
+        "pipelineResult": {
+          "candidateId": "32cc47d1-316d-5c6e-bb26-f8732d909bf4",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      },
+      {
+        "candidateId": "035371a0-b76a-5c41-b5c0-72cda0c9a7c5",
+        "outcome": "promoted",
+        "memoryId": "beb9282c-60d9-483c-b6fd-778291e90447",
+        "pipelineResult": {
+          "candidateId": "035371a0-b76a-5c41-b5c0-72cda0c9a7c5",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      },
+      {
+        "candidateId": "421f13a9-52aa-548a-96fc-eeb463136294",
+        "outcome": "promoted",
+        "memoryId": "2daed212-15fd-4005-97f1-4c0fd5116dcf",
+        "pipelineResult": {
+          "candidateId": "421f13a9-52aa-548a-96fc-eeb463136294",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      },
+      {
+        "candidateId": "ce3d62da-1851-577d-857f-9b83d7341459",
+        "outcome": "promoted",
+        "memoryId": "ec77de40-6a37-4ca3-97ee-ef5c3b2f3578",
+        "pipelineResult": {
+          "candidateId": "ce3d62da-1851-577d-857f-9b83d7341459",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      },
+      {
+        "candidateId": "913eb599-c2fb-5e16-b213-d4d56efeea0f",
+        "outcome": "promoted",
+        "memoryId": "ece57acd-79f3-494e-97e1-7e66dd907193",
+        "pipelineResult": {
+          "candidateId": "913eb599-c2fb-5e16-b213-d4d56efeea0f",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      }
+    ]
+  }
+}
