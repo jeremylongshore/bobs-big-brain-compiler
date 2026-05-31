@@ -1,0 +1,7 @@
+==[ stage 1: ico init + mount + ingest ]==
+==[ stage 2: ico compile (6 passes) ]==
+==[ stage 3: ico spool emit ]==
+==[ stage 4: INTKB curator-cli ingest (ingest → policy → promote, cross-repo wire) ]==
+==[ stage 5: INTKB export → qmd index (curated memory → searchable) ]==
+==[ stage 6: qmd search returns curated memory with citation ]==
+==[ stage 7: ico audit verify (hash chain intact) ]==

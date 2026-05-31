@@ -518,3 +518,77 @@ None — this is feature work, not a bug fix cycle.
 - File beads for any fmo-family or new-paradigm bugs surfaced by the v2 bank.
 - Possibly: start a v0.3 design conversation around per-paraphrase
   `expected_substrings` overrides and `citation_jaccard_across_paraphrases`.
+
+---
+
+## 2026-05-31 — demo-e2e: first full-green proof-of-work run (real key)
+
+**Target**: the in-repo sample corpus (`dogfood/experiments/compile-vs-rag/corpus`, 5 docs)
+**Question bank**: n/a — this is the cross-repo `scripts/demo-e2e.sh` proof-of-work
+demo (ICO → INTKB → qmd → audit), not a question-bank dog-food session.
+**Run id**: `runs/demo-2026-05-31T194258Z/`
+
+### Headline
+
+First time the whole **Compile-Then-Govern** chain runs full-green with a real
+`ANTHROPIC_API_KEY` — all 7 stages pass, every link carrying real content
+end-to-end. Prior runs were structurally green but stages 1–2 produced empty
+content under a placeholder key (ICO bead `u0j` makes that fail loud now), so
+stages 3–6 had nothing to carry. This is the run that closes the thesis §6.2
+honesty note: the wire is no longer "partial."
+
+### Per-stage result
+
+| stage | what                                      | result | time   |
+| ----- | ----------------------------------------- | ------ | ------ |
+| 1     | ico init + mount + ingest                 | pass   | 3.4s   |
+| 2     | ico compile (6 passes, live Claude)       | pass   | 358.4s |
+| 3     | ico spool emit                            | pass   | 1.0s   |
+| 4     | INTKB curator-cli (ingest→policy→promote) | pass   | 0.5s   |
+| 5     | INTKB export → qmd index                  | pass   | 1.8s   |
+| 6     | qmd search returns citation               | pass   | 0.6s   |
+| 7     | ico audit verify (hash chain)             | pass   | 1.0s   |
+
+### What the chain actually carried
+
+- **Compile** turned 5 corpus docs into real semantic knowledge (6 passes).
+- **Curator**: 21 candidates ingested → **21 promoted, 0 rejected, 0 flagged,
+  0 duplicates, 0 tampered**. Every promotion went through the policy pipeline
+  (`outcome: approved`).
+- **Export**: 21 curated memories materialized into the kb-export markdown tree.
+- **qmd search**: returned **20 citations**, e.g.
+  `qmd://kb-demo-demo-e2e/guides/2daed212-15fd-4005-97f1-4c0fd5116dcf.md`.
+- **Audit verify**: 61 hash-chain events across 1 trace file, **0 breaks**.
+
+### Isolation
+
+The demo ran under its own per-run `XDG_CACHE_HOME` + `XDG_CONFIG_HOME`; the
+operator's real `~/.config/qmd/index.yml` shows **0** kb-demo entries afterward.
+Both XDG vars are load-bearing — the cache var alone would leak `collection add`
+entries into the global registry.
+
+### Key source
+
+`ANTHROPIC_API_KEY` decrypted in-process from `intent-eval-platform/intent-eval-lab/.env.sops`
+via the operator's age key — never written to disk or printed. ICO's compiler
+speaks the Anthropic Messages API; the Groq/NVIDIA keys in that same SOPS file
+are OpenAI-format endpoints and do not drive ICO.
+
+### Relationship to e3q
+
+This demo proves the FLOW by driving qmd directly. The production edge-daemon
+`qmd-adapter` was independently hardened to qmd 2.0.1 the same day
+(`qmd-team-intent-kb` PR #159, ADR 037-AT-DSGN, bead `e3q` closed) — that fix is
+proven by its own real-qmd integration test, separate from this demo.
+
+### Bugs filed
+
+None — clean full-green run.
+
+### Next session priorities
+
+- Wire this run into the nightly CI smoke (the demo's stated secondary purpose)
+  so any regression of a link in the chain is caught.
+- Consider a demo variant that drives stages 5–6 through the now-fixed
+  `edge-daemon run-once` adapter path (vs direct qmd) as a stronger production
+  proof.
