@@ -1,0 +1,94 @@
+name: Nightly Smoke (cross-repo chain)
+
+# Key-free end-to-end smoke of the deterministic half of the Compile-Then-Govern
+# chain: INTKB curator → export → qmd search, driven off a committed spool
+# fixture (dogfood/fixtures/smoke-spool). Stages 1-3 (ICO compile — the only
+# stages that call Claude) and stage 7 are skipped, so this run makes ZERO API
+# calls and needs NO ANTHROPIC_API_KEY. The full keyed demo stays a local/manual
+# operation; the key never fires on a schedule. See scripts/demo-e2e.sh
+# (--from-spool mode) and bead intentional-cognition-os-lz2.
+
+on:
+  schedule:
+    # 07:23 UTC daily — off-peak, no overlap with the mutation/codeql crons.
+    - cron: '23 7 * * *'
+  workflow_dispatch: {}
+  pull_request:
+    # Also run on PRs that touch the smoke itself, so it self-validates.
+    paths:
+      - 'scripts/demo-e2e.sh'
+      - 'dogfood/fixtures/smoke-spool/**'
+      - '.github/workflows/nightly-smoke.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Let corepack download the per-repo pnpm version non-interactively.
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+
+jobs:
+  deterministic-smoke:
+    name: Deterministic chain smoke (no API key)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout ICO (this repo)
+        uses: actions/checkout@v6
+
+      - name: Checkout INTKB (curator-cli + exporter-cli)
+        uses: actions/checkout@v6
+        with:
+          repository: jeremylongshore/qmd-team-intent-kb
+          path: intkb
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Enable corepack (resolves pnpm per-repo from packageManager)
+        # ICO pins pnpm@10.x and INTKB pins pnpm@9.15.4; corepack picks the
+        # right one per working directory, avoiding the action-setup conflict.
+        run: corepack enable
+
+      - name: Set up Bun (for qmd)
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install qmd 2.0.1
+        run: |
+          bun add -g @tobilu/qmd@2.0.1
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+
+      - name: Verify qmd on PATH
+        run: qmd --version
+
+      - name: Build INTKB curator-cli + exporter-cli
+        working-directory: intkb
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Run key-free smoke (stages 4-6 off the spool fixture)
+        env:
+          # Belt-and-suspenders: explicitly ensure no key is present, proving
+          # the chain is exercised without any Claude call.
+          ANTHROPIC_API_KEY: ''
+        run: |
+          bash scripts/demo-e2e.sh \
+            --from-spool dogfood/fixtures/smoke-spool \
+            --intkb-repo "$GITHUB_WORKSPACE/intkb" \
+            --keep
+
+      - name: Upload run summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-summary
+          path: dogfood/runs/*/summary.json
+          if-no-files-found: warn
+          retention-days: 14
