@@ -56,22 +56,21 @@ jobs:
         # right one per working directory, avoiding the action-setup conflict.
         run: corepack enable
 
-      - name: Set up Bun (for qmd)
-        uses: oven-sh/setup-bun@v2
-
-      - name: Install qmd 2.0.1
-        run: |
-          bun add -g @tobilu/qmd@2.0.1
-          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
-
-      - name: Verify qmd on PATH
-        run: qmd --version
-
-      - name: Build INTKB curator-cli + exporter-cli
+      - name: Build INTKB curator-cli + exporter-cli (+ installs pinned qmd)
         working-directory: intkb
         run: |
           pnpm install --frozen-lockfile
           pnpm build
+
+      - name: Put INTKB workspace bins on PATH (qmd)
+        # qmd is a pinned devDependency of INTKB (@tobilu/qmd); the nightly
+        # smoke inherits whatever version INTKB's lockfile pins — single source
+        # of truth, kept current by Dependabot on the INTKB side (bead eez).
+        # No bun-global install, no second pin to drift.
+        run: echo "$GITHUB_WORKSPACE/intkb/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - name: Verify qmd on PATH
+        run: qmd --version
 
       - name: Run key-free smoke (stages 4-6 off the spool fixture)
         env:
