@@ -9,6 +9,8 @@ A local-first knowledge OS. Point `ico` at a folder of PDFs, markdown notes, and
 [![CI](https://github.com/jeremylongshore/intentional-cognition-os/actions/workflows/ci.yml/badge.svg)](https://github.com/jeremylongshore/intentional-cognition-os/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/jeremylongshore/intentional-cognition-os)](https://github.com/jeremylongshore/intentional-cognition-os/releases)
 
+> **Part of the [Compile-Then-Govern](https://github.com/intent-solutions-io/compile-then-govern) stack** — ICO is the **compile** layer. It pairs with [qmd-team-intent-kb](https://github.com/jeremylongshore/qmd-team-intent-kb) (govern) and [qmd](https://github.com/tobi/qmd) (retrieve) to turn raw corpus into governed, citation-backed memory. → [Ecosystem overview](https://github.com/intent-solutions-io/compile-then-govern)
+
 ---
 
 ## What it actually does
