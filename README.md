@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
+    <img alt="Intentional Cognition OS — compile knowledge for the machine, distill understanding for the human." src="assets/banner-light.svg" width="860">
+  </picture>
+</p>
+
 # intentional-cognition-os v1.10.0
 
 Compile knowledge for the machine. Distill understanding for the human.
