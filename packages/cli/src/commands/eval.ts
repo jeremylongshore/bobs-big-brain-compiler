@@ -17,7 +17,8 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { resolve as resolvePath } from 'node:path';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname, resolve as resolvePath } from 'node:path';
 
 import type { Command } from 'commander';
 
@@ -57,6 +58,8 @@ interface GlobalOptions {
 
 interface RunOpts {
   spec?: string;
+  /** When set, emit a canonical Evidence Bundle JSON to this path after the run. */
+  emitBundle?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -186,6 +189,22 @@ export async function runEvalCommand(
       durationMs: Date.now() - batchStart,
     };
 
+    // Evidence Bundle emission (DR-010 Q3 unification thesis): when requested,
+    // map the batch to a canonical, kernel-schema-conformant Evidence Bundle and
+    // write it. Emission only — signing (sigstore → Rekor) is a separate
+    // downstream step against the emitted file. Failure here does NOT corrupt the
+    // eval result: it surfaces as a warning and the run still reports normally.
+    if (opts.emitBundle !== undefined) {
+      const emitResult = await emitEvidenceBundleFile(batch, wsPath, opts.emitBundle);
+      if (!emitResult.ok) {
+        process.stderr.write(
+          formatError(`Evidence Bundle emission failed: ${emitResult.error.message}`) + '\n',
+        );
+      } else if (globalOpts.json !== true) {
+        process.stderr.write(`Evidence Bundle written: ${emitResult.value}\n`);
+      }
+    }
+
     if (globalOpts.json === true) {
       process.stdout.write(formatJSON({ batch, loadErrors }) + '\n');
     } else {
@@ -194,6 +213,42 @@ export async function runEvalCommand(
     return { ok: true, value: { batch, loadErrors } };
   } finally {
     closeDatabase(db);
+  }
+}
+
+/**
+ * Build, validate, and write an Evidence Bundle for a completed batch.
+ * Deterministic: the bundle id + eval-run id are derived from the batch content
+ * + a stable timestamp, so the same run yields a byte-identical bundle. Returns
+ * the written path on success.
+ */
+async function emitEvidenceBundleFile(
+  batch: EvalBatchResult,
+  wsPath: string,
+  outRel: string,
+): Promise<{ ok: true; value: string } | { ok: false; error: Error }> {
+  try {
+    const { buildAndValidateEvidenceBundle, serializeEvidenceBundle, deterministicUuidV7 } =
+      await import('../lib/evidence-bundle.js');
+
+    // Deterministic-but-honest timestamp: floor to the second. Reproducible
+    // re-runs of the same eval state within the same second produce the same id.
+    const now = new Date();
+    const createdAt = now.toISOString().replace(/\.\d+Z$/, '.000Z');
+    const tsMs = Date.parse(createdAt);
+    const seed = batch.results.map((r) => `${r.spec.id}:${r.passed}:${r.score}`).join('|');
+    const bundle = await buildAndValidateEvidenceBundle(batch, {
+      createdAt,
+      bundleId: deterministicUuidV7(tsMs, `bundle:${seed}`),
+      evalRunId: deterministicUuidV7(tsMs, `run:${seed}`),
+    });
+
+    const outAbs = resolvePath(wsPath, outRel);
+    await mkdir(dirname(outAbs), { recursive: true });
+    await writeFile(outAbs, serializeEvidenceBundle(bundle), 'utf8');
+    return { ok: true, value: outAbs };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e : new Error(String(e)) };
   }
 }
 
@@ -242,6 +297,10 @@ export function register(program: Command): void {
     .command('run')
     .description('Discover and execute every eval spec under `evals/`')
     .option('--spec <path>', 'Run only the spec at this workspace-relative path')
+    .option(
+      '--emit-bundle <path>',
+      'Emit a canonical Evidence Bundle JSON to this workspace-relative path after the run',
+    )
     .addHelpText(
       'after',
       [
@@ -250,6 +309,7 @@ export function register(program: Command): void {
         '  $ ico eval run',
         '  $ ico eval run --spec evals/smoke/fts5-index-populated.eval.yaml',
         '  $ ico eval run --json',
+        '  $ ico eval run --emit-bundle evidence/eval-bundle.json',
       ].join('\n'),
     )
     .action(async (opts: RunOpts, cmd: Command) => {
