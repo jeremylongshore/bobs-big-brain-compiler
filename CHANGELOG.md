@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.11.0] - 2026-06-03
+
+- feat(deps): add @intentsolutions/core as a dependency (Evidence Bundle prerequisite) (#128) (7ee7b81)
+- docs: add README banner (compile-layer, house style) (#127) (cb72417)
+- docs: cross-link the Compile-Then-Govern ecosystem umbrella (#126) (de2605e)
+- chore(beads): close 8rl — nightly smoke inherits INTKB's pinned qmd (#125) (7c7aed4)
+- ci(nightly-smoke): inherit INTKB's pinned qmd, drop bun-global (intentional-cognition-os-8rl) (#125) (3a5a59f)
+
 ## [v1.10.0] - 2026-05-31
 
 - chore(beads): close lz2 — key-free nightly smoke merged (#124) (20902f8)

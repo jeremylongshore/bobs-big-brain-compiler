@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-# intentional-cognition-os v1.10.0
+# intentional-cognition-os v1.11.0
 
 Compile knowledge for the machine. Distill understanding for the human.
 
@@ -163,7 +163,7 @@ Global flags on every command: `--workspace <path>`, `--json`, `--verbose`, `--q
 
 ## Status
 
-**v1.0.5 — stable.** 1.10.0 tests passing across 5 packages. Used daily by the author. Public release on npm.
+**v1.0.5 — stable.** 1.11.0 tests passing across 5 packages. Used daily by the author. Public release on npm.
 
 - **Stable**: all 14 commands, the compilation passes, ask + research + recall + render + promote, the audit chain.
 - **In progress**: post-v1 coverage uplift on compiler + cli packages; mutation-testing baseline.
