@@ -174,7 +174,7 @@ Adding a new event type? Update `000-docs/011-AT-TRSC-trace-schema.md` first, th
 ## License
 
 By contributing, you agree that your contributions will be licensed under the
-project's [MIT License](LICENSE).
+project's [Apache License 2.0](LICENSE).
 
 ---
 

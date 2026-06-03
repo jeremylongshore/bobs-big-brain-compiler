@@ -156,7 +156,7 @@ Building ICO surfaced several mistakes that are worth documenting for anyone att
 
 ## The Invitation
 
-ICO is open source under the MIT license. The code is at [github.com/jeremylongshore/intentional-cognition-os](https://github.com/jeremylongshore/intentional-cognition-os). We are not asking anyone to adopt a standard.
+ICO is open source under the Apache 2.0 license. The code is at [github.com/jeremylongshore/intentional-cognition-os](https://github.com/jeremylongshore/intentional-cognition-os). We are not asking anyone to adopt a standard.
 
 What we are asking is simpler: **try giving your agents a structured workspace and see if they perform better.**
 

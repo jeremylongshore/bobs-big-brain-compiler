@@ -14,7 +14,7 @@
     "url": "https://github.com/jeremylongshore/intentional-cognition-os.git",
     "directory": "plugin"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": ["knowledge", "rag", "compilation", "audit", "dogfood", "evaluation"],
   "compatibility": "Designed for Claude Code. Requires intentional-cognition-os installed (npm install -g intentional-cognition-os) and an ANTHROPIC_API_KEY in env.",
   "skills": [

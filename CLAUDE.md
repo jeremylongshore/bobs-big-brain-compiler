@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Runtime**: TypeScript, Node.js 22+, pnpm 10.x
 - **CLI**: `ico`
-- **License**: MIT
+- **License**: Apache-2.0
 - **Current state** (v1.6.1): All 10 epics complete + post-v1 hardening. Test suite passing across 5 workspace packages (types, kernel, compiler, cli, benchmarks). CLI publishes as `intentional-cognition-os` on npm. Eval framework: four handler types — `smoke` + `retrieval` (recall@k + precision@k with per-metric floors) + `citation` (offline hallucination check on any markdown artifact) in kernel, `compilation` (Claude-scored 1–5 rubric) in compiler. Benchmark suite (E10-B06) covers all 5 operator commands (ingest, lint, render, compile, ask) with a 500-source large-corpus run + 3× degradation gate. Audit-harness v0.1.0 vendored.
 - **Post-v1 changes worth knowing about** before touching code:
   - **v1.5.1–v1.5.2**: `kernel/src/audit/writeTrace.ts` is now FD-based (`openSync(O_CREAT|O_APPEND|O_WRONLY) → fstatSync → writeSync`) — CodeQL's canonical safe form for the hash-chain append race. Do not regress to `existsSync → statSync → appendFileSync`; CodeQL `js/file-system-race` will fire.
