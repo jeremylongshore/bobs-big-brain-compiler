@@ -1,0 +1,24 @@
+# GENERATED from intent-eval-core-v2.yaml (Q04 / direct) — do not edit by hand.
+# Regenerate: node dogfood/scripts/generate-functional-quality-evals.mjs
+# Ground truth is per-intent and immutable (ADR-031); edit the bank version, not this file.
+id: fq-intent-eval-core-v2-q04-direct
+name: Q04 / direct — intent-eval-core
+type: functional-quality
+question: |-
+  What license is intent-eval-core published under, and why was
+  that choice made?
+intent: |-
+  License + justification: what license is intent-eval-core published
+  under, and why was that choice made? Tests both surface fact
+  (Apache 2.0) and the why (README's "permissively licensed so every
+  downstream consumer can depend on it without friction").
+verification_mode: strong
+expected_substrings:
+  - Apache
+  - '2.0'
+  - downstream
+expected_sources:
+  - README.md
+  - LICENSE
+recall_floor: 0.6
+threshold: 0.6

@@ -23,7 +23,10 @@ const VALID_TYPES: ReadonlySet<EvalType> = new Set([
   'smoke',
   'compilation',
   'citation',
+  'functional-quality',
 ]);
+
+const VALID_VERIFICATION_MODES = new Set(['strong', 'weak']);
 
 const VALID_SMOKE_CHECKS = new Set([
   'fts5-index-nonempty',
@@ -129,6 +132,61 @@ function validateSpec(raw: unknown, sourcePath: string): Result<EvalSpec, Error>
           return err(new Error(`${sourcePath}: expected_citations[${i}] must be a string`));
         }
       }
+    }
+  } else if (type === 'functional-quality') {
+    const question = obj['question'];
+    const substrings = obj['expected_substrings'];
+    const sources = obj['expected_sources'];
+    if (typeof question !== 'string' || question.trim() === '') {
+      return err(new Error(`${sourcePath}: functional-quality spec needs non-empty 'question'`));
+    }
+    if (!Array.isArray(substrings) || substrings.length === 0) {
+      return err(
+        new Error(`${sourcePath}: functional-quality spec needs non-empty 'expected_substrings'`),
+      );
+    }
+    for (let i = 0; i < substrings.length; i += 1) {
+      if (typeof substrings[i] !== 'string' || (substrings[i] as string).length === 0) {
+        return err(
+          new Error(`${sourcePath}: expected_substrings[${i}] must be a non-empty string`),
+        );
+      }
+    }
+    if (!Array.isArray(sources) || sources.length === 0) {
+      return err(
+        new Error(`${sourcePath}: functional-quality spec needs non-empty 'expected_sources'`),
+      );
+    }
+    for (let i = 0; i < sources.length; i += 1) {
+      if (typeof sources[i] !== 'string' || (sources[i] as string).trim() === '') {
+        return err(new Error(`${sourcePath}: expected_sources[${i}] must be a non-empty string`));
+      }
+    }
+    const recallFloor = obj['recall_floor'];
+    if (
+      recallFloor !== undefined &&
+      (typeof recallFloor !== 'number' ||
+        Number.isNaN(recallFloor) ||
+        recallFloor < 0 ||
+        recallFloor > 1)
+    ) {
+      return err(new Error(`${sourcePath}: 'recall_floor' must be a number in [0, 1]`));
+    }
+    const k = obj['k'];
+    if (k !== undefined && (typeof k !== 'number' || k < 1 || !Number.isFinite(k))) {
+      return err(new Error(`${sourcePath}: 'k' must be a positive integer`));
+    }
+    const mode = obj['verification_mode'];
+    if (mode !== undefined && (typeof mode !== 'string' || !VALID_VERIFICATION_MODES.has(mode))) {
+      return err(
+        new Error(
+          `${sourcePath}: 'verification_mode' must be one of ${Array.from(VALID_VERIFICATION_MODES).join(', ')}`,
+        ),
+      );
+    }
+    const intent = obj['intent'];
+    if (intent !== undefined && typeof intent !== 'string') {
+      return err(new Error(`${sourcePath}: 'intent' must be a string`));
     }
   } else if (type === 'compilation') {
     const pass = obj['pass'];

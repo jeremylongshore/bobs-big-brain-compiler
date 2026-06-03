@@ -107,7 +107,7 @@ const STOP_WORDS: ReadonlySet<string> = new Set([
   'about',
 ]);
 
-function buildOrQuery(question: string): string | null {
+export function buildOrQuery(question: string): string | null {
   const cleaned = question.replace(/[-"*()^?!]/g, ' ').toLowerCase();
   const tokens = cleaned
     .split(/\s+/)

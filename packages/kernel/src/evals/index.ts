@@ -8,6 +8,7 @@ export type {
   EvalResult,
   EvalSpec,
   EvalType,
+  FunctionalQualityEvalSpec,
   RetrievalEvalSpec,
   SmokeEvalSpec,
 } from './types.js';

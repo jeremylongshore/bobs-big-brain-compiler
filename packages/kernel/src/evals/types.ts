@@ -24,7 +24,7 @@
 // ---------------------------------------------------------------------------
 
 /** Supported handler types. New handlers add to this union. */
-export type EvalType = 'retrieval' | 'smoke' | 'compilation' | 'citation';
+export type EvalType = 'retrieval' | 'smoke' | 'compilation' | 'citation' | 'functional-quality';
 
 /** Common fields shared by every eval spec. */
 export interface BaseEvalSpec {
@@ -121,8 +121,60 @@ export interface CitationEvalSpec extends BaseEvalSpec {
   expected_citations?: string[];
 }
 
+/**
+ * Functional-quality handler — measures whether the workspace can answer a
+ * natural-language question with the *right facts from the right sources*.
+ *
+ * It operationalizes a dogfood question-bank entry (e.g.
+ * `dogfood/question-banks/intent-eval-core-v2.yaml`, ADR-029/031) as a
+ * deterministic gate:
+ *
+ *   - **source recall** = (expected_sources found in the top-k retrieval) /
+ *     (expected_sources total). Must be ≥ `recall_floor`.
+ *   - **substring grounding** = (expected_substrings present in the retrieved
+ *     pages' body text) / (expected_substrings total).
+ *
+ * The aggregate `score` is the mean of the two; pass when
+ * `score ≥ threshold` AND `source_recall ≥ recall_floor`. Unlike
+ * `retrieval` (which only checks whether the right *page* ranks in the
+ * top-k), functional-quality also verifies the retrieved pages actually
+ * *contain* the expected facts — catching the "right doc, wrong/absent
+ * content" failure mode. Fully deterministic (FTS5 + substring match), so
+ * it runs in CI with no model calls; the LLM answer-synthesis variant of
+ * the same bank lives in the `dogfood/experiments/compile-vs-rag`
+ * harness, not here.
+ */
+export interface FunctionalQualityEvalSpec extends BaseEvalSpec {
+  type: 'functional-quality';
+  /** Natural-language question (one paraphrase of the probed intent). */
+  question: string;
+  /** Facts that must appear in the retrieved page bodies (case-insensitive). */
+  expected_substrings: string[];
+  /** Wiki-relative source paths that should surface in the top-k retrieval. */
+  expected_sources: string[];
+  /**
+   * Minimum source recall in `[0, 1]` the spec must clear independent of
+   * the aggregate score. Defaults to 0 (no floor).
+   */
+  recall_floor?: number;
+  /** How many top retrieval results to consider for source recall. Defaults to 5. */
+  k?: number;
+  /**
+   * Label carried through from the question bank's `verification_mode`
+   * field. Surfaced in reports/traces only; does not change scoring.
+   */
+  verification_mode?: 'strong' | 'weak';
+  /** The probed intent, carried from the bank for report context. Label only. */
+  intent?: string;
+}
+
 /** Union of every supported spec shape. */
-export type EvalSpec = RetrievalEvalSpec | SmokeEvalSpec | CompilationEvalSpec | CitationEvalSpec;
+export type EvalSpec =
+  | RetrievalEvalSpec
+  | SmokeEvalSpec
+  | CompilationEvalSpec
+  | CitationEvalSpec
+  | FunctionalQualityEvalSpec;
 
 // ---------------------------------------------------------------------------
 // Result shape
