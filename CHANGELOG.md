@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.13.0] - 2026-06-03
+
+- feat(evals): add first-class functional-quality eval type (#133) (1192ad7)
+- chore(beads): close 0wy.7 — CLI coverage past 80% (#132) (df666e9)
+- test(cli): climb CLI coverage past 80% via command-driven tests (0wy.7) (#132) (9d6b685)
+- chore(beads): close 0wy.8 — property tests merged (#131) (556843a)
+- test(kernel): property-based tests for the deterministic core (0wy.8) (#131) (de802aa)
+
 ## [v1.12.0] - 2026-06-03
 
 - feat(eval): emit canonical Evidence Bundle from ico eval run (--emit-bundle) (#130) (b03d011)
