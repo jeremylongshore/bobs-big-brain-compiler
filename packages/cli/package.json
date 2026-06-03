@@ -43,6 +43,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
+    "@intentsolutions/core": "^0.1.1",
     "better-sqlite3": "^11.9.0",
     "commander": "^13.0.0",
     "gray-matter": "^4.0.3",
