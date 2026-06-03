@@ -11,7 +11,7 @@ Compile knowledge for the machine. Distill understanding for the human.
 
 A local-first knowledge OS. Point `ico` at a folder of PDFs, markdown notes, and web clips. It compiles them into a queryable wiki you can read, runs grounded Q&A with inline citations, spins up multi-agent research tasks for hard questions, generates spaced-repetition flashcards from what landed, and writes every step to an append-only audit trail. Single CLI. Your data never leaves disk except for the Claude API calls you opt into.
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
 [![npm](https://img.shields.io/npm/v/intentional-cognition-os.svg)](https://www.npmjs.com/package/intentional-cognition-os)
 [![CI](https://github.com/jeremylongshore/intentional-cognition-os/actions/workflows/ci.yml/badge.svg)](https://github.com/jeremylongshore/intentional-cognition-os/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/jeremylongshore/intentional-cognition-os)](https://github.com/jeremylongshore/intentional-cognition-os/releases)

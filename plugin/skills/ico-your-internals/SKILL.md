@@ -3,7 +3,7 @@ name: ico-your-internals
 description: "Dog-food intentional-cognition-os against the operator's own system. Discovers a target — a folder of markdown docs, a project, or an ecosystem — creates an isolated ICO workspace outside the target tree, ingests and compiles its docs, runs a hand-authored question bank against it, verifies each citation by deterministic source-grep, and produces a structured receipts trail with receipts, verifications, friction logs, and a sanitized summary. Sanitized per-run summaries are written into the target repo's dogfood directory; raw answer content and workspace stay in the user cache. Use when validating ICO works on real corpora, generating dog-food proof artifacts, or surfacing ICO bugs to file as beads. Trigger with /ico-your-internals, dog-food ICO, analyze my system with ICO."
 version: 0.1.0
 author: Jeremy Longshore <jeremy@intentsolutions.io>
-license: MIT
+license: Apache-2.0
 model: inherit
 effort: medium
 argument-hint: '--target <path> --bank <bank.yaml> [--dry | --probe <run-id>]'

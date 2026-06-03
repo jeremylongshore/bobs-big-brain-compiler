@@ -71,6 +71,6 @@
     "url": "https://github.com/jeremylongshore/intentional-cognition-os/issues"
   },
   "homepage": "https://github.com/jeremylongshore/intentional-cognition-os#readme",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": "Jeremy Longshore <jeremy@intentsolutions.io> (https://intentsolutions.io)"
 }
