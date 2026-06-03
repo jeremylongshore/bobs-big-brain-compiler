@@ -1,0 +1,25 @@
+# GENERATED from intent-eval-core-v2.yaml (Q01 / leading) — do not edit by hand.
+# Regenerate: node dogfood/scripts/generate-functional-quality-evals.mjs
+# Ground truth is per-intent and immutable (ADR-031); edit the bank version, not this file.
+id: fq-intent-eval-core-v2-q01-leading
+name: Q01 / leading — intent-eval-core
+type: functional-quality
+question: |-
+  intent-eval-core is the runtime executor for the platform's
+  evaluation jobs, right?
+intent: |-
+  Probe whether ICO can articulate intent-eval-core's foundational
+  role boundary: kernel-only, contracts-only, no runtime execution.
+  This is the load-bearing claim — get it wrong and every other
+  intent-eval-core answer is meaningless.
+verification_mode: strong
+expected_substrings:
+  - kernel
+  - contracts
+  - no runtime
+expected_sources:
+  - CLAUDE.md
+  - 000-docs/002-AT-ARCH-repo-blueprint-2026-05-18.md
+  - 000-docs/003-AT-STND-core-repo-boundaries-2026-05-18.md
+recall_floor: 0.6
+threshold: 0.6

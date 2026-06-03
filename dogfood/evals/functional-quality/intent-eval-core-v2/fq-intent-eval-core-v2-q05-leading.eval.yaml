@@ -1,0 +1,25 @@
+# GENERATED from intent-eval-core-v2.yaml (Q05 / leading) — do not edit by hand.
+# Regenerate: node dogfood/scripts/generate-functional-quality-evals.mjs
+# Ground truth is per-intent and immutable (ADR-031); edit the bank version, not this file.
+id: fq-intent-eval-core-v2-q05-leading
+name: Q05 / leading — intent-eval-core
+type: functional-quality
+question: |-
+  intent-eval-core's source-of-truth hierarchy starts with the
+  README, doesn't it?
+intent: |-
+  Deepest question: articulate the source-of-truth hierarchy
+  intent-eval-core's CLAUDE.md prescribes when sources disagree,
+  listed from highest to lowest authority. Probes ability to extract
+  a 7-tier ordered list from a table inside a single source document.
+  Single-source answer (CLAUDE.md only), so this also tests citation
+  precision.
+verification_mode: strong
+expected_substrings:
+  - bd
+  - DR-010
+  - Blueprint A
+expected_sources:
+  - CLAUDE.md
+recall_floor: 0.4
+threshold: 0.4

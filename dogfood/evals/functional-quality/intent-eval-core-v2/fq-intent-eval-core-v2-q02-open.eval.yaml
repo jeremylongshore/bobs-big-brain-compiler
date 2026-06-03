@@ -1,0 +1,20 @@
+# GENERATED from intent-eval-core-v2.yaml (Q02 / open) — do not edit by hand.
+# Regenerate: node dogfood/scripts/generate-functional-quality-evals.mjs
+# Ground truth is per-intent and immutable (ADR-031); edit the bank version, not this file.
+id: fq-intent-eval-core-v2-q02-open
+name: Q02 / open — intent-eval-core
+type: functional-quality
+question: Tell me about the entities intent-eval-core defines.
+intent: |-
+  Surface-level fact check: how many canonical platform entities does
+  intent-eval-core define? The number 13 appears in CLAUDE.md and
+  README.md. If ICO hallucinates a different count, that's a clear
+  citation regression.
+verification_mode: strong
+expected_substrings:
+  - '13'
+expected_sources:
+  - CLAUDE.md
+  - README.md
+recall_floor: 0.6
+threshold: 0.6

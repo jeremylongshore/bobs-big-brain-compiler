@@ -21,6 +21,7 @@ import { err, ok, type Result } from '@ico/types';
 
 import { writeTrace } from '../traces.js';
 import { buildWikiIndex, runCitationEval, type WikiIndex } from './handlers/citation.js';
+import { runFunctionalQualityEval } from './handlers/functional-quality.js';
 import { runRetrievalEval } from './handlers/retrieval.js';
 import { runSmokeEval } from './handlers/smoke.js';
 import type { EvalBatchResult, EvalResult, EvalSpec } from './types.js';
@@ -91,6 +92,9 @@ export function runEval(
       break;
     case 'citation':
       outcome = runCitationEval(db, workspacePath, spec, options.wikiIndex);
+      break;
+    case 'functional-quality':
+      outcome = runFunctionalQualityEval(db, workspacePath, spec);
       break;
     case 'compilation':
       // Compilation evals require a ClaudeClient which lives in

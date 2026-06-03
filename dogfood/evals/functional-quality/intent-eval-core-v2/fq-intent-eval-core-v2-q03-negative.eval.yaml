@@ -1,0 +1,23 @@
+# GENERATED from intent-eval-core-v2.yaml (Q03 / negative) — do not edit by hand.
+# Regenerate: node dogfood/scripts/generate-functional-quality-evals.mjs
+# Ground truth is per-intent and immutable (ADR-031); edit the bank version, not this file.
+id: fq-intent-eval-core-v2-q03-negative
+name: Q03 / negative — intent-eval-core
+type: functional-quality
+question: |-
+  Which document is NOT the source of the gate-result/v1
+  predicate spec — the per-repo blueprint or Blueprint B?
+intent: |-
+  Cross-doc synthesis: which document carries the NORMATIVE
+  gate-result/v1 predicate contract, and which section is it in?
+  Tests ICO's ability to follow an inherits-from chain (per-repo
+  blueprint → lab's Blueprint B) to the right authoritative source.
+verification_mode: strong
+expected_substrings:
+  - Blueprint B
+  - § 7
+expected_sources:
+  - CLAUDE.md
+  - 000-docs/002-AT-ARCH-repo-blueprint-2026-05-18.md
+recall_floor: 0.4
+threshold: 0.4
