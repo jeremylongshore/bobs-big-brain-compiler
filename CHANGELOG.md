@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.12.0] - 2026-06-03
+
+- feat(eval): emit canonical Evidence Bundle from ico eval run (--emit-bundle) (#130) (b03d011)
+- chore: relicense MIT -> Apache-2.0 (match the IEP ecosystem) (#129) (bf33d6a)
+
 ## [v1.11.0] - 2026-06-03
 
 - feat(deps): add @intentsolutions/core as a dependency (Evidence Bundle prerequisite) (#128) (7ee7b81)
