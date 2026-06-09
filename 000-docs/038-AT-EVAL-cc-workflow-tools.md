@@ -1,4 +1,5 @@
 ---
+title: Evaluating gstack / superpowers / last30days against the Intent Solutions governance stack
 filing_code: AT-EVAL-CC-WORKFLOW-TOOLS-2026-06-07
 date: 2026-06-07
 status: complete
@@ -209,7 +210,7 @@ Both are captured as **deferred beads** so the build/no-build call is one step, 
 - **Effort:** S for the two-stage review (two prompt templates + an ordering rule); M for the brainstorm→spec front-gate (must reconcile with `/exec-decision-council` + plan mode).
 - **Risk:** low — additive prompt discipline; the only caution is not re-litigating territory `/exec-decision-council` and plan mode already cover.
 
-_(gstack contributes a third candidate — the browser-QA loop for web repos — recorded in §6.2 as steal-pattern/effort-M but not yet beaded; raise it separately if Braves/partner-portals QA becomes a priority.)_
+Note: gstack contributes a third candidate — the browser-QA loop for web repos — recorded in §6.2 as steal-pattern / effort-M but not yet beaded; raise it separately if Braves / partner-portals QA becomes a priority.
 
 ---
 
