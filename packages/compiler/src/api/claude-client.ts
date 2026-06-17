@@ -215,21 +215,117 @@ async function attempt(
 }
 
 // ---------------------------------------------------------------------------
+// Internal: DeepSeek (OpenAI-compatible) adapter
+//
+// DeepSeek speaks the OpenAI chat-completions API. We expose it as an
+// AnthropicLike duck type so createClaudeClient's retry / error-sanitize /
+// token-accounting logic is reused verbatim — only the transport differs.
+// Selected via ICO_PROVIDER=deepseek (DEEPSEEK_API_KEY required). No new SDK
+// dependency: Node's global fetch carries it.
+// ---------------------------------------------------------------------------
+
+interface OpenAiChatResponse {
+  choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
+  model?: string;
+}
+
+function createDeepSeekAdapter(apiKey: string): AnthropicLike {
+  const baseUrl = (process.env['DEEPSEEK_BASE_URL'] ?? 'https://api.deepseek.com').replace(
+    /\/+$/,
+    '',
+  );
+  const fallbackModel = process.env['DEEPSEEK_MODEL'] ?? 'deepseek-v4-flash';
+
+  return {
+    messages: {
+      async create(params, options) {
+        // Anthropic model names (e.g. claude-sonnet-4-6) are meaningless to DeepSeek;
+        // honor an explicit deepseek-* model, otherwise use the configured fallback.
+        const model = params.model.startsWith('deepseek') ? params.model : fallbackModel;
+
+        const controller = new AbortController();
+        const timer =
+          options?.timeout != null
+            ? setTimeout(() => controller.abort(), options.timeout)
+            : undefined;
+
+        try {
+          const res = await fetch(`${baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify({
+              model,
+              max_tokens: params.max_tokens,
+              temperature: params.temperature,
+              messages: [
+                ...(params.system ? [{ role: 'system', content: params.system }] : []),
+                ...params.messages,
+              ],
+            }),
+            signal: controller.signal,
+          });
+
+          if (!res.ok) {
+            const status = res.status;
+            const body = await res.text().catch(() => '');
+            // Map onto the same category strings the retry logic keys off of.
+            const category =
+              status === 401
+                ? 'authentication_error'
+                : status === 429
+                  ? 'rate_limit_error'
+                  : status === 503
+                    ? 'overloaded_error'
+                    : status >= 500
+                      ? 'server_error'
+                      : 'bad_request_error';
+            throw new Error(`DeepSeek API ${category} (HTTP ${status}): ${body.slice(0, 200)}`);
+          }
+
+          const data = (await res.json()) as OpenAiChatResponse;
+          const choice = data.choices?.[0];
+          return {
+            content: [{ type: 'text', text: choice?.message?.content ?? '' }],
+            usage: {
+              input_tokens: data.usage?.prompt_tokens ?? 0,
+              output_tokens: data.usage?.completion_tokens ?? 0,
+            },
+            model: data.model ?? model,
+            stop_reason: choice?.finish_reason ?? 'stop',
+          };
+        } finally {
+          if (timer != null) clearTimeout(timer);
+        }
+      },
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Public: createClaudeClient
 // ---------------------------------------------------------------------------
 
 /**
- * Create a {@link ClaudeClient} wrapping the Anthropic SDK.
+ * Create a {@link ClaudeClient}.
  *
- * @param apiKey            - Anthropic API key. Never logged.
+ * Provider is selected by `ICO_PROVIDER` (default `anthropic`): `deepseek` routes
+ * through the OpenAI-compatible DeepSeek adapter; anything else uses the Anthropic SDK.
+ * Either way the same retry / error-sanitize / Result-typed surface is returned.
+ *
+ * @param apiKey            - Provider API key (Anthropic or DeepSeek per ICO_PROVIDER). Never logged.
  * @param anthropicInstance - Optional SDK-shaped object; provide in tests to avoid real HTTP
- *                            calls. Must satisfy the {@link AnthropicLike} duck type.
+ *                            calls. Must satisfy the {@link AnthropicLike} duck type. Takes
+ *                            precedence over the provider switch.
  */
 export function createClaudeClient(apiKey: string, anthropicInstance?: unknown): ClaudeClient {
+  const provider = process.env['ICO_PROVIDER'] ?? 'anthropic';
   const sdkClient: AnthropicLike =
     anthropicInstance != null
       ? (anthropicInstance as AnthropicLike)
-      : (new Anthropic({ apiKey, maxRetries: 0 }) as unknown as AnthropicLike);
+      : provider === 'deepseek'
+        ? createDeepSeekAdapter(apiKey)
+        : (new Anthropic({ apiKey, maxRetries: 0 }) as unknown as AnthropicLike);
 
   return {
     async createCompletion(

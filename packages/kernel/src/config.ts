@@ -93,18 +93,25 @@ export function loadConfig(cwd: string = process.cwd()): IcoConfig {
   const fileVars = loadEnvFile(cwd);
   const env = { ...fileVars, ...process.env };
 
-  const apiKey = env['ANTHROPIC_API_KEY'] ?? '';
+  // Provider selection (default anthropic). DeepSeek runs on its own key and
+  // OpenAI-compatible models; see createClaudeClient's ICO_PROVIDER branch.
+  const isDeepSeek = (env['ICO_PROVIDER'] ?? 'anthropic') === 'deepseek';
+  const deepSeekModel = env['DEEPSEEK_MODEL'] ?? 'deepseek-v4-flash';
+
+  const apiKey = (isDeepSeek ? env['DEEPSEEK_API_KEY'] : env['ANTHROPIC_API_KEY']) ?? '';
   if (apiKey === '') {
     throw new Error(
-      'ANTHROPIC_API_KEY is required. Set it in your environment or .env file.\n' +
-        'See .env.example for configuration options.',
+      isDeepSeek
+        ? 'DEEPSEEK_API_KEY is required (ICO_PROVIDER=deepseek). Set it in your environment or .env file.'
+        : 'ANTHROPIC_API_KEY is required. Set it in your environment or .env file.\n' +
+            'See .env.example for configuration options.',
     );
   }
 
   const config = {
     workspace: env['ICO_WORKSPACE'] ?? './workspace',
-    model: env['ICO_MODEL'] ?? 'claude-sonnet-4-6',
-    researchModel: env['ICO_RESEARCH_MODEL'] ?? 'claude-opus-4-6',
+    model: env['ICO_MODEL'] ?? (isDeepSeek ? deepSeekModel : 'claude-sonnet-4-6'),
+    researchModel: env['ICO_RESEARCH_MODEL'] ?? (isDeepSeek ? deepSeekModel : 'claude-opus-4-6'),
     logLevel: isValidLogLevel(env['ICO_LOG_LEVEL']) ? env['ICO_LOG_LEVEL'] : 'info',
   };
 
