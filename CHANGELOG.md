@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.14.0] - 2026-06-17
+
+- feat(compiler): DeepSeek (OpenAI-compatible) LLM provider via ICO_PROVIDER (#137) (3226000)
+- docs: fix ICO version drift in CLAUDE.md (1.6.1 → 1.12.0) (#136) (c55c297)
+- docs(evals): cc-workflow-tools evaluation (gstack/superpowers/last30days) (f748949)
+- chore(deps): bump @intentsolutions/audit-harness ^0.1.0 → ^1.1.5 (#134) (c9afc7b)
+
 ## [v1.13.0] - 2026-06-03
 
 - feat(evals): add first-class functional-quality eval type (#133) (1192ad7)
