@@ -1,0 +1,62 @@
+{
+  "run_id": "demo-2026-06-14T025043Z",
+  "timestamp": "2026-06-14T02:50:45Z",
+  "corpus": "/home/jeremy/000-projects/intentional-cognition-os/dogfood/experiments/compile-vs-rag/corpus",
+  "intkb_repo": "/home/jeremy/000-projects/qmd-team-intent-kb",
+  "tenant_id": "demo-e2e",
+  "overall": "pass",
+  "stages": [
+    {
+      "id": "1",
+      "name": "ico init + mount + ingest",
+      "status": "skip",
+      "duration_ms": 0,
+      "detail": "smoke mode — using committed spool fixture"
+    },
+    {
+      "id": "2",
+      "name": "ico compile (6 passes)",
+      "status": "skip",
+      "duration_ms": 0,
+      "detail": "smoke mode — compile skipped (no API key)"
+    },
+    {
+      "id": "3",
+      "name": "ico spool emit",
+      "status": "skip",
+      "duration_ms": 0,
+      "detail": "smoke mode — fixture spool at dogfood/fixtures/smoke-spool"
+    },
+    {
+      "id": "4",
+      "name": "INTKB curator-cli ingest (ingest → policy → promote, cross-repo wire)",
+      "status": "pass",
+      "duration_ms": 229,
+      "detail": "ok"
+    },
+    {
+      "id": "5",
+      "name": "INTKB export → qmd index (curated memory → searchable)",
+      "status": "pass",
+      "duration_ms": 1019,
+      "detail": "ok"
+    },
+    {
+      "id": "6",
+      "name": "qmd search returns curated memory with citation",
+      "status": "pass",
+      "duration_ms": 404,
+      "detail": "ok"
+    },
+    {
+      "id": "7",
+      "name": "ico audit verify (hash chain intact)",
+      "status": "skip",
+      "duration_ms": 0,
+      "detail": "smoke mode — no compiled workspace to verify"
+    }
+  ],
+  "deferred_count": 0,
+  "pass_count": 3,
+  "fail_count": 0
+}

@@ -1,0 +1,3 @@
+==[ stage 4: INTKB curator-cli ingest (ingest → policy → promote, cross-repo wire) ]==
+==[ stage 5: INTKB export → qmd index (curated memory → searchable) ]==
+==[ stage 6: qmd search returns curated memory with citation ]==
