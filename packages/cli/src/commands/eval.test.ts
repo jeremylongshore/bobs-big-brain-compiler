@@ -6,7 +6,7 @@
  * CLI → loader → runner → trace path.
  */
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -186,5 +186,49 @@ describe('runEvalCommand — output modes', () => {
     expect(joined).toContain('"results"');
     expect(joined).toContain('"loadErrors"');
     writeSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Failure paths + Evidence Bundle emission
+// ---------------------------------------------------------------------------
+
+describe('runEvalCommand — failure + evidence bundle', () => {
+  it('returns err when the workspace cannot be resolved', async () => {
+    vi.mocked(resolveWorkspace).mockReturnValue({ ok: false, error: new Error('no workspace') });
+    const r = await runEvalCommand({}, {});
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.message).toContain('no workspace');
+  });
+
+  it('writes an Evidence Bundle and notes it on stderr when --emit-bundle is set', async () => {
+    writeSpec('evals/s.eval.yaml', 'id: s\nname: S\ntype: smoke\ncheck: no-failed-tasks\n');
+    const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const outSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    const r = await runEvalCommand({ emitBundle: 'out/bundle.json' }, {});
+    expect(r.ok).toBe(true);
+    expect(existsSync(resolve(env.wsRoot, 'out/bundle.json'))).toBe(true);
+    const errJoined = errSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(errJoined).toContain('Evidence Bundle written');
+
+    errSpy.mockRestore();
+    outSpy.mockRestore();
+  });
+
+  it('suppresses the bundle-written stderr notice in JSON mode', async () => {
+    writeSpec('evals/s.eval.yaml', 'id: s\nname: S\ntype: smoke\ncheck: no-failed-tasks\n');
+    const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const outSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    const r = await runEvalCommand({ emitBundle: 'out/b2.json' }, { json: true });
+    expect(r.ok).toBe(true);
+    expect(existsSync(resolve(env.wsRoot, 'out/b2.json'))).toBe(true);
+    const errJoined = errSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(errJoined).not.toContain('Evidence Bundle written'); // JSON mode → quiet
+
+    errSpy.mockRestore();
+    outSpy.mockRestore();
   });
 });
