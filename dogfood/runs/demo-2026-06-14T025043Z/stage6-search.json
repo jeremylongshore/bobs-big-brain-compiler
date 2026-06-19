@@ -1,0 +1,23 @@
+[
+  {
+    "docid": "#d2e982",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/guides/3a887b4d-0c70-4825-898a-d768794e3f60.md",
+    "title": "Common workspace failure modes and fixes",
+    "snippet": "@@ -20,3 @@ (19 before, 0 after)\n\nWhen the index reports no compiled knowledge, the workspace has not been compiled yet; run the compile pass first. When a database lock error appears, another process holds the workspace state file. These are the two most common operator failure modes and their fixes.\n"
+  },
+  {
+    "docid": "#0ad576",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/a8671054-47a9-4a8c-a657-19db8f6e9dcb.md",
+    "title": "Transformer attention mechanism",
+    "snippet": "@@ -20,3 @@ (19 before, 0 after)\n\nThe transformer attention mechanism computes scaled dot-product attention over query, key, and value matrices. Self-attention lets the model weigh sequence positions when producing each output representation. This is a frozen fixture used by the key-free nightly smoke to exercise the curator pip..."
+  },
+  {
+    "docid": "#d992d3",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/guides/d238aef5-fdda-4f95-9278-6723ff20b8ca.md",
+    "title": "CLI command dispatch and Result-typed handlers",
+    "snippet": "@@ -20,3 @@ (19 before, 0 after)\n\nThe CLI entry point parses subcommands and dispatches to handlers. Each command returns a Result type rather than throwing, so the top-level handler maps errors to friendly messages and exit codes. The deterministic control plane owns durable state; the model only proposes.\n"
+  }
+]

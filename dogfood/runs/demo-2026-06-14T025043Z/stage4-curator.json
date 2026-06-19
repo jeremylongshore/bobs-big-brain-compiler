@@ -1,0 +1,50 @@
+{
+  "ok": true,
+  "spool_dir": "dogfood/fixtures/smoke-spool",
+  "tenant_id": "demo-e2e",
+  "ingested_count": 3,
+  "tampered_count": 0,
+  "tampered": [],
+  "batch": {
+    "processed": 3,
+    "promoted": 3,
+    "rejected": 0,
+    "flagged": 0,
+    "duplicates": 0,
+    "results": [
+      {
+        "candidateId": "a1b2c3d4-0001-4a1b-8c2d-000000000001",
+        "outcome": "promoted",
+        "memoryId": "a8671054-47a9-4a8c-a657-19db8f6e9dcb",
+        "pipelineResult": {
+          "candidateId": "a1b2c3d4-0001-4a1b-8c2d-000000000001",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      },
+      {
+        "candidateId": "a1b2c3d4-0002-4a1b-8c2d-000000000002",
+        "outcome": "promoted",
+        "memoryId": "d238aef5-fdda-4f95-9278-6723ff20b8ca",
+        "pipelineResult": {
+          "candidateId": "a1b2c3d4-0002-4a1b-8c2d-000000000002",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      },
+      {
+        "candidateId": "a1b2c3d4-0003-4a1b-8c2d-000000000003",
+        "outcome": "promoted",
+        "memoryId": "3a887b4d-0c70-4825-898a-d768794e3f60",
+        "pipelineResult": {
+          "candidateId": "a1b2c3d4-0003-4a1b-8c2d-000000000003",
+          "outcome": "approved",
+          "evaluations": []
+        },
+        "reason": "Promoted"
+      }
+    ]
+  }
+}

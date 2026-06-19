@@ -1,0 +1,142 @@
+[
+  {
+    "docid": "#f8417c",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/archive/420d514c-91aa-4c5b-ab34-c834fe803470.md",
+    "title": "Decision Log",
+    "snippet": "@@ -27,4 @@ (26 before, 23 after)\n\nThis decision log records 14 resolved decisions and 7 open decisions from a session on 2026-06-13. The log is append-only and documents what was decided, by whom, and why. Key themes include: banning the \"first product proof\" framing for the spine, establishing the brain/vault housing in the `in..."
+  },
+  {
+    "docid": "#08e84b",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/guides/07daca10-691c-4378-8200-f1451acf2747.md",
+    "title": "Open question: What are the specific GC/CMO review criteria and counsel requirements for the doctrine's public register?",
+    "snippet": "@@ -2,4 @@ (1 before, 37 after)\nid: \"07daca10-691c-4378-8200-f1451acf2747\"\ntitle: \"Open question: What are the specific GC/CMO review criteria and counsel requirements for the doctrine's public register?\"\ncategory: \"reference\"\nlifecycle: \"active\""
+  },
+  {
+    "docid": "#5feec1",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/guides/a3f04aff-2c7b-4d97-bf5e-cae6ad4e43ee.md",
+    "title": "Open question: What is the content and structure of the doctrine's six values, five stakeholder classes, and four arms?",
+    "snippet": "@@ -2,4 @@ (1 before, 36 after)\nid: \"a3f04aff-2c7b-4d97-bf5e-cae6ad4e43ee\"\ntitle: \"Open question: What is the content and structure of the doctrine's six values, five stakeholder classes, and four arms?\"\ncategory: \"reference\"\nlifecycle: \"active\""
+  },
+  {
+    "docid": "#767804",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/cf4dc570-44be-46b9-91fd-c019bedd8b9b.md",
+    "title": "Doctrine Governance and Public Messaging Gate",
+    "snippet": "@@ -24,4 @@ (23 before, 7 after)\n\nThe doctrine is currently in DRAFT status. It was voiced through approximately 33 markers in Jeremy's voice across six values, five stakeholder classes, and four arms. The internal register of the doctrine was approved by Jeremy on 2026-06-13, but it requires GC/CMO sign-off on the public regist..."
+  },
+  {
+    "docid": "#2d1f79",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/guides/66674384-f9bd-4a27-9e06-1a0f9cfe9c06.md",
+    "title": "System map — Intent Solutions",
+    "snippet": "@@ -27,4 @@ (26 before, 20 after)\n\nThis document is the canonical system map for the Intent Solutions production estate running on a single Contabo VPS (167.86.106.29, tailnet 100.88.144.55). It describes all subdomains, their serving stacks, ownership, and live status as of a verification pass completed on 2026-06-13. The infras..."
+  },
+  {
+    "docid": "#a77668",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/guides/7d0db426-7239-4d29-9b04-435ff6c2d118.md",
+    "title": "Open question: What are the specific license contradictions in the brain codebase that need reconciliation?",
+    "snippet": "@@ -2,4 @@ (1 before, 36 after)\nid: \"7d0db426-7239-4d29-9b04-435ff6c2d118\"\ntitle: \"Open question: What are the specific license contradictions in the brain codebase that need reconciliation?\"\ncategory: \"reference\"\nlifecycle: \"active\""
+  },
+  {
+    "docid": "#1572d6",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/guides/57b33f3d-4617-4a5e-9529-d8aac7037f86.md",
+    "title": "Open question: What is the complete scheduled jobs inventory across the dev box and VPS?",
+    "snippet": "@@ -2,4 @@ (1 before, 38 after)\nid: \"57b33f3d-4617-4a5e-9529-d8aac7037f86\"\ntitle: \"Open question: What is the complete scheduled jobs inventory across the dev box and VPS?\"\ncategory: \"reference\"\nlifecycle: \"active\""
+  },
+  {
+    "docid": "#a54628",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/b98bb03f-df7e-4b9c-a7b0-416d9b41a5e0.md",
+    "title": "Infrastructure Verification and Documentation Drift",
+    "snippet": "@@ -24,4 @@ (23 before, 7 after)\n\nThe system map for the Intent Solutions production estate was verified on 2026-06-13. All six live-Caddy verify flags were cleared by reconciling against the live `/etc/caddy/Caddyfile` (read over Tailscale), public DNS resolution, and on-box `systemctl`. The verification confirmed that the apex..."
+  },
+  {
+    "docid": "#997923",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/guides/8852ba60-d98f-4a5a-954e-3aca686f2ff7.md",
+    "title": "Open question: What is the pricing model for Intent Solutions offerings, and how does it relate to the doctrine?",
+    "snippet": "@@ -2,4 @@ (1 before, 37 after)\nid: \"8852ba60-d98f-4a5a-954e-3aca686f2ff7\"\ntitle: \"Open question: What is the pricing model for Intent Solutions offerings, and how does it relate to the doctrine?\"\ncategory: \"reference\"\nlifecycle: \"active\""
+  },
+  {
+    "docid": "#7c1106",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/07849f52-c610-4d5b-973e-78191c24ee17.md",
+    "title": "Brain Architecture and Repository Strategy",
+    "snippet": "@@ -25,4 @@ (24 before, 11 after)\n\nThe brain query surface ships both a qmd endpoint wired into `POST /api/search` for `qmd://` citations and the `.listen()` bootstrap, and an MCP `teamkb_search` tool. These are behind a `TEAMKB_API_URL` config flip that selects between local (in-process qmd) and remote (brain API over Tailscale)..."
+  },
+  {
+    "docid": "#1255c0",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/guides/f698c422-0349-4a51-b95d-37e687ea2e7c.md",
+    "title": "Open question: What are the first verticals for the Intent Solutions product, and what criteria will be used to select them?",
+    "snippet": "@@ -2,4 @@ (1 before, 34 after)\nid: \"f698c422-0349-4a51-b95d-37e687ea2e7c\"\ntitle: \"Open question: What are the first verticals for the Intent Solutions product, and what criteria will be used to select them?\"\ncategory: \"reference\"\nlifecycle: \"active\""
+  },
+  {
+    "docid": "#5d2ecd",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/guides/ff713100-6792-4d10-b2b7-b066e4fca198.md",
+    "title": "Decision Log",
+    "snippet": "@@ -27,4 @@ (26 before, 23 after)\n\nThis decision log records the resolutions from a brain build session on 2026-06-13, resolving open item O7 from the previous log. The session ratified seven decisions (D15–D21) concerning the brain query surface architecture, repository strategy, hosting infrastructure, plugin naming, access con..."
+  },
+  {
+    "docid": "#947f59",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/0331ab97-ad95-4a26-892e-d08726577237.md",
+    "title": "Spool Contract",
+    "snippet": "@@ -21,3 @@ (20 before, 0 after)\n\nThe Spool Contract is the promoted interface between the two engine repositories: ICO (Intentional Cognition OS) and INTKB (Intent Knowledge Base). The decision was made to keep these repos separate and promote the spool contract rather than merging them. Merging would overturn the standing mirr..."
+  },
+  {
+    "docid": "#2cc430",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/guides/f7ceacb3-22b4-446d-bb6f-be3be232922e.md",
+    "title": "Open question: What is the doctrine hardening mechanism, and how will it be implemented?",
+    "snippet": "@@ -2,4 @@ (1 before, 26 after)\nid: \"f7ceacb3-22b4-446d-bb6f-be3be232922e\"\ntitle: \"Open question: What is the doctrine hardening mechanism, and how will it be implemented?\"\ncategory: \"reference\"\nlifecycle: \"active\""
+  },
+  {
+    "docid": "#1ec2f8",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/guides/3cae8629-763f-4e9d-a1d9-76732c07a5c1.md",
+    "title": "Open question: What is the partnership and compensation framework that Jeremy is keeping private?",
+    "snippet": "@@ -2,4 @@ (1 before, 37 after)\nid: \"3cae8629-763f-4e9d-a1d9-76732c07a5c1\"\ntitle: \"Open question: What is the partnership and compensation framework that Jeremy is keeping private?\"\ncategory: \"reference\"\nlifecycle: \"active\""
+  },
+  {
+    "docid": "#09ea82",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/02b2c7b6-0ec6-4b4c-9bc0-69a08313067e.md",
+    "title": "Brain Query Surface",
+    "snippet": "@@ -21,3 @@ (20 before, 0 after)\n\nThe Brain Query Surface is the interface for querying the Intentional Cognition OS brain. It ships both a qmd endpoint wired into POST /api/search for qmd:// citations and the .listen() bootstrap, and an MCP teamkb_search tool. These are behind a TEAMKB_API_URL config flip that selects between l..."
+  },
+  {
+    "docid": "#fe5e5e",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/f2b526db-924d-4242-bbbe-847d7152e26e.md",
+    "title": "Marketplace",
+    "snippet": "@@ -21,3 @@ (20 before, 0 after)\n\nThe Marketplace concept describes two distinct marketplaces that share the same codebase. The public \"compile-then-govern\" umbrella is for outsiders, offering self-hosted, curated-only read-only access. The private \"intent-solutions-io\" catalog is for internal company tools. The TEAMKB_API_URL c..."
+  },
+  {
+    "docid": "#b5d058",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/guides/a09bd65e-c0d1-4776-a3fc-aac4e128deff.md",
+    "title": "claude-code-plugins",
+    "snippet": "@@ -21,3 @@ (20 before, 0 after)\n\nThe claude-code-plugins project has approximately 2,300 stars, 300+ forks, and 45k+ npm downloads. It is considered the product proof, not the spine. Calling the spine the \"first\" product would erase the plugins hub.\n"
+  },
+  {
+    "docid": "#941d3e",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/6f346eab-508c-4cb0-be0d-ceb54ee887f5.md",
+    "title": "System Map",
+    "snippet": "@@ -21,3 @@ (20 before, 0 after)\n\nThe System Map is the authoritative reference for the Intent Solutions production estate, which runs on a single Contabo VPS. It documents all subdomains, their serving stacks, ownership, and live status. The map was verified on 2026-06-13 by reconciling six flagged host blocks against the live ..."
+  },
+  {
+    "docid": "#c1c9d1",
+    "score": 0,
+    "file": "qmd://kb-demo-demo-e2e/curated/487dfe9c-b70f-494b-a488-92556f91b25b.md",
+    "title": "Doctrine",
+    "snippet": "@@ -21,3 @@ (20 before, 0 after)\n\nThe Doctrine is a foundational document for Intent Solutions that defines six values, five stakeholder classes, and four arms. It was voiced through approximately 33 markers in Jeremy's voice and is currently in DRAFT status. The internal register of the doctrine was approved by Jeremy on 2026-0..."
+  }
+]
