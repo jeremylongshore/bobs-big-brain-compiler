@@ -62,15 +62,26 @@ async function runUnpromote(args: string[]): Promise<number | undefined> {
 }
 
 describe('ico unpromote — command action', () => {
-  it('a non-existent target reports an error and sets exit code 1', async () => {
+  it('without --yes, requires confirmation (warns on stdout, not stderr) and exits 1', async () => {
+    // The no-flags path hits the confirmation gate *before* any existence check:
+    // it prints a prompt to stdout and returns "Confirmation required", which the
+    // action intentionally does NOT echo to stderr (it's a prompt, not an error).
+    let stdout = '';
+    const outSpy = vi.spyOn(process.stdout, 'write').mockImplementation((c: unknown) => {
+      stdout += String(c);
+      return true;
+    });
     const code = await runUnpromote(['wiki/topics/ghost.md']);
+    outSpy.mockRestore();
     expect(code).toBe(1);
-    expect(stderr.length).toBeGreaterThan(0);
+    expect(stdout).toMatch(/--yes|confirm/i); // confirmation prompt on stdout
+    expect(stderr).toBe(''); // confirmation is not an error → nothing on stderr
   });
 
-  it('--yes on a non-existent target still fails with exit code 1', async () => {
+  it('--yes on a non-existent target reports the error to stderr and exits 1', async () => {
     const code = await runUnpromote(['wiki/topics/ghost.md', '--yes']);
     expect(code).toBe(1);
+    expect(stderr.length).toBeGreaterThan(0); // the real "not found" error lands on stderr
   });
 
   it('--dry-run on a non-existent target fails with exit code 1', async () => {

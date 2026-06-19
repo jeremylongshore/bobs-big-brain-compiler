@@ -8,7 +8,7 @@
  * @module commands/init.command.test
  */
 
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -77,8 +77,14 @@ describe('ico init — command action', () => {
     expect(r.stdout).toMatch(/demo|workspace|initial/i);
   });
 
-  it('exits 1 when the workspace cannot be created (unwritable parent)', async () => {
-    const r = await runInitCmd(['demo', '--path', '/proc/nonexistent-ico/deep/path']);
+  it('exits 1 when the workspace cannot be created (parent path is a file)', async () => {
+    // Use a regular FILE where a directory is required → mkdir fails fast with
+    // ENOTDIR. Do NOT use a /proc-style path: procfs has special kernel semantics
+    // that make mkdirSync block indefinitely instead of erroring (the original
+    // `/proc/...` path hung this test for the full CI timeout).
+    const filePath = join(base, 'not-a-directory');
+    writeFileSync(filePath, 'x');
+    const r = await runInitCmd(['demo', '--path', join(filePath, 'sub')]);
     expect(r.exitCode).toBe(1);
     expect(r.stderr.length).toBeGreaterThan(0);
   });
