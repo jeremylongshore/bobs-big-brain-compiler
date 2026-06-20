@@ -38,7 +38,7 @@ It is a cognition runtime, not a chat wrapper. The model proposes; a determinist
 
 ```bash
 npm install -g intentional-cognition-os
-ico --version          # → 1.0.5
+ico --version          # → 1.14.0
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
@@ -108,8 +108,8 @@ You now have:
 | **Multi-agent research mode**                | ✅ collector→summarizer→skeptic→integrator | ❌                  | ❌                                                | ❌                        | you build it              | ❌                            |
 | **Spaced-repetition recall**                 | ✅ built-in, Anki export                   | ❌                  | plugin only                                       | ❌                        | ❌                        | ✅ (that's the whole product) |
 | **Append-only audit trail**                  | ✅ SHA-256 hash-chained JSONL              | ❌                  | ❌                                                | ❌                        | ❌                        | ❌                            |
-| **Open source / hackable**                   | ✅ MIT                                     | ❌                  | partial (core closed)                             | ❌                        | ✅                        | ✅                            |
-| **Single CLI, no plugin zoo**                | ✅ 14 commands                             | n/a                 | ❌ (Obsidian Sync / Smart Connections / Copilot…) | n/a                       | ❌ you assemble           | n/a                           |
+| **Open source / hackable**                   | ✅ Apache-2.0                              | ❌                  | partial (core closed)                             | ❌                        | ✅                        | ✅                            |
+| **Single CLI, no plugin zoo**                | ✅ 16 commands                             | n/a                 | ❌ (Obsidian Sync / Smart Connections / Copilot…) | n/a                       | ❌ you assemble           | n/a                           |
 | **You write the data; the AI just reads it** | ✅ kernel owns state                       | ✅                  | ✅                                                | ✅                        | depends                   | ✅                            |
 
 **The honest summary**: NotebookLM is the closest competitor in _function_, but it's a cloud product with no audit trail and no recall layer. Obsidian + plugins gets you a local wiki but you write every note yourself — `ico` writes the wiki for you by compiling sources. LangChain gives you the parts; `ico` is the assembled tool.
@@ -163,9 +163,9 @@ Global flags on every command: `--workspace <path>`, `--json`, `--verbose`, `--q
 
 ## Status
 
-**v1.0.5 — stable.** 1.14.0 tests passing across 5 packages. Used daily by the author. Public release on npm.
+**v1.14.0 — stable.** 1.14.0 tests passing across 5 packages. Used daily by the author. Public release on npm.
 
-- **Stable**: all 14 commands, the compilation passes, ask + research + recall + render + promote, the audit chain.
+- **Stable**: all 16 commands, the compilation passes, ask + research + recall + render + promote, the audit chain.
 - **In progress**: post-v1 coverage uplift on compiler + cli packages; mutation-testing baseline.
 - **Roadmap**: remote/sync (Phase 3), multi-user (Phase 4), plugin system (Phase 5). All deliberately deferred to keep v1 local-first and inspectable.
 
@@ -183,7 +183,7 @@ Vulnerability reporting: [SECURITY.md](SECURITY.md).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Apache-2.0 — see [LICENSE](LICENSE).
 
 ## Author
 
