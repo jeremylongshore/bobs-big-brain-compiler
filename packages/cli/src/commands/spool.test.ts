@@ -11,7 +11,7 @@
  */
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { Command } from 'commander';
@@ -106,6 +106,15 @@ function fakeCommand(globalOpts: Record<string, unknown> = {}): Command {
 
 function expectExit(code: number, fn: () => void): void {
   expect(fn).toThrow(`__exit__:${code}`);
+}
+
+/** Restore an env var to a prior value, deleting it if it was unset. */
+function restoreEnv(key: string, prev: string | undefined): void {
+  if (prev === undefined) {
+    delete process.env[key];
+  } else {
+    process.env[key] = prev;
+  }
 }
 
 function stderrText(): string {
@@ -286,16 +295,156 @@ describe('runSpoolEmit — --out path safety', () => {
     );
   });
 
-  it('defaults --out to <workspace>/spool when omitted', () => {
-    vi.mocked(dryRunSpool).mockReturnValue({
-      ok: true,
-      value: makeDryRunSummary(),
-    });
-    expectExit(0, () => runSpoolEmit({ scope: 'wiki', dryRun: true, tenant: 't' }, fakeCommand()));
-    expect(dryRunSpool).toHaveBeenCalledWith(
-      tmpWs,
-      expect.objectContaining({ outDir: join(tmpWs, 'spool') }),
-    );
+  it('defaults --out to the INTKB read path (TEAMKB_BASE_PATH/spool) when omitted', () => {
+    // The write-side wiring: an omitted --out must land in the directory INTKB
+    // actually polls, NOT <workspace>/spool (which INTKB never reads).
+    const fakeBase = mkdtempSync(join(tmpdir(), 'ico-teamkb-base-'));
+    const prevBase = process.env['TEAMKB_BASE_PATH'];
+    const prevHome = process.env['TEAMKB_HOME'];
+    process.env['TEAMKB_BASE_PATH'] = fakeBase;
+    delete process.env['TEAMKB_HOME'];
+    try {
+      vi.mocked(dryRunSpool).mockReturnValue({
+        ok: true,
+        value: makeDryRunSummary(),
+      });
+      expectExit(0, () =>
+        runSpoolEmit({ scope: 'wiki', dryRun: true, tenant: 't' }, fakeCommand()),
+      );
+      expect(dryRunSpool).toHaveBeenCalledWith(
+        tmpWs,
+        expect.objectContaining({ outDir: join(fakeBase, 'spool') }),
+      );
+    } finally {
+      restoreEnv('TEAMKB_BASE_PATH', prevBase);
+      restoreEnv('TEAMKB_HOME', prevHome);
+      rmSync(fakeBase, { recursive: true, force: true });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ICO → INTKB spool handoff wiring (write side)
+// ---------------------------------------------------------------------------
+
+describe('runSpoolEmit — ICO→INTKB spool handoff default path', () => {
+  it('falls back to ~/.teamkb/spool when neither TEAMKB_BASE_PATH nor TEAMKB_HOME is set', () => {
+    const prevBase = process.env['TEAMKB_BASE_PATH'];
+    const prevHome = process.env['TEAMKB_HOME'];
+    delete process.env['TEAMKB_BASE_PATH'];
+    delete process.env['TEAMKB_HOME'];
+    try {
+      vi.mocked(dryRunSpool).mockReturnValue({
+        ok: true,
+        value: makeDryRunSummary(),
+      });
+      expectExit(0, () =>
+        runSpoolEmit({ scope: 'wiki', dryRun: true, tenant: 't' }, fakeCommand()),
+      );
+      expect(dryRunSpool).toHaveBeenCalledWith(
+        tmpWs,
+        expect.objectContaining({ outDir: join(homedir(), '.teamkb', 'spool') }),
+      );
+    } finally {
+      restoreEnv('TEAMKB_BASE_PATH', prevBase);
+      restoreEnv('TEAMKB_HOME', prevHome);
+    }
+  });
+
+  it('prefers TEAMKB_BASE_PATH over TEAMKB_HOME for the default path', () => {
+    const baseDir = mkdtempSync(join(tmpdir(), 'ico-teamkb-prefer-base-'));
+    const homeDir = mkdtempSync(join(tmpdir(), 'ico-teamkb-prefer-home-'));
+    const prevBase = process.env['TEAMKB_BASE_PATH'];
+    const prevHome = process.env['TEAMKB_HOME'];
+    process.env['TEAMKB_BASE_PATH'] = baseDir;
+    process.env['TEAMKB_HOME'] = homeDir;
+    try {
+      vi.mocked(dryRunSpool).mockReturnValue({
+        ok: true,
+        value: makeDryRunSummary(),
+      });
+      expectExit(0, () =>
+        runSpoolEmit({ scope: 'wiki', dryRun: true, tenant: 't' }, fakeCommand()),
+      );
+      expect(dryRunSpool).toHaveBeenCalledWith(
+        tmpWs,
+        expect.objectContaining({ outDir: join(baseDir, 'spool') }),
+      );
+    } finally {
+      restoreEnv('TEAMKB_BASE_PATH', prevBase);
+      restoreEnv('TEAMKB_HOME', prevHome);
+      rmSync(baseDir, { recursive: true, force: true });
+      rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('uses TEAMKB_HOME for the default path when TEAMKB_BASE_PATH is unset', () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'ico-teamkb-home-only-'));
+    const prevBase = process.env['TEAMKB_BASE_PATH'];
+    const prevHome = process.env['TEAMKB_HOME'];
+    delete process.env['TEAMKB_BASE_PATH'];
+    process.env['TEAMKB_HOME'] = homeDir;
+    try {
+      vi.mocked(dryRunSpool).mockReturnValue({
+        ok: true,
+        value: makeDryRunSummary(),
+      });
+      expectExit(0, () =>
+        runSpoolEmit({ scope: 'wiki', dryRun: true, tenant: 't' }, fakeCommand()),
+      );
+      expect(dryRunSpool).toHaveBeenCalledWith(
+        tmpWs,
+        expect.objectContaining({ outDir: join(homeDir, 'spool') }),
+      );
+    } finally {
+      restoreEnv('TEAMKB_BASE_PATH', prevBase);
+      restoreEnv('TEAMKB_HOME', prevHome);
+      rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts an explicit --out under the TeamKB base (the INTKB read path)', () => {
+    const baseDir = mkdtempSync(join(tmpdir(), 'ico-teamkb-explicit-'));
+    const prevBase = process.env['TEAMKB_BASE_PATH'];
+    process.env['TEAMKB_BASE_PATH'] = baseDir;
+    try {
+      vi.mocked(dryRunSpool).mockReturnValue({
+        ok: true,
+        value: makeDryRunSummary(),
+      });
+      expectExit(0, () =>
+        runSpoolEmit(
+          { scope: 'wiki', dryRun: true, tenant: 't', out: join(baseDir, 'spool') },
+          fakeCommand(),
+        ),
+      );
+      expect(dryRunSpool).toHaveBeenCalledWith(
+        tmpWs,
+        expect.objectContaining({ outDir: join(baseDir, 'spool') }),
+      );
+    } finally {
+      restoreEnv('TEAMKB_BASE_PATH', prevBase);
+      rmSync(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  it('still rejects an --out that escapes both the workspace and the TeamKB base', () => {
+    const baseDir = mkdtempSync(join(tmpdir(), 'ico-teamkb-reject-'));
+    const prevBase = process.env['TEAMKB_BASE_PATH'];
+    process.env['TEAMKB_BASE_PATH'] = baseDir;
+    try {
+      expectExit(1, () =>
+        runSpoolEmit(
+          { scope: 'wiki', dryRun: true, tenant: 't', out: '/tmp/somewhere-else-entirely' },
+          fakeCommand(),
+        ),
+      );
+      expect(stderrText()).toMatch(/--out must resolve to a path inside the workspace/);
+      expect(dryRunSpool).not.toHaveBeenCalled();
+    } finally {
+      restoreEnv('TEAMKB_BASE_PATH', prevBase);
+      rmSync(baseDir, { recursive: true, force: true });
+    }
   });
 });
 
