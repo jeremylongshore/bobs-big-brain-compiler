@@ -221,6 +221,62 @@ describe('runIngest', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Disclosure guard — reject comp/PII at the source, before any write
+  // -------------------------------------------------------------------------
+
+  it('rejects a source containing compensation content and writes nothing', () => {
+    const srcFile = join(tempBase, 'offer.md');
+    writeFile(srcFile, 'The package includes a 4-year vesting schedule and stock options.');
+
+    const result = runIngest(srcFile, ingestOpts(), globalOpts());
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toMatch(/disclosure check failed/i);
+    expect(result.error.message).toMatch(/compensation/i);
+
+    // No copy into the workspace and no DB row — the guard ran before any write.
+    expect(existsSync(join(workspaceRoot, 'raw', 'notes', 'offer.md'))).toBe(false);
+    const dbResult = initDatabase(join(workspaceRoot, '.ico', 'state.db'));
+    if (!dbResult.ok) throw dbResult.error;
+    const localDb = dbResult.value;
+    try {
+      const row = localDb.prepare<[], { n: number }>('SELECT COUNT(*) AS n FROM sources').get();
+      expect(row?.n).toBe(0);
+    } finally {
+      closeDatabase(localDb);
+    }
+  });
+
+  it('rejects a source containing PII (SSN) at the source', () => {
+    const srcFile = join(tempBase, 'contractor.txt');
+    writeFile(srcFile, 'Contractor SSN 123-45-6789 on file for the engagement.');
+
+    const result = runIngest(srcFile, ingestOpts(), globalOpts());
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toMatch(/disclosure check failed/i);
+    expect(result.error.message).toMatch(/PII/);
+    expect(existsSync(join(workspaceRoot, 'raw', 'notes', 'contractor.txt'))).toBe(false);
+  });
+
+  it('ingests a governance doc that merely names "compensation" in policy text', () => {
+    // The disclosure-tier rule NAMES the forbidden category to forbid it — that bare
+    // word must not be rejected, or the brain could never ingest its own doctrine.
+    const srcFile = join(tempBase, 'doctrine.md');
+    writeFile(
+      srcFile,
+      'Disclosure tiers: never write compensation or anyone’s pay into this repo.',
+    );
+
+    const result = runIngest(srcFile, ingestOpts(), globalOpts());
+
+    expect(result.ok).toBe(true);
+    expect(existsSync(join(workspaceRoot, 'raw', 'notes', 'doctrine.md'))).toBe(true);
+  });
+
+  // -------------------------------------------------------------------------
   // Trace event written
   // -------------------------------------------------------------------------
 
