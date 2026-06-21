@@ -110,6 +110,10 @@ export {
   type SpoolDryRunSummary,
 } from './spool.js';
 
+// UUID v5: canonical content-derived candidate-ID derivation (ICO <-> INTKB
+// byte-identical contract). See `./uuid.ts`.
+export { uuidV5, spoolCandidateName, deriveSpoolCandidateId } from './uuid.js';
+
 // Audit-chain verifier
 export { verifyAuditChain, type AuditChainBreak, type AuditVerifyResult } from './audit-verify.js';
 
