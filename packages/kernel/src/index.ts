@@ -113,6 +113,14 @@ export {
 // Audit-chain verifier
 export { verifyAuditChain, type AuditChainBreak, type AuditVerifyResult } from './audit-verify.js';
 
+// Disclosure guard — no-comp/no-PII choke at the brain boundary (ico ingest)
+export {
+  scanForDisclosure,
+  disclosureLabel,
+  type DisclosureCategory,
+  type DisclosureViolation,
+} from './disclosure.js';
+
 // Procfs — computed views over task state
 export {
   computeTaskStatus,
