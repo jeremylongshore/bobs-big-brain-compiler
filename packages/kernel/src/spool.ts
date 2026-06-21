@@ -60,6 +60,7 @@ import {
 } from '@ico/types';
 
 import { writeTrace } from './traces.js';
+import { deriveSpoolCandidateId, uuidV5 } from './uuid.js';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -144,49 +145,10 @@ export class SpoolError extends Error {
 }
 
 // ---------------------------------------------------------------------------
-// Internal: UUID v5 (RFC 4122, name-based with SHA-1)
+// UUID v5: the candidate-ID derivation now lives in `./uuid.ts` so it is a
+// single, importable source of truth shared byte-for-byte with INTKB (the spool
+// consumer). See `deriveSpoolCandidateId` / `uuidV5` imported above.
 // ---------------------------------------------------------------------------
-
-/** Parse a UUID string into a 16-byte Buffer. */
-function uuidStringToBytes(uuid: string): Buffer {
-  const hex = uuid.replace(/-/g, '');
-  if (hex.length !== 32) {
-    throw new Error(`Invalid UUID: ${uuid}`);
-  }
-  return Buffer.from(hex, 'hex');
-}
-
-/** Format a 16-byte Buffer back into a canonical UUID string. */
-function uuidBytesToString(bytes: Buffer): string {
-  const hex = bytes.toString('hex');
-  return [
-    hex.slice(0, 8),
-    hex.slice(8, 12),
-    hex.slice(12, 16),
-    hex.slice(16, 20),
-    hex.slice(20, 32),
-  ].join('-');
-}
-
-/**
- * Compute a deterministic UUID v5 from `(namespace, name)` per RFC 4122 §4.3.
- * SHA-1 of (namespace bytes || name UTF-8 bytes), truncated to 16 bytes,
- * with version (5) and variant (RFC 4122) bits patched.
- *
- * Node's built-in `crypto.randomUUID()` is v4 only; there is no native v5,
- * so this is a small inline implementation rather than a third-party dep.
- */
-function uuidV5(namespace: string, name: string): string {
-  const nsBytes = uuidStringToBytes(namespace);
-  const nameBytes = Buffer.from(name, 'utf8');
-  const hash = createHash('sha1').update(nsBytes).update(nameBytes).digest();
-  const bytes = Buffer.from(hash.subarray(0, 16));
-  // Version 5: top 4 bits of byte 6 = 0101
-  bytes[6] = (bytes[6]! & 0x0f) | 0x50;
-  // Variant RFC 4122: top 2 bits of byte 8 = 10
-  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
-  return uuidBytesToString(bytes);
-}
 
 // ---------------------------------------------------------------------------
 // Internal: page-type → category mapping (exhaustive)
@@ -359,10 +321,7 @@ function buildCandidate(
       : basename(page.relPath, '.md');
   // Prefix open-question titles so the curator sees them as questions.
   const finalTitle = pageType === 'open-question' ? `Open question: ${title}` : title;
-  const candidateId = uuidV5(
-    SPOOL_UUID_NAMESPACE,
-    `${workspaceId}\x00${page.relPath}\x00${page.bodySha256}`,
-  );
+  const candidateId = deriveSpoolCandidateId(workspaceId, page.relPath, page.bodySha256);
 
   const tagsRaw = page.frontmatter['tags'];
   const tags = Array.isArray(tagsRaw)
