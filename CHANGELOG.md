@@ -1,5 +1,14 @@
 # Changelog
 
+## [v1.15.0] - 2026-06-21
+
+- feat(kernel): extract canonical content-derived UUID v5 derivation (EPIC 1) (#143) (a55a9d9)
+- docs(readme): fix stale MIT license, version 1.0.5→1.14.0, 14→16 commands (#141) (e755fa2)
+- chore(beads): link epic cze ↔ GH #140 ↔ Plane ICOS-24 (three-layer mirror) (2c5679b)
+- chore(beads): track ICO ingest-time disclosure enforcement (epic cze) (6da4526)
+- test(cli): command coverage for init/status/unpromote + index handlers (#139) (4ed5f62)
+- docs: settle DECR 035 license to Apache-2.0 + canonicalize umbrella name (#138) (56f200c)
+
 ## [v1.14.0] - 2026-06-17
 
 - feat(compiler): DeepSeek (OpenAI-compatible) LLM provider via ICO_PROVIDER (#137) (3226000)
