@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.16.0] - 2026-06-21
+
+- feat(ingest): reject comp/PII at the source with an ico ingest disclosure guard (cze.1) (#144) (051fc1c)
+
 ## [v1.15.0] - 2026-06-21
 
 - feat(kernel): extract canonical content-derived UUID v5 derivation (EPIC 1) (#143) (a55a9d9)
