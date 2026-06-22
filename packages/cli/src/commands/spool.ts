@@ -18,7 +18,7 @@
  * @module commands/spool
  */
 
-import { existsSync, lstatSync, realpathSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 
@@ -341,6 +341,21 @@ export function runSpoolEmit(options: SpoolEmitOptions, command: Command): void 
   }
 
   // --- Live emit path ---
+  // The emit step owns creating its output directory. The default
+  // (resolveTeamKbBase()/spool) may not exist on a fresh machine or in CI;
+  // validateOutDir has already constrained outDirAbs to an allowed root with
+  // symlink defences, so creating it here is safe and wires the ICO -> INTKB
+  // handoff out of the box.
+  try {
+    mkdirSync(outDirAbs, { recursive: true });
+  } catch (e) {
+    process.stderr.write(
+      formatError(
+        `Cannot create spool output directory "${outDirAbs}": ${e instanceof Error ? e.message : String(e)}\n`,
+      ),
+    );
+    process.exit(1);
+  }
   const dbResult = initDatabase(ws.value.dbPath);
   if (!dbResult.ok) {
     process.stderr.write(formatError(`Database error: ${dbResult.error.message}\n`));
