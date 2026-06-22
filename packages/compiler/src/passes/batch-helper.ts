@@ -22,7 +22,7 @@
  * "raw pages from all batches" and "merged pages ready to write".
  */
 
-import { createHash } from 'node:crypto';
+import { uuidV5 } from '@ico/kernel';
 
 // ---------------------------------------------------------------------------
 // Tunable
@@ -169,28 +169,15 @@ function extractFrontmatterBlock(content: string): string | null {
  * Derive a deterministic RFC-4122 UUIDv5 from a normalized title under the
  * fixed ICO namespace. Same title in → same UUID out, every run, every machine.
  *
- * Implemented directly with SHA-1 (UUIDv5's hash) so the package takes on no new
- * dependency: hash(namespace-bytes ‖ name-bytes), then set the version (5) and
- * variant (RFC 4122) bits.
+ * Delegates to the canonical {@link uuidV5} in `@ico/kernel` — the single
+ * source of truth for v5 derivation (SHA-1 of `namespace-bytes ‖ name-bytes`
+ * with the version/variant bits patched). This module deliberately does NOT
+ * re-implement the hash inline: the kernel helper is the reviewed, shared
+ * contract, and duplicating the SHA-1 call here both risks drift and trips the
+ * weak-crypto scanner on a sink that is really just standards-mandated UUIDv5.
  */
 export function deriveStableId(normalizedTitle: string): string {
-  const namespaceBytes = uuidToBytes(ICO_NAMESPACE_UUID);
-  const nameBytes = Buffer.from(normalizedTitle, 'utf-8');
-  const hash = createHash('sha1').update(namespaceBytes).update(nameBytes).digest();
-
-  const bytes = hash.subarray(0, 16);
-  // Version 5: high nibble of byte 6 = 0101.
-  bytes[6] = (bytes[6]! & 0x0f) | 0x50;
-  // RFC 4122 variant: top two bits of byte 8 = 10.
-  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
-
-  const hex = bytes.toString('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
-}
-
-/** Convert a canonical UUID string into its 16 raw bytes. */
-function uuidToBytes(uuid: string): Buffer {
-  return Buffer.from(uuid.replace(/-/g, ''), 'hex');
+  return uuidV5(ICO_NAMESPACE_UUID, normalizedTitle);
 }
 
 // ---------------------------------------------------------------------------
