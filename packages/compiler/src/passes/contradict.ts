@@ -3,19 +3,33 @@
  *
  * Orchestrates:
  *   1. Read all wiki/sources/*.md summary files.
- *   2. Prompt construction with injection defense.
- *   3. Claude API call via ClaudeClient.
- *   4. Parse multi-page response (split on ---PAGE_BREAK---).
- *   5. Atomic write of each contradiction page to wiki/contradictions/<slug>.md.
- *   6. Compilation record inserted into the `compilations` SQLite table per page.
- *   7. Provenance recording per page.
- *   8. Trace event written to the audit trail.
- *   9. Audit log appended.
+ *   2. Chunk the summaries into batches of a configurable size (default 25).
+ *   3. Per batch: build a prompt with injection defense and call the Claude API.
+ *   4. Parse each batch's multi-page response (split on ---PAGE_BREAK---),
+ *      honoring the NO_CONTRADICTIONS_FOUND sentinel per batch, and collect the
+ *      raw pages across all batches.
+ *   5. Dedupe/merge the collected pages by normalized title, unioning source_ids
+ *      and stamping a stable UUIDv5 id so re-runs are idempotent.
+ *   6. Atomic write of each merged contradiction page to wiki/contradictions/<slug>.md.
+ *   7. Compilation record UPSERTed into the `compilations` SQLite table per page.
+ *   8. Provenance recording per page.
+ *   9. Trace event written to the audit trail.
+ *  10. Audit log appended.
+ *
+ * Batching makes the pass process ALL summaries instead of silently truncating
+ * to whatever fit in a single prompt/response budget.
+ *
+ * CROSS-BATCH CAVEAT (v1, best-effort): contradiction detection is INTRA-batch —
+ * a contradiction between a claim in batch 1 and a claim in batch 2 may be missed,
+ * because the two conflicting summaries never appear in the same prompt. Same-titled
+ * contradictions emitted by two batches DO merge (source_ids unioned), but a conflict
+ * that genuinely spans the batch boundary is not detected. Accepted and documented;
+ * the corpus most affected is the one large enough to need batching, where the old
+ * single call simply truncated and dropped contradictions outright.
  *
  * Never throws — all error paths return err(Error).
  */
 
-import { randomUUID } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
@@ -30,6 +44,7 @@ import { appendAuditLog, type Database, recordProvenance, writeTrace } from '@ic
 import { err, ok, type Result } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
+import { chunkArray, DEFAULT_BATCH_SIZE, mergePages } from './batch-helper.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -89,6 +104,11 @@ export interface ContradictOptions {
   model?: string;
   /** Maximum tokens for the response. Defaults to MAX_TOKENS_PER_OPERATION env var or 4096. */
   maxTokens?: number;
+  /**
+   * Number of summaries per Claude call. Defaults to ICO_BATCH_SIZE env var or 25.
+   * Smaller batches process more summaries reliably at the cost of more API calls.
+   */
+  batchSize?: number;
 }
 
 /** Normalised result for a single contradiction page. */
@@ -99,11 +119,11 @@ export interface ContradictResult {
   outputPath: string;
   /** ISO 8601 timestamp when compilation was initiated. */
   compiledAt: string;
-  /** Total tokens consumed (input + output) — shared across all pages in this batch. */
+  /** Total tokens consumed (input + output) summed across every batch call. */
   tokensUsed: number;
-  /** Tokens in the request prompt. */
+  /** Tokens in the request prompts, summed across every batch call. */
   inputTokens: number;
-  /** Tokens in the model response. */
+  /** Tokens in the model responses, summed across every batch call. */
   outputTokens: number;
 }
 
@@ -121,13 +141,6 @@ function titleToSlug(title: string): string {
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '') || 'contradiction'
   );
-}
-
-/** Extract a frontmatter field value by key from a page string. */
-function extractFrontmatterField(content: string, key: string): string | undefined {
-  const pattern = new RegExp(`^${key}:\\s*["']?([^\\n"']+)["']?`, 'm');
-  const match = pattern.exec(content);
-  return match?.[1]?.trim();
 }
 
 /**
@@ -153,13 +166,23 @@ function readWikiSubdir(workspacePath: string, subdir: string): string[] {
 /**
  * Run the contradict compilation pass.
  *
- * Reads all wiki/sources/*.md, sends them to Claude for contradiction
- * detection, and writes each found contradiction to wiki/contradictions/.
+ * Reads all wiki/sources/*.md, chunks them into batches, calls Claude per batch
+ * for contradiction detection, merges the resulting pages by normalized title,
+ * and writes each found contradiction to wiki/contradictions/.
+ *
+ * Batching the summaries is the whole point: a single concatenated prompt
+ * silently dropped contradictions once the workspace outgrew the model's output
+ * budget. Batching guarantees every summary reaches the model.
+ *
+ * CROSS-BATCH CAVEAT (v1, best-effort): contradiction detection is INTRA-batch —
+ * a conflict between a claim in one batch and a claim in another may be missed,
+ * because the two summaries never share a prompt. Same-titled contradictions from
+ * two batches DO merge (source_ids unioned). Accepted + documented.
  *
  * @param client        - Thin Claude API client wrapper.
  * @param db            - Open better-sqlite3 database with migrations applied.
  * @param workspacePath - Absolute path to the workspace root directory.
- * @param options       - Optional model and token overrides.
+ * @param options       - Optional model, token, and batch-size overrides.
  * @returns `ok(results)` on success (may be empty if no contradictions found),
  *          `err(Error)` on any failure.
  */
@@ -172,6 +195,7 @@ export async function detectContradictions(
   const compiledAt = new Date().toISOString();
   const model = options?.model ?? DEFAULT_MODEL;
   const maxTokens = options?.maxTokens ?? DEFAULT_MAX_TOKENS;
+  const batchSize = options?.batchSize ?? DEFAULT_BATCH_SIZE;
 
   // 1. Read all summary files.
   const summaries = readWikiSubdir(workspacePath, 'sources');
@@ -180,38 +204,62 @@ export async function detectContradictions(
     return ok([]);
   }
 
-  const summaryContent = summaries.join('\n\n---\n\n');
+  // 2. Chunk the summaries and call the API per batch, collecting raw pages.
+  //    A single batch (small corpus) reproduces the old single-call behavior.
+  const batches = chunkArray(summaries, batchSize);
+  const rawPages: string[] = [];
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let responseModel = model;
 
-  // 2. Build prompts.
-  const userPrompt = buildUserPrompt({ compiledAt, model, summaryContent });
+  for (const batch of batches) {
+    const summaryContent = batch.join('\n\n---\n\n');
+    const userPrompt = buildUserPrompt({ compiledAt, model, summaryContent });
 
-  // 3. Call the Claude API.
-  const completionResult = await client.createCompletion(SYSTEM_PROMPT, userPrompt, {
-    model,
-    maxTokens,
-  });
+    const completionResult = await client.createCompletion(SYSTEM_PROMPT, userPrompt, {
+      model,
+      maxTokens,
+    });
 
-  if (!completionResult.ok) {
-    return err(completionResult.error);
+    if (!completionResult.ok) {
+      return err(completionResult.error);
+    }
+
+    const {
+      content,
+      inputTokens: inTok,
+      outputTokens: outTok,
+      model: respModel,
+    } = completionResult.value;
+    inputTokens += inTok;
+    outputTokens += outTok;
+    responseModel = respModel;
+
+    // A batch with no contradictions emits the sentinel — skip its pages.
+    if (
+      content.trim() === 'NO_CONTRADICTIONS_FOUND' ||
+      content.includes('NO_CONTRADICTIONS_FOUND')
+    ) {
+      continue;
+    }
+
+    for (const page of content.split(PAGE_BREAK)) {
+      const trimmed = page.trim();
+      if (trimmed.length > 0) rawPages.push(trimmed);
+    }
   }
 
-  const { content, inputTokens, outputTokens, model: responseModel } = completionResult.value;
   const tokensUsed = inputTokens + outputTokens;
-
-  // 4. Check for the no-contradictions sentinel.
-  if (content.trim() === 'NO_CONTRADICTIONS_FOUND' || content.includes('NO_CONTRADICTIONS_FOUND')) {
-    return ok([]);
-  }
-
-  // 5. Split response into individual contradiction pages.
-  const rawPages = content
-    .split(PAGE_BREAK)
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0);
 
   if (rawPages.length === 0) {
     return ok([]);
   }
+
+  // 3. Dedupe/merge by normalized title, unioning source_ids and assigning a
+  //    stable UUIDv5 id so re-runs are idempotent. Cross-batch contradictions
+  //    under the same title collapse here; conflicts spanning the batch boundary
+  //    are best-effort and may be missed (see the pass-level caveat above).
+  const mergedPages = mergePages(rawPages, { listField: 'source_ids' });
 
   // Ensure wiki/contradictions/ directory exists.
   const contradictionsDir = join(workspacePath, 'wiki', 'contradictions');
@@ -225,15 +273,16 @@ export async function detectContradictions(
 
   const results: ContradictResult[] = [];
 
-  for (const pageContent of rawPages) {
-    const compilationId = randomUUID();
-    const title = extractFrontmatterField(pageContent, 'title') ?? 'untitled';
+  for (const page of mergedPages) {
+    const compilationId = page.id;
+    const pageContent = page.content;
+    const title = page.title;
     const slug = titleToSlug(title);
     const outputPath = join('wiki', 'contradictions', `${slug}.md`);
     const absoluteOutputPath = join(workspacePath, outputPath);
     const tmpPath = `${absoluteOutputPath}.tmp`;
 
-    // 6. Atomic write.
+    // 4. Atomic write.
     try {
       writeFileSync(tmpPath, pageContent, 'utf-8');
       renameSync(tmpPath, absoluteOutputPath);
@@ -241,12 +290,19 @@ export async function detectContradictions(
       return err(e instanceof Error ? e : new Error(String(e)));
     }
 
-    // 7. Insert compilation record.
+    // 5. UPSERT compilation record (keyed on the stable id → idempotent re-runs).
     try {
       db.prepare<[string, string | null, string, string, string, number, string, number], void>(
         `INSERT INTO compilations
            (id, source_id, type, output_path, compiled_at, stale, model, tokens_used)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           type = excluded.type,
+           output_path = excluded.output_path,
+           compiled_at = excluded.compiled_at,
+           stale = excluded.stale,
+           model = excluded.model,
+           tokens_used = excluded.tokens_used`,
       ).run(
         compilationId,
         null,
@@ -261,7 +317,7 @@ export async function detectContradictions(
       return err(e instanceof Error ? e : new Error(String(e)));
     }
 
-    // 8. Record provenance (batch operation — no single source_id).
+    // 6. Record provenance (batch operation — no single source_id).
     const provenanceResult = recordProvenance(db, workspacePath, {
       sourceId: 'batch',
       outputPath,
@@ -272,7 +328,7 @@ export async function detectContradictions(
       return err(provenanceResult.error);
     }
 
-    // 9. Write trace event.
+    // 7. Write trace event.
     const traceResult = writeTrace(db, workspacePath, 'compile.contradict', {
       compilationId,
       outputPath,
@@ -282,7 +338,7 @@ export async function detectContradictions(
       return err(traceResult.error);
     }
 
-    // 10. Append audit log entry.
+    // 8. Append audit log entry.
     const auditResult = appendAuditLog(
       workspacePath,
       'compile.contradict',

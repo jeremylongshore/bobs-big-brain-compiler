@@ -90,6 +90,47 @@ function mockClientError(message: string): ClaudeClient {
   };
 }
 
+/**
+ * Mock a client that returns a different response per call. The Nth invocation
+ * (1-indexed by batch) resolves the Nth response in `responsesByCall`; calls
+ * past the end re-use the last response. Lets a test drive multi-batch behavior.
+ */
+function mockClientSequence(responsesByCall: string[]): ClaudeClient {
+  let call = 0;
+  return {
+    createCompletion: vi.fn().mockImplementation(() => {
+      const response = responsesByCall[Math.min(call, responsesByCall.length - 1)] ?? '';
+      call++;
+      return Promise.resolve(
+        ok({
+          content: response,
+          inputTokens: 500,
+          outputTokens: 200,
+          model: 'claude-sonnet-4-6',
+          stopReason: 'end_turn',
+        }),
+      );
+    }),
+  };
+}
+
+/** Build a minimal contradiction page string with a given title + source_ids list. */
+function contradictionPage(title: string, sourceIds: string[]): string {
+  return `---
+type: contradiction
+id: gen-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}
+title: ${title}
+severity: medium
+source_ids:
+${sourceIds.map((s) => `  - ${s}`).join('\n')}
+compiled_at: 2026-04-06T00:00:00.000Z
+model: claude-sonnet-4-6
+---
+
+## Analysis
+Conflict body for ${title}.`;
+}
+
 interface TestEnv {
   wsRoot: string;
   dbPath: string;
@@ -300,5 +341,141 @@ A secondary contradiction about evidence standards.
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.length).toBe(2);
+  });
+
+  // -------------------------------------------------------------------------
+  // 11. Small-corpus parity — a corpus that fits in one batch makes exactly
+  //     one Claude call (the old single-call behavior is unchanged).
+  // -------------------------------------------------------------------------
+
+  it('makes exactly one Claude call when all summaries fit in a single batch', async () => {
+    // beforeEach writes 2 summaries; default batch size (25) holds them in one batch.
+    const client = mockClient(MOCK_CONTRADICTION_PAGE);
+    const result = await detectContradictions(client, env.db, env.wsRoot);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // 12. Batching — many summaries are processed across batches, each yielding a
+  //     distinct contradiction, far exceeding a single truncated call.
+  // -------------------------------------------------------------------------
+
+  it('processes all summaries across batches, far exceeding a single call', async () => {
+    // Write 40 distinct summary files.
+    const sourcesDir = join(env.wsRoot, 'wiki', 'sources');
+    mkdirSync(sourcesDir, { recursive: true });
+    for (let i = 0; i < 40; i++) {
+      writeFileSync(
+        join(sourcesDir, `source-${String(i).padStart(2, '0')}.md`),
+        `---\ntype: source-summary\nid: src-${i}\ntitle: Source ${i}\n---\n\nClaim ${i}.`,
+        'utf-8',
+      );
+    }
+
+    // Each batch emits one DISTINCT contradiction page (parameterised by call index).
+    let call = 0;
+    const client: ClaudeClient = {
+      createCompletion: vi.fn().mockImplementation(() => {
+        const idx = call++;
+        return Promise.resolve(
+          ok({
+            content: contradictionPage(`Conflict Batch ${idx}`, [`src-${idx}`]),
+            inputTokens: 500,
+            outputTokens: 200,
+            model: 'claude-sonnet-4-6',
+            stopReason: 'end_turn',
+          }),
+        );
+      }),
+    };
+
+    // batchSize 10 over 42 summaries (2 from beforeEach + 40 here) → 5 batches.
+    const result = await detectContradictions(client, env.db, env.wsRoot, { batchSize: 10 });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // 42 / 10 = 5 batch calls (last batch holds the remainder).
+    expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(5);
+
+    // Far more than the single page a single-call run would yield.
+    expect(result.value.length).toBe(5);
+    expect(result.value.length).toBeGreaterThan(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // 13. Per-batch sentinel — a batch returning NO_CONTRADICTIONS_FOUND
+  //     contributes no pages; other batches still produce theirs.
+  // -------------------------------------------------------------------------
+
+  it('honors NO_CONTRADICTIONS_FOUND per batch (mixed empty + non-empty batches)', async () => {
+    // beforeEach wrote 2 summaries → batchSize 1 forces two batch calls.
+    // Batch 1 finds nothing; batch 2 finds a contradiction. Only one page results.
+    const client = mockClientSequence([
+      'NO_CONTRADICTIONS_FOUND',
+      contradictionPage('Only Conflict', ['src-x']),
+    ]);
+
+    const result = await detectContradictions(client, env.db, env.wsRoot, { batchSize: 1 });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
+    expect(result.value).toHaveLength(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // 14. Dedupe/merge — two batches emitting the same-titled contradiction
+  //     collapse to one page whose source_ids union both contributions.
+  // -------------------------------------------------------------------------
+
+  it('merges a same-titled contradiction from two batches with both source_ids', async () => {
+    const client = mockClientSequence([
+      contradictionPage('Shared Conflict', ['s-aaa']),
+      contradictionPage('Shared Conflict', ['s-bbb']),
+    ]);
+
+    const result = await detectContradictions(client, env.db, env.wsRoot, { batchSize: 1 });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
+    expect(result.value).toHaveLength(1);
+
+    const written = readFileSync(join(env.wsRoot, result.value[0]!.outputPath), 'utf-8');
+    expect(written).toContain('s-aaa');
+    expect(written).toContain('s-bbb');
+
+    const rows = env.db
+      .prepare<[], { count: number }>(`SELECT COUNT(*) AS count FROM compilations`)
+      .all();
+    expect(rows[0]!.count).toBe(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // 15. Idempotency — re-running does not duplicate compilation rows.
+  // -------------------------------------------------------------------------
+
+  it('re-running the pass UPSERTs rather than duplicating compilation rows', async () => {
+    const client1 = mockClient(contradictionPage('Stable Conflict', ['s1']));
+    const first = await detectContradictions(client1, env.db, env.wsRoot);
+    expect(first.ok).toBe(true);
+
+    const client2 = mockClient(contradictionPage('Stable Conflict', ['s1', 's2']));
+    const second = await detectContradictions(client2, env.db, env.wsRoot);
+    expect(second.ok).toBe(true);
+
+    const rows = env.db
+      .prepare<
+        [],
+        { count: number }
+      >(`SELECT COUNT(*) AS count FROM compilations WHERE type = 'contradiction'`)
+      .all();
+    expect(rows[0]!.count).toBe(1);
   });
 });

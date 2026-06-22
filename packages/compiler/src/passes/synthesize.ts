@@ -3,19 +3,34 @@
  *
  * Orchestrates:
  *   1. Read all wiki/sources/*.md and wiki/concepts/*.md files.
- *   2. Prompt construction with injection defense.
- *   3. Claude API call via ClaudeClient.
- *   4. Parse multi-page response (split on ---PAGE_BREAK---).
- *   5. Atomic write of each topic page to wiki/topics/<slug>.md.
- *   6. Compilation record inserted into the `compilations` SQLite table per page.
- *   7. Provenance recording per page.
- *   8. Trace event written to the audit trail.
- *   9. Audit log appended.
+ *   2. Chunk the summaries into batches of a configurable size (default 25).
+ *      The concept pages are reference context attached to every batch.
+ *   3. Per batch: build a prompt with injection defense and call the Claude API.
+ *   4. Parse each batch's multi-page response (split on ---PAGE_BREAK---) and
+ *      collect the raw pages across all batches.
+ *   5. Dedupe/merge the collected pages by normalized title, unioning concept_ids
+ *      and stamping a stable UUIDv5 id so re-runs are idempotent.
+ *   6. Atomic write of each merged topic page to wiki/topics/<slug>.md.
+ *   7. Compilation record UPSERTed into the `compilations` SQLite table per page.
+ *   8. Provenance recording per page.
+ *   9. Trace event written to the audit trail.
+ *  10. Audit log appended.
+ *
+ * Batching makes the pass process ALL summaries instead of silently truncating
+ * to whatever fit in a single prompt/response budget.
+ *
+ * CROSS-BATCH CAVEAT (v1, best-effort): a topic that only emerges from summaries
+ * split across two different batches may be missed, because each batch is
+ * synthesized independently — the model never sees those summaries together.
+ * Topics emitted under the SAME title from two batches DO merge (concept_ids are
+ * unioned), but a genuinely cross-batch theme that neither batch surfaces on its
+ * own is not recovered. Accepted and documented; the corpus most affected is the
+ * one large enough to need batching in the first place, where the old single
+ * call simply truncated and dropped pages outright.
  *
  * Never throws — all error paths return err(Error).
  */
 
-import { randomUUID } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
@@ -30,6 +45,7 @@ import { appendAuditLog, type Database, recordProvenance, writeTrace } from '@ic
 import { err, ok, type Result } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
+import { chunkArray, DEFAULT_BATCH_SIZE, mergePages } from './batch-helper.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -93,6 +109,11 @@ export interface SynthesizeOptions {
   model?: string;
   /** Maximum tokens for the response. Defaults to MAX_TOKENS_PER_OPERATION env var or 4096. */
   maxTokens?: number;
+  /**
+   * Number of summaries per Claude call. Defaults to ICO_BATCH_SIZE env var or 25.
+   * Smaller batches process more summaries reliably at the cost of more API calls.
+   */
+  batchSize?: number;
 }
 
 /** Normalised result for a single synthesized topic page. */
@@ -103,11 +124,11 @@ export interface SynthesizeResult {
   outputPath: string;
   /** ISO 8601 timestamp when compilation was initiated. */
   compiledAt: string;
-  /** Total tokens consumed (input + output) — shared across all pages in this batch. */
+  /** Total tokens consumed (input + output) summed across every batch call. */
   tokensUsed: number;
-  /** Tokens in the request prompt. */
+  /** Tokens in the request prompts, summed across every batch call. */
   inputTokens: number;
-  /** Tokens in the model response. */
+  /** Tokens in the model responses, summed across every batch call. */
   outputTokens: number;
 }
 
@@ -125,13 +146,6 @@ function titleToSlug(title: string): string {
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '') || 'topic'
   );
-}
-
-/** Extract a frontmatter field value by key from a page string. */
-function extractFrontmatterField(content: string, key: string): string | undefined {
-  const pattern = new RegExp(`^${key}:\\s*["']?([^\\n"']+)["']?`, 'm');
-  const match = pattern.exec(content);
-  return match?.[1]?.trim();
 }
 
 /**
@@ -157,13 +171,24 @@ function readWikiDir(workspacePath: string, subdir: string): string[] {
 /**
  * Run the synthesize compilation pass.
  *
- * Reads all wiki/sources/*.md and wiki/concepts/*.md, sends them to Claude,
- * and writes the resulting topic pages to wiki/topics/.
+ * Reads all wiki/sources/*.md and wiki/concepts/*.md, chunks the summaries into
+ * batches, calls Claude per batch (with the concept pages as reference context),
+ * merges the resulting topic pages by normalized title, and writes them to
+ * wiki/topics/.
+ *
+ * Batching the summaries is the whole point: a single concatenated prompt
+ * silently dropped most topic pages once the workspace outgrew the model's
+ * output budget. Batching guarantees every summary reaches the model.
+ *
+ * CROSS-BATCH CAVEAT (v1, best-effort): a topic that only emerges by combining
+ * summaries from two different batches may be missed — each batch is synthesized
+ * independently, so the model never sees those summaries together. Same-titled
+ * topics from two batches DO merge (concept_ids unioned). Accepted + documented.
  *
  * @param client        - Thin Claude API client wrapper.
  * @param db            - Open better-sqlite3 database with migrations applied.
  * @param workspacePath - Absolute path to the workspace root directory.
- * @param options       - Optional model and token overrides.
+ * @param options       - Optional model, token, and batch-size overrides.
  * @returns `ok(results)` on success, `err(Error)` on any failure.
  */
 export async function synthesizeTopics(
@@ -175,6 +200,7 @@ export async function synthesizeTopics(
   const compiledAt = new Date().toISOString();
   const model = options?.model ?? DEFAULT_MODEL;
   const maxTokens = options?.maxTokens ?? DEFAULT_MAX_TOKENS;
+  const batchSize = options?.batchSize ?? DEFAULT_BATCH_SIZE;
 
   // 1. Read summaries and concepts.
   const summaries = readWikiDir(workspacePath, 'sources');
@@ -184,35 +210,58 @@ export async function synthesizeTopics(
     return ok([]);
   }
 
-  const summaryContent = summaries.join('\n\n---\n\n');
+  // The concept pages are reference context shared across every batch; only the
+  // summaries are chunked (they are the synthesis axis).
   const conceptContent =
     concepts.length > 0 ? concepts.join('\n\n---\n\n') : '(no concepts extracted yet)';
 
-  // 2. Build prompts.
-  const userPrompt = buildUserPrompt({ compiledAt, model, summaryContent, conceptContent });
+  // 2. Chunk the summaries and call the API per batch, collecting raw pages.
+  //    A single batch (small corpus) reproduces the old single-call behavior.
+  const batches = chunkArray(summaries, batchSize);
+  const rawPages: string[] = [];
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let responseModel = model;
 
-  // 3. Call the Claude API.
-  const completionResult = await client.createCompletion(SYSTEM_PROMPT, userPrompt, {
-    model,
-    maxTokens,
-  });
+  for (const batch of batches) {
+    const summaryContent = batch.join('\n\n---\n\n');
+    const userPrompt = buildUserPrompt({ compiledAt, model, summaryContent, conceptContent });
 
-  if (!completionResult.ok) {
-    return err(completionResult.error);
+    const completionResult = await client.createCompletion(SYSTEM_PROMPT, userPrompt, {
+      model,
+      maxTokens,
+    });
+
+    if (!completionResult.ok) {
+      return err(completionResult.error);
+    }
+
+    const {
+      content,
+      inputTokens: inTok,
+      outputTokens: outTok,
+      model: respModel,
+    } = completionResult.value;
+    inputTokens += inTok;
+    outputTokens += outTok;
+    responseModel = respModel;
+
+    for (const page of content.split(PAGE_BREAK)) {
+      const trimmed = page.trim();
+      if (trimmed.length > 0) rawPages.push(trimmed);
+    }
   }
 
-  const { content, inputTokens, outputTokens, model: responseModel } = completionResult.value;
   const tokensUsed = inputTokens + outputTokens;
-
-  // 4. Split response into individual topic pages.
-  const rawPages = content
-    .split(PAGE_BREAK)
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0);
 
   if (rawPages.length === 0) {
     return ok([]);
   }
+
+  // 3. Dedupe/merge by normalized title, unioning concept_ids and assigning a
+  //    stable UUIDv5 id so re-runs are idempotent. Cross-batch topics under the
+  //    same title collapse here; genuinely cross-batch themes are best-effort.
+  const mergedPages = mergePages(rawPages, { listField: 'concept_ids' });
 
   // Ensure wiki/topics/ directory exists.
   const topicsDir = join(workspacePath, 'wiki', 'topics');
@@ -226,15 +275,16 @@ export async function synthesizeTopics(
 
   const results: SynthesizeResult[] = [];
 
-  for (const pageContent of rawPages) {
-    const compilationId = randomUUID();
-    const title = extractFrontmatterField(pageContent, 'title') ?? 'untitled';
+  for (const page of mergedPages) {
+    const compilationId = page.id;
+    const pageContent = page.content;
+    const title = page.title;
     const slug = titleToSlug(title);
     const outputPath = join('wiki', 'topics', `${slug}.md`);
     const absoluteOutputPath = join(workspacePath, outputPath);
     const tmpPath = `${absoluteOutputPath}.tmp`;
 
-    // 5. Atomic write.
+    // 4. Atomic write.
     try {
       writeFileSync(tmpPath, pageContent, 'utf-8');
       renameSync(tmpPath, absoluteOutputPath);
@@ -242,18 +292,25 @@ export async function synthesizeTopics(
       return err(e instanceof Error ? e : new Error(String(e)));
     }
 
-    // 6. Insert compilation record.
+    // 5. UPSERT compilation record (keyed on the stable id → idempotent re-runs).
     try {
       db.prepare<[string, string | null, string, string, string, number, string, number], void>(
         `INSERT INTO compilations
            (id, source_id, type, output_path, compiled_at, stale, model, tokens_used)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           type = excluded.type,
+           output_path = excluded.output_path,
+           compiled_at = excluded.compiled_at,
+           stale = excluded.stale,
+           model = excluded.model,
+           tokens_used = excluded.tokens_used`,
       ).run(compilationId, null, 'topic', outputPath, compiledAt, 0, responseModel, tokensUsed);
     } catch (e) {
       return err(e instanceof Error ? e : new Error(String(e)));
     }
 
-    // 7. Record provenance (batch operation — no single source_id).
+    // 6. Record provenance (batch operation — no single source_id).
     const provenanceResult = recordProvenance(db, workspacePath, {
       sourceId: 'batch',
       outputPath,
@@ -264,7 +321,7 @@ export async function synthesizeTopics(
       return err(provenanceResult.error);
     }
 
-    // 8. Write trace event.
+    // 7. Write trace event.
     const traceResult = writeTrace(db, workspacePath, 'compile.synthesize', {
       compilationId,
       outputPath,
@@ -274,7 +331,7 @@ export async function synthesizeTopics(
       return err(traceResult.error);
     }
 
-    // 9. Append audit log entry.
+    // 8. Append audit log entry.
     const auditResult = appendAuditLog(
       workspacePath,
       'compile.synthesize',

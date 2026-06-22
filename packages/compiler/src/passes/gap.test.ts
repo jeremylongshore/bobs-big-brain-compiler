@@ -83,6 +83,48 @@ function mockClientError(message: string): ClaudeClient {
   };
 }
 
+/**
+ * Mock a client that returns a different response per call. The Nth invocation
+ * (1-indexed by batch) resolves the Nth response in `responsesByCall`; calls
+ * past the end re-use the last response. Lets a test drive multi-batch behavior.
+ */
+function mockClientSequence(responsesByCall: string[]): ClaudeClient {
+  let call = 0;
+  return {
+    createCompletion: vi.fn().mockImplementation(() => {
+      const response = responsesByCall[Math.min(call, responsesByCall.length - 1)] ?? '';
+      call++;
+      return Promise.resolve(
+        ok({
+          content: response,
+          inputTokens: 500,
+          outputTokens: 200,
+          model: 'claude-sonnet-4-6',
+          stopReason: 'end_turn',
+        }),
+      );
+    }),
+  };
+}
+
+/** Build a minimal gap page string with a given title + related_page_ids list. */
+function gapPage(title: string, relatedIds: string[]): string {
+  return `---
+type: open-question
+id: gen-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}
+title: ${title}
+priority: medium
+evidence_strength: weak
+related_page_ids:
+${relatedIds.map((r) => `  - ${r}`).join('\n')}
+compiled_at: 2026-04-06T00:00:00.000Z
+model: claude-sonnet-4-6
+---
+
+## The Gap
+Gap body for ${title}.`;
+}
+
 interface TestEnv {
   wsRoot: string;
   dbPath: string;
@@ -325,5 +367,154 @@ No evaluation methodology is described.
     const userPrompt = String(callArgs[1] ?? '');
     expect(userPrompt).toContain('wiki/sources');
     expect(userPrompt).toContain('wiki/concepts');
+  });
+
+  // -------------------------------------------------------------------------
+  // 12. Small-corpus parity — a corpus that fits in one batch makes exactly
+  //     one Claude call (the old single-call behavior is unchanged).
+  // -------------------------------------------------------------------------
+
+  it('makes exactly one Claude call when all pages fit in a single batch', async () => {
+    // beforeEach writes 1 source; default batch size (25) holds it in one batch.
+    const client = mockClient(MOCK_GAP_PAGE);
+    const result = await identifyGaps(client, env.db, env.wsRoot);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // 13. Batching — many compiled pages are processed across batches, each
+  //     yielding a distinct gap, far exceeding a single truncated call.
+  // -------------------------------------------------------------------------
+
+  it('processes all compiled pages across batches, far exceeding a single call', async () => {
+    // Write 40 concept pages (gap reads sources + concepts + topics).
+    const conceptsDir = join(env.wsRoot, 'wiki', 'concepts');
+    mkdirSync(conceptsDir, { recursive: true });
+    for (let i = 0; i < 40; i++) {
+      writeFileSync(
+        join(conceptsDir, `concept-${String(i).padStart(2, '0')}.md`),
+        `---\ntype: concept\nid: con-${i}\ntitle: Concept ${i}\n---\n\nConcept ${i} body.`,
+        'utf-8',
+      );
+    }
+
+    // Each batch emits one DISTINCT gap page (parameterised by call index).
+    let call = 0;
+    const client: ClaudeClient = {
+      createCompletion: vi.fn().mockImplementation(() => {
+        const idx = call++;
+        return Promise.resolve(
+          ok({
+            content: gapPage(`Gap Batch ${idx}`, [`p-${idx}`]),
+            inputTokens: 500,
+            outputTokens: 200,
+            model: 'claude-sonnet-4-6',
+            stopReason: 'end_turn',
+          }),
+        );
+      }),
+    };
+
+    // batchSize 10 over 41 pages (1 source from beforeEach + 40 concepts) → 5 batches.
+    const result = await identifyGaps(client, env.db, env.wsRoot, { batchSize: 10 });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // 41 / 10 = 5 batch calls (last batch holds the remainder).
+    expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(5);
+
+    expect(result.value.length).toBe(5);
+    expect(result.value.length).toBeGreaterThan(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // 14. Per-batch sentinel — a batch returning NO_GAPS_FOUND contributes no
+  //     pages; other batches still produce theirs.
+  // -------------------------------------------------------------------------
+
+  it('honors NO_GAPS_FOUND per batch (mixed empty + non-empty batches)', async () => {
+    // Add a second compiled page so two batches of size 1 are formed.
+    const conceptsDir = join(env.wsRoot, 'wiki', 'concepts');
+    mkdirSync(conceptsDir, { recursive: true });
+    writeFileSync(
+      join(conceptsDir, 'concept-a.md'),
+      '---\ntype: concept\nid: con-a\ntitle: Concept A\n---\nBody.',
+      'utf-8',
+    );
+
+    // Batch 1 finds nothing; batch 2 finds a gap. Only one page results.
+    const client = mockClientSequence(['NO_GAPS_FOUND', gapPage('Only Gap', ['p-x'])]);
+
+    const result = await identifyGaps(client, env.db, env.wsRoot, { batchSize: 1 });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
+    expect(result.value).toHaveLength(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // 15. Dedupe/merge — two batches emitting the same-titled gap collapse to one
+  //     page whose related_page_ids union both contributions.
+  // -------------------------------------------------------------------------
+
+  it('merges a same-titled gap from two batches with both related_page_ids', async () => {
+    // Add a second compiled page so two batches of size 1 are formed.
+    const conceptsDir = join(env.wsRoot, 'wiki', 'concepts');
+    mkdirSync(conceptsDir, { recursive: true });
+    writeFileSync(
+      join(conceptsDir, 'concept-b.md'),
+      '---\ntype: concept\nid: con-b\ntitle: Concept B\n---\nBody.',
+      'utf-8',
+    );
+
+    const client = mockClientSequence([
+      gapPage('Shared Gap', ['p-aaa']),
+      gapPage('Shared Gap', ['p-bbb']),
+    ]);
+
+    const result = await identifyGaps(client, env.db, env.wsRoot, { batchSize: 1 });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
+    expect(result.value).toHaveLength(1);
+
+    const written = readFileSync(join(env.wsRoot, result.value[0]!.outputPath), 'utf-8');
+    expect(written).toContain('p-aaa');
+    expect(written).toContain('p-bbb');
+
+    const rows = env.db
+      .prepare<[], { count: number }>(`SELECT COUNT(*) AS count FROM compilations`)
+      .all();
+    expect(rows[0]!.count).toBe(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // 16. Idempotency — re-running does not duplicate compilation rows.
+  // -------------------------------------------------------------------------
+
+  it('re-running the pass UPSERTs rather than duplicating compilation rows', async () => {
+    const client1 = mockClient(gapPage('Stable Gap', ['p1']));
+    const first = await identifyGaps(client1, env.db, env.wsRoot);
+    expect(first.ok).toBe(true);
+
+    const client2 = mockClient(gapPage('Stable Gap', ['p1', 'p2']));
+    const second = await identifyGaps(client2, env.db, env.wsRoot);
+    expect(second.ok).toBe(true);
+
+    const rows = env.db
+      .prepare<
+        [],
+        { count: number }
+      >(`SELECT COUNT(*) AS count FROM compilations WHERE type = 'open-question'`)
+      .all();
+    expect(rows[0]!.count).toBe(1);
   });
 });
