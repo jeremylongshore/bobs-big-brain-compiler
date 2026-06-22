@@ -18,8 +18,9 @@
  * @module commands/spool
  */
 
-import { existsSync, lstatSync, realpathSync } from 'node:fs';
-import { isAbsolute, resolve } from 'node:path';
+import { existsSync, lstatSync, mkdirSync, realpathSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { isAbsolute, join, resolve } from 'node:path';
 
 import type { Command } from 'commander';
 
@@ -70,26 +71,72 @@ interface PathValidationErr {
 type PathValidation = PathValidationOk | PathValidationErr;
 
 /**
+ * Resolve the TeamKB (INTKB) base directory that ICO and INTKB share.
+ *
+ * This is the write-side half of the ICO → INTKB spool handoff. INTKB's
+ * reader resolves its spool dir as `(TEAMKB_BASE_PATH ?? ~/.teamkb)/spool`
+ * (see `@qmd-team-intent-kb/common` `getTeamKbBasePath` →
+ * `resolveTeamKbPath('spool')`). To make a default `ico spool emit` land in
+ * the directory INTKB actually polls — instead of `<workspace>/spool`, which
+ * INTKB never reads — ICO must derive the same base.
+ *
+ * Env precedence:
+ *  1. `TEAMKB_BASE_PATH` — INTKB's canonical override (matches its reader).
+ *  2. `TEAMKB_HOME` — ICO's pre-existing allowlist root (back-compat).
+ *  3. `~/.teamkb` — the shared default when neither is set.
+ *
+ * Both env names are honoured so an operator who set either one gets a
+ * consistent write/read path without further wiring.
+ */
+function resolveTeamKbBase(): string {
+  const basePath = process.env['TEAMKB_BASE_PATH'];
+  if (typeof basePath === 'string' && basePath.trim() !== '') {
+    return resolve(basePath.trim());
+  }
+  const teamKbHome = process.env['TEAMKB_HOME'];
+  if (typeof teamKbHome === 'string' && teamKbHome.trim() !== '') {
+    return resolve(teamKbHome.trim());
+  }
+  return resolve(join(homedir(), '.teamkb'));
+}
+
+/**
+ * The default spool output directory — the INTKB-compatible read path.
+ * Used when `--out` is omitted so the handoff is wired by default.
+ */
+function defaultSpoolDir(): string {
+  return join(resolveTeamKbBase(), 'spool');
+}
+
+/**
  * Validate an `--out` argument against path-traversal / symlink-swap attacks.
  * Resolves the candidate path via `realpath` and asserts it is a prefix of
- * either `workspacePath` or `$TEAMKB_HOME`. Also rejects if any path
- * component is a symlink owned by a user other than the current user.
+ * either `workspacePath` or the shared TeamKB base (see `resolveTeamKbBase`).
+ * Also rejects if any path component is a symlink owned by a user other than
+ * the current user.
+ *
+ * When `--out` is omitted the default is the INTKB read path
+ * (`resolveTeamKbBase()/spool`), wiring the ICO → INTKB handoff out of the box.
  *
  * The path does not need to exist yet — the existence-check happens in the
  * kernel layer. We only validate the resolved-prefix property.
  */
 function validateOutDir(outRaw: string | undefined, workspacePath: string): PathValidation {
+  // No --out: default to INTKB's read path so the spool handoff is wired
+  // out of the box. `<workspace>/spool` was the historical default but INTKB
+  // never reads it; emitting there means zero candidates flow without manual
+  // operator wiring (see grounding: "ICO spool write path and INTKB spool read
+  // path do not match by default").
   if (outRaw === undefined) {
-    return { ok: true, resolved: resolve(workspacePath, 'spool') };
+    return { ok: true, resolved: defaultSpoolDir() };
   }
   const absolute = isAbsolute(outRaw) ? outRaw : resolve(workspacePath, outRaw);
 
-  // Determine allowed roots.
-  const teamKbHome = process.env['TEAMKB_HOME'];
-  const allowedRoots: string[] = [resolve(workspacePath)];
-  if (teamKbHome !== undefined && teamKbHome.trim() !== '') {
-    allowedRoots.push(resolve(teamKbHome));
-  }
+  // Determine allowed roots: the workspace, plus the shared TeamKB base so an
+  // explicit `--out ~/.teamkb/spool` (or under TEAMKB_BASE_PATH / TEAMKB_HOME)
+  // is accepted — the same base the default resolves to.
+  const teamKbBase = resolveTeamKbBase();
+  const allowedRoots: string[] = [resolve(workspacePath), teamKbBase];
 
   // Resolve the parent path (deepest existing ancestor) via realpath to
   // collapse symlinks. We do not require the leaf to exist.
@@ -131,9 +178,9 @@ function validateOutDir(outRaw: string | undefined, workspacePath: string): Path
   if (!inside) {
     return {
       ok: false,
-      message: `--out must resolve to a path inside the workspace${
-        teamKbHome ? ' or $TEAMKB_HOME' : ''
-      }. Resolved: ${resolved}`,
+      message:
+        `--out must resolve to a path inside the workspace or the shared TeamKB base (${teamKbBase}). ` +
+        `Resolved: ${resolved}`,
       exitCode: 1,
     };
   }
@@ -294,6 +341,21 @@ export function runSpoolEmit(options: SpoolEmitOptions, command: Command): void 
   }
 
   // --- Live emit path ---
+  // The emit step owns creating its output directory. The default
+  // (resolveTeamKbBase()/spool) may not exist on a fresh machine or in CI;
+  // validateOutDir has already constrained outDirAbs to an allowed root with
+  // symlink defences, so creating it here is safe and wires the ICO -> INTKB
+  // handoff out of the box.
+  try {
+    mkdirSync(outDirAbs, { recursive: true });
+  } catch (e) {
+    process.stderr.write(
+      formatError(
+        `Cannot create spool output directory "${outDirAbs}": ${e instanceof Error ? e.message : String(e)}\n`,
+      ),
+    );
+    process.exit(1);
+  }
   const dbResult = initDatabase(ws.value.dbPath);
   if (!dbResult.ok) {
     process.stderr.write(formatError(`Database error: ${dbResult.error.message}\n`));
@@ -348,7 +410,11 @@ export function register(program: Command): void {
   spool
     .command('emit')
     .description('Emit compiled artifacts to the spool directory for INTKB ingestion')
-    .option('--out <dir>', 'Spool output directory (default: <workspace>/spool)')
+    .option(
+      '--out <dir>',
+      'Spool output directory (default: the INTKB read path, ' +
+        '$TEAMKB_BASE_PATH/spool or ~/.teamkb/spool)',
+    )
     .option(
       '--scope <scope>',
       `Which artifacts to emit: ${VALID_SCOPES.join(' | ')} (default: wiki)`,
