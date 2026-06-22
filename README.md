@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-# intentional-cognition-os v1.14.0
+# intentional-cognition-os v1.16.0
 
 Compile knowledge for the machine. Distill understanding for the human.
 
@@ -38,7 +38,7 @@ It is a cognition runtime, not a chat wrapper. The model proposes; a determinist
 
 ```bash
 npm install -g intentional-cognition-os
-ico --version          # → 1.14.0
+ico --version          # → 1.16.0
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
@@ -163,7 +163,7 @@ Global flags on every command: `--workspace <path>`, `--json`, `--verbose`, `--q
 
 ## Status
 
-**v1.14.0 — stable.** 1.14.0 tests passing across 5 packages. Used daily by the author. Public release on npm.
+**v1.16.0 — stable.** 1.16.0 tests passing across 5 packages. Used daily by the author. Public release on npm.
 
 - **Stable**: all 16 commands, the compilation passes, ask + research + recall + render + promote, the audit chain.
 - **In progress**: post-v1 coverage uplift on compiler + cli packages; mutation-testing baseline.

@@ -7,7 +7,7 @@
  * @module commands/ingest
  */
 
-import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, extname, join, relative } from 'node:path';
 import { createInterface } from 'node:readline';
 
@@ -18,9 +18,11 @@ import {
   appendAuditLog,
   closeDatabase,
   computeFileHash,
+  disclosureLabel,
   initDatabase,
   isSourceChanged,
   registerSource,
+  scanForDisclosure,
   writeTrace,
 } from '@ico/kernel';
 import type { Source } from '@ico/types';
@@ -249,17 +251,20 @@ export function runIngest(
   }
   const { root: wsRoot, dbPath } = wsResult.value;
 
-  // 2. Validate the file exists and is readable
-  if (!existsSync(filePath)) {
-    return { ok: false, error: new Error(`File not found: ${filePath}`) };
-  }
-
-  let fileSize: number;
+  // 2. Read the source once — this single read is the existence gate, the size
+  //    measurement, AND the bytes the disclosure scan (step 5b) operates on.
+  //    Reading once, rather than exists/stat THEN read, avoids a check-then-use
+  //    (TOCTOU) race where the file changes between the check and the read.
+  let rawBytes: Buffer;
   try {
-    fileSize = statSync(filePath).size;
+    rawBytes = readFileSync(filePath);
   } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+      return { ok: false, error: new Error(`File not found: ${filePath}`) };
+    }
     return { ok: false, error: e instanceof Error ? e : new Error(String(e)) };
   }
+  const fileSize = rawBytes.length;
 
   // 3. Determine source type
   const sourceType = detectSourceType(filePath);
@@ -284,6 +289,27 @@ export function runIngest(
     return { ok: false, error: hashResult.error };
   }
   const hash = hashResult.value;
+
+  // 5b. Disclosure pre-check — reject comp/PII at the source, before any write.
+  //     The governed brain is append-only and must never hold compensation,
+  //     comp-splits, anyone's pay, or PII. `ico ingest` copies the source into the
+  //     workspace + SQLite *before* it spools to INTKB, so this is the source-side
+  //     choke (mirrors intent-os/ci/disclosure-gate.sh + INTKB's intake filter).
+  //     Scans the bytes read in step 2 as UTF-8 — complete for markdown/html/text
+  //     (the corpus); a PDF's compressed text is not reached here, but INTKB's
+  //     repository-layer choke backstops the spool path. Runs before the DB is
+  //     opened so a rejection leaks no resources and leaves no trace/audit entry.
+  const violation = scanForDisclosure(rawBytes.toString('utf-8'));
+  if (violation) {
+    return {
+      ok: false,
+      error: new Error(
+        `Disclosure check failed: ${disclosureLabel(violation.category)} content detected ` +
+          `("${violation.match}") in ${basename(filePath)}. The governed brain must never hold ` +
+          `compensation or PII — move it to Jeremy-private and leave a pointer, then re-ingest.`,
+      ),
+    };
+  }
 
   // 6. Build destination path: workspace/raw/<subdir>/<slug>
   const subdir = TYPE_TO_SUBDIR[sourceType];
