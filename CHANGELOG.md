@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.16.1] - 2026-06-22
+
+- EPIC 0 — ICO->INTKB spool write side (#142) (1aa9f74)
+- chore(beads): close cze.1 — ingest disclosure guard merged (#144) (3d5ff4f)
+
 ## [v1.16.0] - 2026-06-21
 
 - feat(ingest): reject comp/PII at the source with an ico ingest disclosure guard (cze.1) (#144) (051fc1c)
