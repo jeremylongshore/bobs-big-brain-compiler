@@ -254,6 +254,66 @@ function stripFrontmatterListKey(content: string, key: string): string {
   return `${leading}${open}${kept.join('\n')}${close}${after}`;
 }
 
+/**
+ * Guarantee a page begins with a well-formed `---` … `---` YAML frontmatter
+ * fence.
+ *
+ * The cross-source prompts instruct the model to fence each page, but only
+ * emphasise the fence "for the first page", so the model intermittently emits
+ * continuation pages as a bare YAML block (`type: …\nid: …\n…`) followed by a
+ * blank line and the Markdown body, with NO `---` fences at all. `gray-matter`
+ * (the spool reader's parser) only recognises frontmatter delimited by a
+ * leading `---`, so a fence-less page parses as all-body with empty frontmatter
+ * → its `type` is undefined → `ico spool emit` skips it as MISSING_TYPE and the
+ * page never reaches the govern store (bead intentional-cognition-os-57c: 205
+ * such pages — 183 open-questions, 18 contradictions, 4 topics — silently
+ * dropped on the 2026-06-22 full run).
+ *
+ * The deterministic write path owns the page contract, so we repair the fence
+ * here rather than trusting the model. A page that already opens with `---` is
+ * returned unchanged. Otherwise the leading run of YAML-ish lines (key lines,
+ * indented list/continuation lines, and blanks interior to that run) is treated
+ * as frontmatter and wrapped in fences; the first Markdown/body line ends it. If
+ * no leading YAML block is recognised the content is returned unchanged (we
+ * never guess a fence around prose).
+ */
+export function ensureFrontmatterFence(content: string): string {
+  const trimmed = content.trimStart();
+  if (trimmed.startsWith('---')) return content; // already fenced
+
+  const leadingWs = content.slice(0, content.length - trimmed.length);
+  const lines = trimmed.split('\n');
+
+  // A key line (`name: …`) or an indented continuation / list item (`  - x`).
+  const isYamlish = (line: string): boolean =>
+    /^[A-Za-z_][A-Za-z0-9_-]*\s*:/.test(line) || /^\s+\S/.test(line);
+
+  let end = 0; // exclusive index past the last frontmatter line
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    if (isYamlish(line)) {
+      end = i + 1;
+      continue;
+    }
+    if (line.trim() === '') {
+      // A blank line is interior to the block only if more YAML follows before
+      // any body line; otherwise it is the frontmatter/body separator.
+      let j = i + 1;
+      while (j < lines.length && lines[j]!.trim() === '') j++;
+      if (j < lines.length && isYamlish(lines[j]!)) continue;
+      break;
+    }
+    break; // first Markdown/body line (e.g. `## The Gap`)
+  }
+
+  if (end === 0) return content; // no recognisable frontmatter — leave untouched
+
+  const frontmatter = lines.slice(0, end).join('\n').replace(/\s+$/, '');
+  const body = lines.slice(end).join('\n').replace(/^\s+/, '');
+  const bodyBlock = body.length > 0 ? `\n\n${body}` : '\n';
+  return `${leadingWs}---\n${frontmatter}\n---${bodyBlock}`;
+}
+
 // ---------------------------------------------------------------------------
 // Merge
 // ---------------------------------------------------------------------------
@@ -324,6 +384,12 @@ export function mergePages(rawPages: readonly string[], options: MergePagesOptio
     const id = deriveStableId(key);
     let content = setFrontmatterField(group.chosen, 'id', id);
     content = setFrontmatterList(content, options.listField, group.ids);
+    // Guarantee the `---` frontmatter fence LAST: if the model emitted this page
+    // without it, the id stamp + list union above are no-ops on the bare YAML
+    // block (so the model's original list survives), and this wrap makes the
+    // page parseable by the spool reader (bead ...-57c). Already-fenced pages
+    // are returned unchanged.
+    content = ensureFrontmatterFence(content);
     return { key, id, title: group.title, content };
   });
 }

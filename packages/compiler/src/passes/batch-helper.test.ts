@@ -4,11 +4,13 @@
  * Pure functions only — no workspace, no DB, no Claude client.
  */
 
+import matter from 'gray-matter';
 import { describe, expect, it } from 'vitest';
 
 import {
   chunkArray,
   deriveStableId,
+  ensureFrontmatterFence,
   extractFrontmatterField,
   mergePages,
   normalizeTitle,
@@ -242,5 +244,91 @@ describe('mergePages', () => {
     const long = conceptPage('topic', ['s2'], 'a much longer and richer definition body');
     const merged = mergePages([short, long], { listField: 'source_ids' });
     expect(merged[0]!.content).toContain('a much longer and richer definition body');
+  });
+
+  it('wraps a fence-less merged page so the spool reader can parse it (bead 57c)', () => {
+    // Exactly the shape the model intermittently produced: a bare YAML block,
+    // NO `---` fences, a blank line, then the Markdown body. Pre-fix these were
+    // skipped at spool emit as MISSING_TYPE and never reached the govern store.
+    const fenceless = `type: open-question
+id: 11111111-1111-4111-8111-111111111111
+title: How does MCP handle error recovery?
+priority: medium
+related_page_ids:
+  - 7b3e2f1a-8c4d-4e5f-9a6b-0c1d2e3f4a5b
+compiled_at: 2026-06-22T05:40:17.919Z
+model: deepseek-chat
+
+## The Gap
+
+No data on error recovery semantics.`;
+    const merged = mergePages([fenceless], { listField: 'related_page_ids' });
+    const content = merged[0]!.content;
+    // gray-matter (the spool reader's parser) now extracts the frontmatter.
+    const parsed = matter(content);
+    expect(parsed.data['type']).toBe('open-question');
+    expect(parsed.data['title']).toBe('How does MCP handle error recovery?');
+    expect(parsed.content.trim()).toContain('## The Gap');
+    // The model's original related_page_ids survive the wrap (not overwritten).
+    expect(parsed.data['related_page_ids']).toEqual(['7b3e2f1a-8c4d-4e5f-9a6b-0c1d2e3f4a5b']);
+    // And the stable id was still stamped.
+    expect(parsed.data['id']).toBe(deriveStableId('how-does-mcp-handle-error-recovery'));
+  });
+});
+
+describe('ensureFrontmatterFence', () => {
+  it('returns an already-fenced page unchanged', () => {
+    const fenced = conceptPage('Knowledge Compilation', ['s1']);
+    expect(ensureFrontmatterFence(fenced)).toBe(fenced);
+  });
+
+  it('wraps a bare YAML block (blank-line separated body) in --- fences', () => {
+    const bare = `type: open-question
+id: abc
+title: A question about MCP latency (e.g., Azure Content Safety)
+priority: low
+tags:
+  - mcp
+  - latency
+
+## The Gap
+
+Some body text.`;
+    const out = ensureFrontmatterFence(bare);
+    expect(out.startsWith('---\n')).toBe(true);
+    const parsed = matter(out);
+    expect(parsed.data['type']).toBe('open-question');
+    expect(parsed.data['priority']).toBe('low');
+    expect(parsed.data['tags']).toEqual(['mcp', 'latency']);
+    expect(parsed.content.trim()).toBe('## The Gap\n\nSome body text.');
+  });
+
+  it('treats list items + interior blanks as frontmatter, stopping at the body', () => {
+    const bare = `type: contradiction
+id: xyz
+title: Conflicting claims
+source_ids:
+  - a
+  - b
+
+## Claim A
+
+text`;
+    const out = ensureFrontmatterFence(bare);
+    const parsed = matter(out);
+    expect(parsed.data['source_ids']).toEqual(['a', 'b']);
+    expect(parsed.content.trim().startsWith('## Claim A')).toBe(true);
+  });
+
+  it('leaves prose with no leading YAML block untouched (never guesses a fence)', () => {
+    const prose = `This is just a paragraph of text.\n\nNo frontmatter here.`;
+    expect(ensureFrontmatterFence(prose)).toBe(prose);
+  });
+
+  it('wraps a frontmatter-only page (no body) without inventing content', () => {
+    const bare = `type: open-question\nid: q1\ntitle: Standalone`;
+    const out = ensureFrontmatterFence(bare);
+    expect(matter(out).data['type']).toBe('open-question');
+    expect(matter(out).content.trim()).toBe('');
   });
 });
