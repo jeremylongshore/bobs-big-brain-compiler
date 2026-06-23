@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.17.0] - 2026-06-23
+
+- feat(compiler): batch the cross-source compile passes (scale to large corpora) (#145) (c4062d4)
+
 ## [v1.16.1] - 2026-06-22
 
 - EPIC 0 — ICO->INTKB spool write side (#142) (1aa9f74)
