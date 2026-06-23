@@ -302,6 +302,25 @@ function inferPageType(page: CompiledPage, parent: 'wiki' | 'outputs'): Compiled
   }
 }
 
+/**
+ * Explain WHY a page yielded no usable page type, so the MISSING_TYPE skip is
+ * actionable instead of a catch-all. The dominant real-world cause is a page the
+ * model emitted without the opening `---` frontmatter fence: gray-matter then
+ * parses zero frontmatter keys, so `type` is absent (bead
+ * intentional-cognition-os-57c). Distinguish that from a present-but-unrecognised
+ * `type` value and from a fenced page that simply omitted `type`.
+ */
+function describeMissingType(page: CompiledPage): string {
+  if (Object.keys(page.frontmatter).length === 0) {
+    return "no parseable frontmatter — page is missing the opening '---' fence (or the YAML failed to parse)";
+  }
+  const t = page.frontmatter['type'];
+  if (typeof t === 'string') {
+    return `frontmatter type "${t}" is not a recognised CompiledPageType`;
+  }
+  return "frontmatter has no 'type' field";
+}
+
 // ---------------------------------------------------------------------------
 // Internal: candidate builder
 // ---------------------------------------------------------------------------
@@ -566,7 +585,7 @@ export function emitSpool(
       skipped.push({
         path: page.relPath,
         code: 'MISSING_TYPE',
-        detail: 'frontmatter type field missing or not a recognised CompiledPageType value',
+        detail: describeMissingType(page),
       });
       continue;
     }
@@ -729,7 +748,7 @@ export function dryRunSpool(
       skipped.push({
         path: page.relPath,
         code: 'MISSING_TYPE',
-        detail: 'frontmatter type missing/invalid',
+        detail: describeMissingType(page),
       });
       continue;
     }

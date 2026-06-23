@@ -44,6 +44,15 @@ export {
 } from './passes/summarize.js';
 export { extractConcepts, type ExtractOptions, type ExtractResult } from './passes/extract.js';
 export {
+  chunkArray,
+  DEFAULT_BATCH_SIZE,
+  deriveStableId,
+  mergePages,
+  normalizeTitle,
+  type MergedPage,
+  type MergePagesOptions,
+} from './passes/batch-helper.js';
+export {
   synthesizeTopics,
   type SynthesizeOptions,
   type SynthesizeResult,

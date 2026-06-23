@@ -92,6 +92,46 @@ function mockClientError(message: string): ClaudeClient {
   };
 }
 
+/**
+ * Mock a client that returns a different response per call. The Nth invocation
+ * (1-indexed by batch) resolves the Nth response in `responsesByCall`; calls
+ * past the end re-use the last response. Lets a test drive multi-batch behavior.
+ */
+function mockClientSequence(responsesByCall: string[]): ClaudeClient {
+  let call = 0;
+  return {
+    createCompletion: vi.fn().mockImplementation(() => {
+      const response = responsesByCall[Math.min(call, responsesByCall.length - 1)] ?? '';
+      call++;
+      return Promise.resolve(
+        ok({
+          content: response,
+          inputTokens: 500,
+          outputTokens: 200,
+          model: 'claude-sonnet-4-6',
+          stopReason: 'end_turn',
+        }),
+      );
+    }),
+  };
+}
+
+/** Build a minimal concept page string with a given title + source_ids list. */
+function conceptPage(title: string, sourceIds: string[]): string {
+  return `---
+type: concept
+id: gen-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}
+title: ${title}
+definition: A short definition of ${title}.
+source_ids:
+${sourceIds.map((s) => `  - ${s}`).join('\n')}
+compiled_at: 2026-04-06T00:00:00.000Z
+model: claude-sonnet-4-6
+---
+
+Body for ${title}.`;
+}
+
 interface TestEnv {
   wsRoot: string;
   dbPath: string;
@@ -299,5 +339,140 @@ describe('extractConcepts', () => {
     ]);
 
     expect(result.ok).toBe(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // 11. Batching — 60 summaries are processed across batches, yielding far
+  //     more pages than a single truncated call would.
+  // -------------------------------------------------------------------------
+
+  it('processes all 60 summaries across batches, far exceeding a single call', async () => {
+    // Write 60 distinct summary files.
+    const summaryPaths: string[] = [];
+    const sourcesDir = join(env.wsRoot, 'wiki', 'sources');
+    mkdirSync(sourcesDir, { recursive: true });
+    for (let i = 0; i < 60; i++) {
+      const rel = `wiki/sources/source-${String(i).padStart(2, '0')}.md`;
+      writeFileSync(
+        join(env.wsRoot, rel),
+        `---\ntype: source-summary\nid: src-${i}\ntitle: Source ${i}\n---\n\nContent about concept ${i}.`,
+        'utf-8',
+      );
+      summaryPaths.push(rel);
+    }
+
+    // Each batch call emits one DISTINCT concept page per call (parameterised by
+    // call index), so the number of pages scales with the number of batches.
+    // A single call (the old behavior) would have produced just 1 page.
+    let call = 0;
+    const client: ClaudeClient = {
+      createCompletion: vi.fn().mockImplementation(() => {
+        const idx = call++;
+        return Promise.resolve(
+          ok({
+            content: conceptPage(`Concept Batch ${idx}`, [`src-${idx}`]),
+            inputTokens: 500,
+            outputTokens: 200,
+            model: 'claude-sonnet-4-6',
+            stopReason: 'end_turn',
+          }),
+        );
+      }),
+    };
+
+    // batchSize 10 over 60 summaries → 6 batches → 6 distinct concept pages.
+    const result = await extractConcepts(client, env.db, env.wsRoot, summaryPaths, {
+      batchSize: 10,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // 60 / 10 = 6 batch calls.
+    expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(6);
+
+    // Far more than the single page a single-call run would yield.
+    expect(result.value.length).toBe(6);
+    expect(result.value.length).toBeGreaterThan(1);
+
+    // Every page was actually written to disk.
+    for (const r of result.value) {
+      expect(existsSync(join(env.wsRoot, r.outputPath))).toBe(true);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // 12. Dedupe/merge — two batches emitting the same-titled concept collapse
+  //     to one page whose source_ids union both batches' contributions.
+  // -------------------------------------------------------------------------
+
+  it('merges a same-titled concept from two batches into one page with both source_ids', async () => {
+    // Two summary files → batchSize 1 forces two separate batch calls.
+    const summaryPaths: string[] = [];
+    const sourcesDir = join(env.wsRoot, 'wiki', 'sources');
+    mkdirSync(sourcesDir, { recursive: true });
+    for (let i = 0; i < 2; i++) {
+      const rel = `wiki/sources/dup-source-${i}.md`;
+      writeFileSync(
+        join(env.wsRoot, rel),
+        `---\ntype: source-summary\nid: dup-src-${i}\ntitle: Dup Source ${i}\n---\n\nBoth mention shared concept.`,
+        'utf-8',
+      );
+      summaryPaths.push(rel);
+    }
+
+    // Batch 1 emits the concept with source s-aaa; batch 2 emits the SAME
+    // concept title with source s-bbb. They must merge to one page.
+    const client = mockClientSequence([
+      conceptPage('Shared Concept', ['s-aaa']),
+      conceptPage('Shared Concept', ['s-bbb']),
+    ]);
+
+    const result = await extractConcepts(client, env.db, env.wsRoot, summaryPaths, {
+      batchSize: 1,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Two batch calls were made.
+    expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
+
+    // But only ONE merged concept page results.
+    expect(result.value).toHaveLength(1);
+
+    // The written page carries BOTH source_ids.
+    const written = readFileSync(join(env.wsRoot, result.value[0]!.outputPath), 'utf-8');
+    expect(written).toContain('s-aaa');
+    expect(written).toContain('s-bbb');
+
+    // And exactly one compilations row exists (idempotent UPSERT on the stable id).
+    const rows = env.db
+      .prepare<[], { count: number }>(`SELECT COUNT(*) AS count FROM compilations`)
+      .all();
+    expect(rows[0]!.count).toBe(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // 13. Idempotency — re-running over the same summaries does not duplicate
+  //     compilation rows (stable id + UPSERT).
+  // -------------------------------------------------------------------------
+
+  it('re-running the pass UPSERTs rather than duplicating compilation rows', async () => {
+    const client1 = mockClient(conceptPage('Stable Topic', ['s1']));
+    const first = await extractConcepts(client1, env.db, env.wsRoot, [SUMMARY_PATH]);
+    expect(first.ok).toBe(true);
+
+    const client2 = mockClient(conceptPage('Stable Topic', ['s1', 's2']));
+    const second = await extractConcepts(client2, env.db, env.wsRoot, [SUMMARY_PATH]);
+    expect(second.ok).toBe(true);
+
+    const rows = env.db
+      .prepare<
+        [],
+        { count: number }
+      >(`SELECT COUNT(*) AS count FROM compilations WHERE type = 'concept'`)
+      .all();
+    expect(rows[0]!.count).toBe(1);
   });
 });

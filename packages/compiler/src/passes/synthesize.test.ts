@@ -88,6 +88,48 @@ function mockClientError(message: string): ClaudeClient {
   };
 }
 
+/**
+ * Mock a client that returns a different response per call. The Nth invocation
+ * (1-indexed by batch) resolves the Nth response in `responsesByCall`; calls
+ * past the end re-use the last response. Lets a test drive multi-batch behavior.
+ */
+function mockClientSequence(responsesByCall: string[]): ClaudeClient {
+  let call = 0;
+  return {
+    createCompletion: vi.fn().mockImplementation(() => {
+      const response = responsesByCall[Math.min(call, responsesByCall.length - 1)] ?? '';
+      call++;
+      return Promise.resolve(
+        ok({
+          content: response,
+          inputTokens: 500,
+          outputTokens: 200,
+          model: 'claude-sonnet-4-6',
+          stopReason: 'end_turn',
+        }),
+      );
+    }),
+  };
+}
+
+/** Build a minimal topic page string with a given title + concept_ids list. */
+function topicPage(title: string, conceptIds: string[]): string {
+  return `---
+type: topic
+id: gen-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}
+title: ${title}
+summary: A short summary of ${title}.
+source_ids:
+  - some-source
+concept_ids:
+${conceptIds.map((c) => `  - ${c}`).join('\n')}
+compiled_at: 2026-04-06T00:00:00.000Z
+model: claude-sonnet-4-6
+---
+
+Body for ${title}.`;
+}
+
 interface TestEnv {
   wsRoot: string;
   dbPath: string;
@@ -300,5 +342,135 @@ Evidence quality varies significantly across the reviewed sources.
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.length).toBe(2);
+  });
+
+  // -------------------------------------------------------------------------
+  // 11. Small-corpus parity — a corpus that fits in one batch makes exactly
+  //     one Claude call (the old single-call behavior is unchanged).
+  // -------------------------------------------------------------------------
+
+  it('makes exactly one Claude call when all summaries fit in a single batch', async () => {
+    // beforeEach writes 2 summaries; default batch size (25) holds them in one batch.
+    const client = mockClient(MOCK_API_RESPONSE);
+    const result = await synthesizeTopics(client, env.db, env.wsRoot);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // 12. Batching — many summaries are processed across batches, yielding more
+  //     topic pages than a single truncated call would.
+  // -------------------------------------------------------------------------
+
+  it('processes all summaries across batches, far exceeding a single call', async () => {
+    // Write 60 distinct summary files.
+    const sourcesDir = join(env.wsRoot, 'wiki', 'sources');
+    mkdirSync(sourcesDir, { recursive: true });
+    for (let i = 0; i < 60; i++) {
+      writeFileSync(
+        join(sourcesDir, `source-${String(i).padStart(2, '0')}.md`),
+        `---\ntype: source-summary\nid: src-${i}\ntitle: Source ${i}\n---\n\nContent about theme ${i}.`,
+        'utf-8',
+      );
+    }
+
+    // Each batch call emits one DISTINCT topic page (parameterised by call index),
+    // so the page count scales with the number of batches. A single call (the old
+    // behavior) would have produced just 1 page.
+    let call = 0;
+    const client: ClaudeClient = {
+      createCompletion: vi.fn().mockImplementation(() => {
+        const idx = call++;
+        return Promise.resolve(
+          ok({
+            content: topicPage(`Topic Batch ${idx}`, [`c-${idx}`]),
+            inputTokens: 500,
+            outputTokens: 200,
+            model: 'claude-sonnet-4-6',
+            stopReason: 'end_turn',
+          }),
+        );
+      }),
+    };
+
+    // batchSize 10 over 62 summaries (2 from beforeEach + 60 here) → 7 batches.
+    const result = await synthesizeTopics(client, env.db, env.wsRoot, { batchSize: 10 });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // 62 / 10 = 7 batch calls (last batch holds the remainder).
+    expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(7);
+
+    // Far more than the single page a single-call run would yield.
+    expect(result.value.length).toBe(7);
+    expect(result.value.length).toBeGreaterThan(1);
+
+    // Every page was actually written to disk.
+    for (const r of result.value) {
+      expect(existsSync(join(env.wsRoot, r.outputPath))).toBe(true);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // 13. Dedupe/merge — two batches emitting the same-titled topic collapse to
+  //     one page whose concept_ids union both batches' contributions.
+  // -------------------------------------------------------------------------
+
+  it('merges a same-titled topic from two batches into one page with both concept_ids', async () => {
+    // beforeEach already wrote 2 summaries → batchSize 1 forces two batch calls.
+    // Batch 1 emits the topic with concept c-aaa; batch 2 emits the SAME topic
+    // title with concept c-bbb. They must merge to one page.
+    const client = mockClientSequence([
+      topicPage('Shared Theme', ['c-aaa']),
+      topicPage('Shared Theme', ['c-bbb']),
+    ]);
+
+    const result = await synthesizeTopics(client, env.db, env.wsRoot, { batchSize: 1 });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Two batch calls were made.
+    expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
+
+    // But only ONE merged topic page results.
+    expect(result.value).toHaveLength(1);
+
+    // The written page carries BOTH concept_ids.
+    const written = readFileSync(join(env.wsRoot, result.value[0]!.outputPath), 'utf-8');
+    expect(written).toContain('c-aaa');
+    expect(written).toContain('c-bbb');
+
+    // And exactly one compilations row exists (idempotent UPSERT on the stable id).
+    const rows = env.db
+      .prepare<[], { count: number }>(`SELECT COUNT(*) AS count FROM compilations`)
+      .all();
+    expect(rows[0]!.count).toBe(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // 14. Idempotency — re-running over the same summaries does not duplicate
+  //     compilation rows (stable id + UPSERT).
+  // -------------------------------------------------------------------------
+
+  it('re-running the pass UPSERTs rather than duplicating compilation rows', async () => {
+    const client1 = mockClient(topicPage('Stable Topic', ['c1']));
+    const first = await synthesizeTopics(client1, env.db, env.wsRoot);
+    expect(first.ok).toBe(true);
+
+    const client2 = mockClient(topicPage('Stable Topic', ['c1', 'c2']));
+    const second = await synthesizeTopics(client2, env.db, env.wsRoot);
+    expect(second.ok).toBe(true);
+
+    const rows = env.db
+      .prepare<
+        [],
+        { count: number }
+      >(`SELECT COUNT(*) AS count FROM compilations WHERE type = 'topic'`)
+      .all();
+    expect(rows[0]!.count).toBe(1);
   });
 });
