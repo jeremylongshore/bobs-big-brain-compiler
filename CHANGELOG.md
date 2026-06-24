@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.17.2] - 2026-06-24
+
+- fix(compiler): auto-scale the per-batch token ceiling + warn on truncation (#147) (f0d997f)
+
 ## [v1.17.1] - 2026-06-24
 
 - fix(compiler): default DeepSeek to deepseek-chat + read reasoning_content (#146) (03786a3)
