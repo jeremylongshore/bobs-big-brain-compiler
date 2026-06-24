@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.19.0] - 2026-06-24
+
+- feat(compiler): model-agnostic provider registry (anthropic/openai/local) (#149) (22914b0)
+
 ## [v1.18.0] - 2026-06-24
 
 - feat(compiler): cross-batch contradiction detection via reduce pass (v2) (#150) (25498cf)
