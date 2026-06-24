@@ -29,7 +29,13 @@ import { appendAuditLog, type Database, recordProvenance, writeTrace } from '@ic
 import { err, ok, type Result } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
-import { chunkArray, DEFAULT_BATCH_SIZE, mergePages } from './batch-helper.js';
+import {
+  chunkArray,
+  DEFAULT_BATCH_SIZE,
+  mergePages,
+  scaledMaxTokens,
+  wasTruncated,
+} from './batch-helper.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -185,8 +191,8 @@ export async function extractConcepts(
   // 1. Generate compilation metadata.
   const compiledAt = new Date().toISOString();
   const model = options?.model ?? DEFAULT_MODEL;
-  const maxTokens = options?.maxTokens ?? DEFAULT_MAX_TOKENS;
   const batchSize = options?.batchSize ?? DEFAULT_BATCH_SIZE;
+  const maxTokens = scaledMaxTokens(options?.maxTokens, DEFAULT_MAX_TOKENS, batchSize);
 
   // 2. Read all summary files.
   const summaryChunks: string[] = [];
@@ -232,10 +238,19 @@ export async function extractConcepts(
       inputTokens: inTok,
       outputTokens: outTok,
       model: respModel,
+      stopReason,
     } = completionResult.value;
     inputTokens += inTok;
     outputTokens += outTok;
     responseModel = respModel;
+    // A hit token-ceiling silently drops pages — surface it loudly (bead u5t).
+    if (wasTruncated(stopReason)) {
+      process.stderr.write(
+        `[ico] WARNING: a batch response hit the ${maxTokens}-token ceiling and was ` +
+          `truncated — pages may have been dropped. Raise MAX_TOKENS_PER_OPERATION ` +
+          `or lower ICO_BATCH_SIZE.\n`,
+      );
+    }
 
     for (const page of content.split(PAGE_BREAK)) {
       const trimmed = page.trim();
