@@ -393,7 +393,12 @@ A secondary contradiction about evidence standards.
     };
 
     // batchSize 10 over 42 summaries (2 from beforeEach + 40 here) → 5 batches.
-    const result = await detectContradictions(client, env.db, env.wsRoot, { batchSize: 10 });
+    // crossBatch:false isolates the intra-batch fan-out this test asserts on —
+    // the cross-batch reduce step has its own dedicated suite below.
+    const result = await detectContradictions(client, env.db, env.wsRoot, {
+      batchSize: 10,
+      crossBatch: false,
+    });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -419,7 +424,12 @@ A secondary contradiction about evidence standards.
       contradictionPage('Only Conflict', ['src-x']),
     ]);
 
-    const result = await detectContradictions(client, env.db, env.wsRoot, { batchSize: 1 });
+    // crossBatch:false keeps this focused on the per-batch sentinel — exactly
+    // the two batch calls, no reduce call.
+    const result = await detectContradictions(client, env.db, env.wsRoot, {
+      batchSize: 1,
+      crossBatch: false,
+    });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -439,7 +449,12 @@ A secondary contradiction about evidence standards.
       contradictionPage('Shared Conflict', ['s-bbb']),
     ]);
 
-    const result = await detectContradictions(client, env.db, env.wsRoot, { batchSize: 1 });
+    // crossBatch:false isolates the intra-batch dedupe/merge under test; the
+    // reduce step's own merge behavior is covered in the reduce suite below.
+    const result = await detectContradictions(client, env.db, env.wsRoot, {
+      batchSize: 1,
+      crossBatch: false,
+    });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -477,5 +492,225 @@ A secondary contradiction about evidence standards.
       >(`SELECT COUNT(*) AS count FROM compilations WHERE type = 'contradiction'`)
       .all();
     expect(rows[0]!.count).toBe(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // Cross-batch reduce step (v2 — bead intentional-cognition-os-l8b)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Write `n` summary files (each id-bearing) into wiki/sources/ so a small
+   * batchSize forces a multi-batch fan-out. Returns the summary ids written.
+   */
+  function writeSummaries(n: number, prefix = 'xb'): string[] {
+    const sourcesDir = join(env.wsRoot, 'wiki', 'sources');
+    mkdirSync(sourcesDir, { recursive: true });
+    const ids: string[] = [];
+    for (let i = 0; i < n; i++) {
+      const id = `${prefix}-${i}`;
+      ids.push(id);
+      writeFileSync(
+        join(sourcesDir, `${id}.md`),
+        `---\ntype: source-summary\nid: ${id}\ntitle: Summary ${prefix} ${i}\n---\n\nClaim ${i}.`,
+        'utf-8',
+      );
+    }
+    return ids;
+  }
+
+  /** True when a createCompletion call was the cross-batch reduce call. */
+  function isReduceCall(systemPrompt: unknown): boolean {
+    return typeof systemPrompt === 'string' && systemPrompt.includes('CROSS-BATCH contradictions');
+  }
+
+  /**
+   * Mock that answers per-batch calls and the single reduce call independently.
+   * Every intra-batch call returns `NO_CONTRADICTIONS_FOUND`; the reduce call
+   * (detected by its system prompt) returns `reduceResponse`. Lets a test prove
+   * a page came specifically from the cross-batch reduce step.
+   */
+  function mockClientWithReduce(reduceResponse: string): ClaudeClient {
+    return {
+      createCompletion: vi.fn().mockImplementation((systemPrompt: string) => {
+        const content = isReduceCall(systemPrompt) ? reduceResponse : 'NO_CONTRADICTIONS_FOUND';
+        return Promise.resolve(
+          ok({
+            content,
+            inputTokens: 300,
+            outputTokens: 120,
+            model: 'claude-sonnet-4-6',
+            stopReason: 'end_turn',
+          }),
+        );
+      }),
+    };
+  }
+
+  it('runs one extra reduce call after the per-batch fan-out when the corpus spans batches', async () => {
+    // beforeEach wrote 2 summaries; add 4 more → 6 total. batchSize 2 → 3 batches.
+    writeSummaries(4);
+    const client = mockClientWithReduce('NO_CONTRADICTIONS_FOUND');
+
+    const result = await detectContradictions(client, env.db, env.wsRoot, { batchSize: 2 });
+    expect(result.ok).toBe(true);
+
+    const calls = (client.createCompletion as ReturnType<typeof vi.fn>).mock.calls;
+    // 3 batch calls + 1 reduce call.
+    expect(calls).toHaveLength(4);
+    // Exactly one of them is the reduce call.
+    expect(calls.filter((c) => isReduceCall(c[0])).length).toBe(1);
+  });
+
+  it('surfaces a cross-batch contradiction the per-batch passes never found', async () => {
+    writeSummaries(4);
+    // Every batch finds nothing; only the reduce step surfaces a conflict whose
+    // sources come from two different batches.
+    const client = mockClientWithReduce(
+      contradictionPage('Cross-batch conflict on graph efficacy', ['xb-0', 'xb-3']),
+    );
+
+    const result = await detectContradictions(client, env.db, env.wsRoot, { batchSize: 2 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // The only contradiction recorded came from the reduce step.
+    expect(result.value).toHaveLength(1);
+    const written = readFileSync(join(env.wsRoot, result.value[0]!.outputPath), 'utf-8');
+    expect(written).toContain('xb-0');
+    expect(written).toContain('xb-3');
+  });
+
+  it('passes the cross-batch digest (ids grouped by batch) to the reduce call', async () => {
+    writeSummaries(2); // 2 + 2 from beforeEach = 4 summaries; batchSize 2 → 2 batches.
+    const client = mockClientWithReduce('NO_CONTRADICTIONS_FOUND');
+
+    await detectContradictions(client, env.db, env.wsRoot, { batchSize: 2 });
+
+    const calls = (client.createCompletion as ReturnType<typeof vi.fn>).mock.calls;
+    const reduceCalls = calls.filter((c) => isReduceCall(c[0]));
+    expect(reduceCalls).toHaveLength(1);
+    const reduceUserPrompt = reduceCalls[0]![1] as string;
+    // The digest groups summary ids under per-batch headings — the structural
+    // cue the reduce prompt relies on to spot cross-batch conflicts. Both
+    // batches' headings must be present, each carrying their summary ids.
+    expect(reduceUserPrompt).toContain('<batch_digest>');
+    expect(reduceUserPrompt).toContain('## Batch 0');
+    expect(reduceUserPrompt).toContain('## Batch 1');
+    expect(reduceUserPrompt).toContain('xb-0');
+    expect(reduceUserPrompt).toContain('xb-1');
+  });
+
+  it('does NOT run a reduce call when the whole corpus fits in one batch', async () => {
+    // beforeEach wrote 2 summaries; default batchSize (25) → a single batch.
+    const client = mockClientWithReduce(contradictionPage('Should not appear', ['xb-0']));
+
+    const result = await detectContradictions(client, env.db, env.wsRoot);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const calls = (client.createCompletion as ReturnType<typeof vi.fn>).mock.calls;
+    // One batch call, zero reduce calls.
+    expect(calls).toHaveLength(1);
+    expect(calls.filter((c) => isReduceCall(c[0])).length).toBe(0);
+    // The reduce-only response never materialised.
+    expect(result.value).toHaveLength(0);
+  });
+
+  it('skips the reduce step entirely when crossBatch is false', async () => {
+    writeSummaries(4); // 6 summaries → multiple batches, but reduce is opted out.
+    const client = mockClientWithReduce(contradictionPage('Suppressed cross-batch', ['xb-0']));
+
+    const result = await detectContradictions(client, env.db, env.wsRoot, {
+      batchSize: 2,
+      crossBatch: false,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const calls = (client.createCompletion as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.filter((c) => isReduceCall(c[0])).length).toBe(0);
+    // No reduce call → the reduce-only conflict is never recorded.
+    expect(result.value).toHaveLength(0);
+  });
+
+  it('merges a reduce page into an intra-batch page of the same title (source_ids unioned)', async () => {
+    writeSummaries(4);
+    // A batch finds the conflict with one source; the reduce step restates it
+    // under the SAME title with the cross-batch partner source. They must merge.
+    const client: ClaudeClient = {
+      createCompletion: vi.fn().mockImplementation((systemPrompt: string) => {
+        const content = isReduceCall(systemPrompt)
+          ? contradictionPage('Shared Conflict', ['xb-3'])
+          : // First batch emits the intra-batch half; later batches find nothing.
+            contradictionPage('Shared Conflict', ['xb-0']);
+        return Promise.resolve(
+          ok({
+            content,
+            inputTokens: 300,
+            outputTokens: 120,
+            model: 'claude-sonnet-4-6',
+            stopReason: 'end_turn',
+          }),
+        );
+      }),
+    };
+
+    const result = await detectContradictions(client, env.db, env.wsRoot, { batchSize: 2 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Same title across batch + reduce → one merged page, not two.
+    expect(result.value).toHaveLength(1);
+    const written = readFileSync(join(env.wsRoot, result.value[0]!.outputPath), 'utf-8');
+    expect(written).toContain('xb-0'); // from the intra-batch page
+    expect(written).toContain('xb-3'); // from the reduce page
+
+    const rows = env.db
+      .prepare<[], { count: number }>(`SELECT COUNT(*) AS count FROM compilations`)
+      .all();
+    expect(rows[0]!.count).toBe(1);
+  });
+
+  it('counts the reduce call tokens in the returned totals', async () => {
+    writeSummaries(2); // 4 summaries, batchSize 2 → 2 batch calls + 1 reduce call.
+    // Batch calls find nothing; the reduce call produces the only page.
+    const client = mockClientWithReduce(contradictionPage('Cross conflict', ['xb-0', 'xb-1']));
+
+    const result = await detectContradictions(client, env.db, env.wsRoot, { batchSize: 2 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // 3 calls total (2 batch + 1 reduce), each billed 300 in / 120 out.
+    expect(result.value[0]!.inputTokens).toBe(900);
+    expect(result.value[0]!.outputTokens).toBe(360);
+    expect(result.value[0]!.tokensUsed).toBe(1260);
+  });
+
+  it('returns err when the reduce call fails', async () => {
+    writeSummaries(4);
+    const client: ClaudeClient = {
+      createCompletion: vi.fn().mockImplementation((systemPrompt: string) => {
+        if (isReduceCall(systemPrompt)) {
+          return Promise.resolve({
+            ok: false,
+            error: new Error('Claude API server_error (HTTP 500): reduce failed'),
+          });
+        }
+        return Promise.resolve(
+          ok({
+            content: 'NO_CONTRADICTIONS_FOUND',
+            inputTokens: 300,
+            outputTokens: 120,
+            model: 'claude-sonnet-4-6',
+            stopReason: 'end_turn',
+          }),
+        );
+      }),
+    };
+
+    const result = await detectContradictions(client, env.db, env.wsRoot, { batchSize: 2 });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toContain('reduce failed');
   });
 });

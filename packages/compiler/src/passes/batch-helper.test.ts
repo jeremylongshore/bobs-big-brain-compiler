@@ -8,6 +8,7 @@ import matter from 'gray-matter';
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildBatchDigest,
   chunkArray,
   deriveStableId,
   ensureFrontmatterFence,
@@ -15,9 +16,11 @@ import {
   mergePages,
   normalizeTitle,
   parseFrontmatterList,
+  renderBatchDigest,
   scaledMaxTokens,
   setFrontmatterField,
   setFrontmatterList,
+  shouldRunReduce,
   wasTruncated,
 } from './batch-helper.js';
 
@@ -362,5 +365,117 @@ describe('wasTruncated (bead u5t)', () => {
   it('is false for a normal completion', () => {
     expect(wasTruncated('stop')).toBe(false);
     expect(wasTruncated('end_turn')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cross-batch reduce (v2 — bead intentional-cognition-os-l8b)
+// ---------------------------------------------------------------------------
+
+/** A minimal source-summary page with a given id + title. */
+function summaryPage(id: string, title: string): string {
+  return `---
+type: source-summary
+id: ${id}
+title: ${title}
+---
+
+## Key Claims
+A claim from ${title}.`;
+}
+
+describe('buildBatchDigest (bead l8b)', () => {
+  it('tags every id-bearing document with the batch index it landed in', () => {
+    const batches = [
+      [summaryPage('a-1', 'Paper A'), summaryPage('a-2', 'Paper B')],
+      [summaryPage('b-1', 'Paper C')],
+    ];
+    const digest = buildBatchDigest(batches);
+    expect(digest).toEqual([
+      { id: 'a-1', title: 'Paper A', batchIndex: 0 },
+      { id: 'a-2', title: 'Paper B', batchIndex: 0 },
+      { id: 'b-1', title: 'Paper C', batchIndex: 1 },
+    ]);
+  });
+
+  it('skips a document with no id (it cannot be cross-referenced)', () => {
+    const noId = `---\ntype: source-summary\ntitle: Untitled but real\n---\n\nBody.`;
+    const digest = buildBatchDigest([[summaryPage('a-1', 'Paper A'), noId]]);
+    expect(digest).toEqual([{ id: 'a-1', title: 'Paper A', batchIndex: 0 }]);
+  });
+
+  it('falls back to the provided title for an id-bearing, title-less document', () => {
+    const noTitle = `---\ntype: source-summary\nid: c-9\n---\n\nBody.`;
+    const digest = buildBatchDigest([[noTitle]], 'untitled summary');
+    expect(digest).toEqual([{ id: 'c-9', title: 'untitled summary', batchIndex: 0 }]);
+  });
+
+  it('returns an empty digest for empty batches', () => {
+    expect(buildBatchDigest([])).toEqual([]);
+    expect(buildBatchDigest([[], []])).toEqual([]);
+  });
+});
+
+describe('renderBatchDigest (bead l8b)', () => {
+  it('groups entries under one heading per batch in ascending batch order', () => {
+    const rendered = renderBatchDigest([
+      { id: 'b-1', title: 'Paper C', batchIndex: 1 },
+      { id: 'a-1', title: 'Paper A', batchIndex: 0 },
+      { id: 'a-2', title: 'Paper B', batchIndex: 0 },
+    ]);
+    expect(rendered).toBe(
+      [
+        '## Batch 0',
+        '- a-1 — Paper A',
+        '- a-2 — Paper B',
+        '',
+        '## Batch 1',
+        '- b-1 — Paper C',
+      ].join('\n'),
+    );
+  });
+
+  it('renders an id under a different batch heading than another id (cross-batch is visible)', () => {
+    const rendered = renderBatchDigest([
+      { id: 'a-1', title: 'A', batchIndex: 0 },
+      { id: 'b-1', title: 'B', batchIndex: 1 },
+    ]);
+    // The two ids sit under two DIFFERENT '## Batch' headings — the structural
+    // signal the reduce prompt keys off of to find cross-batch conflicts.
+    expect(rendered).toContain('## Batch 0\n- a-1 — A');
+    expect(rendered).toContain('## Batch 1\n- b-1 — B');
+  });
+
+  it('returns an empty string for an empty digest', () => {
+    expect(renderBatchDigest([])).toBe('');
+  });
+});
+
+describe('shouldRunReduce (bead l8b)', () => {
+  it('is false for a single batch (no boundary to cross)', () => {
+    const digest = [{ id: 'a-1', title: 'A', batchIndex: 0 }];
+    expect(shouldRunReduce(1, digest)).toBe(false);
+  });
+
+  it('is true when two batches each contributed a digest entry', () => {
+    const digest = [
+      { id: 'a-1', title: 'A', batchIndex: 0 },
+      { id: 'b-1', title: 'B', batchIndex: 1 },
+    ];
+    expect(shouldRunReduce(2, digest)).toBe(true);
+  });
+
+  it('is false when only one batch produced id-bearing entries', () => {
+    // batchCount says 2, but every digest entry came from batch 0 — there is no
+    // pair of batches to compare, so the reduce call would be pure cost.
+    const digest = [
+      { id: 'a-1', title: 'A', batchIndex: 0 },
+      { id: 'a-2', title: 'B', batchIndex: 0 },
+    ];
+    expect(shouldRunReduce(2, digest)).toBe(false);
+  });
+
+  it('is false for an empty digest regardless of batch count', () => {
+    expect(shouldRunReduce(5, [])).toBe(false);
   });
 });
