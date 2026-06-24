@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.17.3] - 2026-06-24
+
+- fix(cli): read spool.tenantId from .ico/config.json (was a dead path) (#148) (ed2ef9d)
+
 ## [v1.17.2] - 2026-06-24
 
 - fix(compiler): auto-scale the per-batch token ceiling + warn on truncation (#147) (f0d997f)
