@@ -152,9 +152,19 @@ function parseWire(raw: string | undefined): WireFormat | undefined {
   return undefined;
 }
 
-/** Strip trailing slashes so `${baseURL}/path` joins cleanly. */
+/**
+ * Strip trailing slashes so `${baseURL}/path` joins cleanly.
+ *
+ * Implemented with a linear scan rather than a `/\/+$/` regex: that pattern is a
+ * polynomial-ReDoS shape (a quantifier anchored at `$`) on attacker-influenced
+ * config input, so we walk back from the end instead.
+ */
 function trimTrailingSlash(url: string): string {
-  return url.replace(/\/+$/, '');
+  let end = url.length;
+  while (end > 0 && url.charCodeAt(end - 1) === 47 /* '/' */) {
+    end--;
+  }
+  return end === url.length ? url : url.slice(0, end);
 }
 
 /**

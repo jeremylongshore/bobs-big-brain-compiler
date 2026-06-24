@@ -259,7 +259,10 @@ function isOpenAiWireModel(model: string): boolean {
  *                   in which case no Authorization header is sent.
  */
 function createOpenAiAdapter(provider: ProviderConfig, apiKey: string): AnthropicLike {
-  const baseUrl = (provider.baseURL ?? 'https://api.openai.com/v1').replace(/\/+$/, '');
+  // provider.baseURL is already trailing-slash-trimmed by resolveProvider; the
+  // `??` only supplies the (slash-free) default when an anthropic-wire provider's
+  // null baseURL is mis-routed here, which never happens for openai-wire.
+  const baseUrl = provider.baseURL ?? 'https://api.openai.com/v1';
   const fallbackModel = provider.defaultModel;
   const label = provider.label;
 
