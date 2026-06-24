@@ -67,6 +67,45 @@ export function chunkArray<T>(arr: readonly T[], size: number): T[][] {
 }
 
 // ---------------------------------------------------------------------------
+// Response-token ceiling
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-document slice of the response-token ceiling. The validated config pairs
+ * ICO_BATCH_SIZE=20 with MAX_TOKENS_PER_OPERATION=8000 → 400 tokens/doc.
+ */
+export const PER_DOC_TOKEN_BUDGET = 400;
+
+/**
+ * Upper bound on the auto-scaled ceiling. Held at 8000 to stay within the
+ * smallest provider output cap in play (DeepSeek = 8192), so scaling can never
+ * push max_tokens past a model limit and turn a silent truncation into a hard
+ * API rejection. Larger batches that need more must pin `maxTokens` explicitly.
+ */
+const MAX_SCALED_TOKENS = 8000;
+
+/**
+ * Response token ceiling for a batched pass. When the caller does NOT pin
+ * `maxTokens`, scale it with batch size (down-floored by the configured default,
+ * up-capped by MAX_SCALED_TOKENS) so a full batch's pages fit instead of being
+ * silently truncated at the 4096 default — a smaller-scale recurrence of the
+ * original single-call truncation bug (bead intentional-cognition-os-u5t).
+ */
+export function scaledMaxTokens(
+  explicit: number | undefined,
+  defaultMax: number,
+  batchSize: number,
+): number {
+  if (explicit !== undefined) return explicit;
+  return Math.min(MAX_SCALED_TOKENS, Math.max(defaultMax, batchSize * PER_DOC_TOKEN_BUDGET));
+}
+
+/** True when a provider stopped generating because it hit the output ceiling. */
+export function wasTruncated(stopReason: string): boolean {
+  return stopReason === 'max_tokens' || stopReason === 'length';
+}
+
+// ---------------------------------------------------------------------------
 // Title normalization
 // ---------------------------------------------------------------------------
 

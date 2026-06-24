@@ -44,7 +44,13 @@ import { appendAuditLog, type Database, recordProvenance, writeTrace } from '@ic
 import { err, ok, type Result } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
-import { chunkArray, DEFAULT_BATCH_SIZE, mergePages } from './batch-helper.js';
+import {
+  chunkArray,
+  DEFAULT_BATCH_SIZE,
+  mergePages,
+  scaledMaxTokens,
+  wasTruncated,
+} from './batch-helper.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -194,8 +200,8 @@ export async function detectContradictions(
 ): Promise<Result<ContradictResult[], Error>> {
   const compiledAt = new Date().toISOString();
   const model = options?.model ?? DEFAULT_MODEL;
-  const maxTokens = options?.maxTokens ?? DEFAULT_MAX_TOKENS;
   const batchSize = options?.batchSize ?? DEFAULT_BATCH_SIZE;
+  const maxTokens = scaledMaxTokens(options?.maxTokens, DEFAULT_MAX_TOKENS, batchSize);
 
   // 1. Read all summary files.
   const summaries = readWikiSubdir(workspacePath, 'sources');
@@ -230,10 +236,19 @@ export async function detectContradictions(
       inputTokens: inTok,
       outputTokens: outTok,
       model: respModel,
+      stopReason,
     } = completionResult.value;
     inputTokens += inTok;
     outputTokens += outTok;
     responseModel = respModel;
+    // A hit token-ceiling silently drops pages — surface it loudly (bead u5t).
+    if (wasTruncated(stopReason)) {
+      process.stderr.write(
+        `[ico] WARNING: a batch response hit the ${maxTokens}-token ceiling and was ` +
+          `truncated — pages may have been dropped. Raise MAX_TOKENS_PER_OPERATION ` +
+          `or lower ICO_BATCH_SIZE.\n`,
+      );
+    }
 
     // A batch with no contradictions emits the sentinel — skip its pages.
     if (

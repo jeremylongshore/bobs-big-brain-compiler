@@ -15,8 +15,10 @@ import {
   mergePages,
   normalizeTitle,
   parseFrontmatterList,
+  scaledMaxTokens,
   setFrontmatterField,
   setFrontmatterList,
+  wasTruncated,
 } from './batch-helper.js';
 
 // ---------------------------------------------------------------------------
@@ -330,5 +332,35 @@ text`;
     const out = ensureFrontmatterFence(bare);
     expect(matter(out).data['type']).toBe('open-question');
     expect(matter(out).content.trim()).toBe('');
+  });
+});
+
+describe('scaledMaxTokens (bead u5t)', () => {
+  it('honors an explicit ceiling unchanged', () => {
+    expect(scaledMaxTokens(12345, 4096, 25)).toBe(12345);
+  });
+
+  it('scales with batch size when unset, matching the validated 20→8000 config', () => {
+    expect(scaledMaxTokens(undefined, 4096, 20)).toBe(8000); // 20 * 400
+  });
+
+  it('never falls below the configured default', () => {
+    expect(scaledMaxTokens(undefined, 4096, 5)).toBe(4096); // max(4096, 2000)
+  });
+
+  it('caps the auto-scale so it cannot exceed the smallest provider output limit', () => {
+    expect(scaledMaxTokens(undefined, 4096, 100)).toBe(8000); // min(8000, 40000)
+  });
+});
+
+describe('wasTruncated (bead u5t)', () => {
+  it('flags the provider ceiling stop reasons', () => {
+    expect(wasTruncated('max_tokens')).toBe(true); // Anthropic
+    expect(wasTruncated('length')).toBe(true); // OpenAI / DeepSeek
+  });
+
+  it('is false for a normal completion', () => {
+    expect(wasTruncated('stop')).toBe(false);
+    expect(wasTruncated('end_turn')).toBe(false);
   });
 });
