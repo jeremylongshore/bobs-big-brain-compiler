@@ -18,7 +18,7 @@
  * @module commands/spool
  */
 
-import { existsSync, lstatSync, mkdirSync, realpathSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 
@@ -29,7 +29,6 @@ import {
   dryRunSpool,
   emitSpool,
   initDatabase,
-  loadConfig,
   type SpoolEmitScope,
   SpoolError,
 } from '@ico/kernel';
@@ -231,13 +230,19 @@ function resolveTenantId(
   if (typeof flag === 'string' && flag.trim() !== '') {
     return { ok: true, tenantId: flag.trim() };
   }
-  const config = loadConfig(workspacePath);
-  const spoolCfg = (config as unknown as Record<string, unknown>)['spool'];
-  if (spoolCfg !== null && typeof spoolCfg === 'object') {
-    const t = (spoolCfg as Record<string, unknown>)['tenantId'];
+  // Read spool.tenantId from the workspace's .ico/config.json — the path the
+  // refusal message advertises. loadConfig() is env/.env-based and never read
+  // this file, so the documented config was dead and the CLI silently required
+  // --tenant despite a valid .ico/config.json (bead intentional-cognition-os-1kc.3).
+  try {
+    const raw = readFileSync(join(workspacePath, '.ico', 'config.json'), 'utf-8');
+    const parsed = JSON.parse(raw) as { spool?: { tenantId?: unknown } };
+    const t = parsed.spool?.tenantId;
     if (typeof t === 'string' && t.trim() !== '') {
       return { ok: true, tenantId: t.trim() };
     }
+  } catch {
+    // Missing / unreadable / invalid config.json — fall through to the refusal.
   }
   return {
     ok: false,

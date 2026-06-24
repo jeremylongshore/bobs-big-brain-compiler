@@ -185,7 +185,10 @@ describe('runSpoolEmit — tenantId resolution', () => {
   });
 
   it('falls back to spool.tenantId from workspace config when flag absent', () => {
-    vi.mocked(loadConfig).mockReturnValue({ spool: { tenantId: 'config-tenant' } } as never);
+    writeFileSync(
+      join(tmpWs, '.ico', 'config.json'),
+      JSON.stringify({ spool: { tenantId: 'config-tenant' } }),
+    );
     vi.mocked(dryRunSpool).mockReturnValue({
       ok: true,
       value: makeDryRunSummary(),
@@ -198,7 +201,10 @@ describe('runSpoolEmit — tenantId resolution', () => {
   });
 
   it('flag wins over config when both are present', () => {
-    vi.mocked(loadConfig).mockReturnValue({ spool: { tenantId: 'config-tenant' } } as never);
+    writeFileSync(
+      join(tmpWs, '.ico', 'config.json'),
+      JSON.stringify({ spool: { tenantId: 'config-tenant' } }),
+    );
     vi.mocked(dryRunSpool).mockReturnValue({
       ok: true,
       value: makeDryRunSummary(),
@@ -213,7 +219,10 @@ describe('runSpoolEmit — tenantId resolution', () => {
   });
 
   it('refuses empty-string tenant flag and falls through to config', () => {
-    vi.mocked(loadConfig).mockReturnValue({ spool: { tenantId: 'config-tenant' } } as never);
+    writeFileSync(
+      join(tmpWs, '.ico', 'config.json'),
+      JSON.stringify({ spool: { tenantId: 'config-tenant' } }),
+    );
     vi.mocked(dryRunSpool).mockReturnValue({
       ok: true,
       value: makeDryRunSummary(),
