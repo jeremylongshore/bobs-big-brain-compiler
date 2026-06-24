@@ -225,7 +225,12 @@ async function attempt(
 // ---------------------------------------------------------------------------
 
 interface OpenAiChatResponse {
-  choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
+  // `reasoning_content` carries the output of DeepSeek reasoning models
+  // (deepseek-reasoner / deepseek-v4-flash); plain chat models use `content`.
+  choices?: Array<{
+    message?: { content?: string; reasoning_content?: string };
+    finish_reason?: string;
+  }>;
   usage?: { prompt_tokens?: number; completion_tokens?: number };
   model?: string;
 }
@@ -235,7 +240,11 @@ function createDeepSeekAdapter(apiKey: string): AnthropicLike {
     /\/+$/,
     '',
   );
-  const fallbackModel = process.env['DEEPSEEK_MODEL'] ?? 'deepseek-v4-flash';
+  // Default to `deepseek-chat` (a plain chat model) — NOT a reasoning model.
+  // Reasoning models (e.g. deepseek-v4-flash) return their output in
+  // `reasoning_content`, so the previous default produced empty `content` and
+  // every cross-source pass compiled 0 pages (bead intentional-cognition-os-dad).
+  const fallbackModel = process.env['DEEPSEEK_MODEL'] ?? 'deepseek-chat';
 
   return {
     messages: {
@@ -285,8 +294,12 @@ function createDeepSeekAdapter(apiKey: string): AnthropicLike {
 
           const data = (await res.json()) as OpenAiChatResponse;
           const choice = data.choices?.[0];
+          // Prefer `content`; fall back to `reasoning_content` when a reasoning
+          // model leaves `content` empty, so an explicitly-configured reasoning
+          // model still yields output instead of silently compiling 0 pages.
+          const text = choice?.message?.content || choice?.message?.reasoning_content || '';
           return {
-            content: [{ type: 'text', text: choice?.message?.content ?? '' }],
+            content: [{ type: 'text', text }],
             usage: {
               input_tokens: data.usage?.prompt_tokens ?? 0,
               output_tokens: data.usage?.completion_tokens ?? 0,

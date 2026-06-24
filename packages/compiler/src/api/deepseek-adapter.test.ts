@@ -68,8 +68,10 @@ describe('createClaudeClient — DeepSeek provider', () => {
     ]);
   });
 
-  it('falls back to deepseek-v4-flash when handed an Anthropic model name', async () => {
+  it('falls back to the default deepseek-chat when handed an Anthropic model name', async () => {
     process.env['ICO_PROVIDER'] = 'deepseek';
+    const prevModel = process.env['DEEPSEEK_MODEL'];
+    delete process.env['DEEPSEEK_MODEL'];
     const fetchMock = vi.fn(() =>
       Promise.resolve(
         jsonResponse({
@@ -85,7 +87,39 @@ describe('createClaudeClient — DeepSeek provider', () => {
 
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     const body = JSON.parse(init.body as string) as ChatBody;
-    expect(body.model).toBe('deepseek-v4-flash');
+    // Default must be a PLAIN chat model, not a reasoning model — a reasoning
+    // model returns empty `content` and compiles 0 pages (bead ...-dad).
+    expect(body.model).toBe('deepseek-chat');
+    if (prevModel === undefined) delete process.env['DEEPSEEK_MODEL'];
+    else process.env['DEEPSEEK_MODEL'] = prevModel;
+  });
+
+  it('reads reasoning_content when a reasoning model leaves content empty', async () => {
+    process.env['ICO_PROVIDER'] = 'deepseek';
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse({
+          // A reasoning model: empty content, output in reasoning_content.
+          choices: [
+            {
+              message: { content: '', reasoning_content: 'the actual compiled page' },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: { prompt_tokens: 5, completion_tokens: 6 },
+        }),
+      ),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const client = createClaudeClient('k');
+    const result = await client.createCompletion('s', 'u', { model: 'deepseek-reasoner' });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // Not the empty string — the reasoning_content fallback kicked in.
+      expect(result.value.content).toBe('the actual compiled page');
+    }
   });
 
   it('returns a sanitized error (no key leakage) on a non-ok response', async () => {
