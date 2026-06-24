@@ -106,6 +106,111 @@ export function wasTruncated(stopReason: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Cross-batch reduce (v2 — surfaces signals that span the batch boundary)
+// ---------------------------------------------------------------------------
+
+/**
+ * A single input document tagged with the batch it landed in.
+ *
+ * The batched passes detect contradictions / gaps / topics INTRA-batch only: a
+ * signal whose two halves fall in different batches is never seen in one prompt,
+ * so it is missed. The reduce step recovers those by making one additional
+ * (map-)reduce call after the per-batch fan-out: every input is summarised down
+ * to a one-line title + id digest, grouped by batch, and the model is asked to
+ * surface ONLY signals whose contributors come from two or more DIFFERENT
+ * batches — so it complements, rather than re-runs, the intra-batch passes.
+ *
+ * Sending a compact digest (title + id, not full body) is the whole point: the
+ * digest of an N-document corpus is tiny next to the corpus itself, so the
+ * reduce call stays well inside the token budget no matter how many batches the
+ * fan-out produced.
+ */
+export interface DigestEntry {
+  /** Stable id of the source document (the `id:` from its frontmatter). */
+  id: string;
+  /** Human-readable title of the source document. */
+  title: string;
+  /** Zero-based index of the batch this document was sent to. */
+  batchIndex: number;
+}
+
+/**
+ * Build per-batch {@link DigestEntry} rows from the chunked input batches.
+ *
+ * Each entry carries the document's stable `id:` and `title:` (read from its
+ * frontmatter) plus its batch index. A document with no `id:` is skipped — the
+ * digest is only useful if the reduce response can cite real ids back, and an
+ * id-less input cannot be cross-referenced. A document with no `title:` falls
+ * back to `fallbackTitle` so it still appears (the id is what matters for
+ * cross-batch attribution).
+ *
+ * Pure: reads only frontmatter, never calls the model or touches disk.
+ */
+export function buildBatchDigest(
+  batches: ReadonlyArray<ReadonlyArray<string>>,
+  fallbackTitle = 'untitled',
+): DigestEntry[] {
+  const entries: DigestEntry[] = [];
+  for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+    for (const doc of batches[batchIndex]!) {
+      const id = extractFrontmatterField(doc, 'id');
+      if (id === undefined || id.length === 0) continue;
+      const title = extractFrontmatterField(doc, 'title') ?? fallbackTitle;
+      entries.push({ id, title, batchIndex });
+    }
+  }
+  return entries;
+}
+
+/**
+ * Render a {@link DigestEntry} list into a compact, prompt-ready block grouped
+ * by batch. Each batch becomes a `## Batch N` heading followed by `- <id> — <title>`
+ * lines. The grouping is what lets the model reason about which signals span the
+ * batch boundary: two ids under two different `## Batch` headings are, by
+ * construction, cross-batch.
+ *
+ * Returns an empty string for an empty digest, so callers can cheaply skip the
+ * reduce call when there is nothing to reduce.
+ */
+export function renderBatchDigest(entries: ReadonlyArray<DigestEntry>): string {
+  if (entries.length === 0) return '';
+  const byBatch = new Map<number, DigestEntry[]>();
+  for (const entry of entries) {
+    const bucket = byBatch.get(entry.batchIndex);
+    if (bucket === undefined) byBatch.set(entry.batchIndex, [entry]);
+    else bucket.push(entry);
+  }
+  const sortedBatchIndexes = [...byBatch.keys()].sort((a, b) => a - b);
+  return sortedBatchIndexes
+    .map((batchIndex) => {
+      const lines = byBatch
+        .get(batchIndex)!
+        .map((entry) => `- ${entry.id} — ${entry.title}`)
+        .join('\n');
+      return `## Batch ${batchIndex}\n${lines}`;
+    })
+    .join('\n\n');
+}
+
+/**
+ * Decide whether the cross-batch reduce step is worth running.
+ *
+ * The reduce pass is a pure cost when it cannot find anything new, so it only
+ * runs when BOTH are true:
+ *   - the fan-out produced at least two batches (a single batch already had
+ *     every document in one prompt — there is no batch boundary to cross), and
+ *   - at least two batches contributed a digest entry (an id-bearing document),
+ *     so there is actually a pair of batches to compare.
+ *
+ * Pure predicate over the digest — no model call, no I/O.
+ */
+export function shouldRunReduce(batchCount: number, digest: ReadonlyArray<DigestEntry>): boolean {
+  if (batchCount < 2) return false;
+  const batchesWithEntries = new Set(digest.map((entry) => entry.batchIndex));
+  return batchesWithEntries.size >= 2;
+}
+
+// ---------------------------------------------------------------------------
 // Title normalization
 // ---------------------------------------------------------------------------
 

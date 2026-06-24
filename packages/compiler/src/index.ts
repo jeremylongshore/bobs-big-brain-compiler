@@ -44,11 +44,15 @@ export {
 } from './passes/summarize.js';
 export { extractConcepts, type ExtractOptions, type ExtractResult } from './passes/extract.js';
 export {
+  buildBatchDigest,
   chunkArray,
   DEFAULT_BATCH_SIZE,
   deriveStableId,
+  type DigestEntry,
   mergePages,
   normalizeTitle,
+  renderBatchDigest,
+  shouldRunReduce,
   type MergedPage,
   type MergePagesOptions,
 } from './passes/batch-helper.js';
