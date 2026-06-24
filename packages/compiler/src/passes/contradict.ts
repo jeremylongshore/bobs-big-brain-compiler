@@ -50,6 +50,7 @@ import {
   buildBatchDigest,
   chunkArray,
   DEFAULT_BATCH_SIZE,
+  extractFrontmatterField,
   mergePages,
   renderBatchDigest,
   scaledMaxTokens,
@@ -377,7 +378,14 @@ export async function detectContradictions(
       ) {
         for (const page of reduceContent.split(PAGE_BREAK)) {
           const trimmed = page.trim();
-          if (trimmed.length > 0) rawPages.push(trimmed);
+          // Only accept pages that are actually contradiction frontmatter —
+          // conversational filler the model may emit instead of a clean page
+          // would otherwise become a broken 'untitled' page at merge/write
+          // (flagged in review). The per-batch path is shielded by its richer
+          // prompt; the reduce path validates explicitly.
+          if (trimmed.length > 0 && extractFrontmatterField(trimmed, 'type') === 'contradiction') {
+            rawPages.push(trimmed);
+          }
         }
       }
     }
