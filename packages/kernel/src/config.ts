@@ -1,8 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { providerRequiresKey, resolveApiKey, resolveModel, resolveProvider } from '@ico/types';
+
 export interface IcoConfig {
   workspace: string;
+  /** The active provider id (`ICO_PROVIDER`), e.g. `anthropic`, `groq`, `deepseek`. */
+  provider: string;
   model: string;
   researchModel: string;
   logLevel: 'debug' | 'info' | 'warn' | 'error';
@@ -93,25 +97,32 @@ export function loadConfig(cwd: string = process.cwd()): IcoConfig {
   const fileVars = loadEnvFile(cwd);
   const env = { ...fileVars, ...process.env };
 
-  // Provider selection (default anthropic). DeepSeek runs on its own key and
-  // OpenAI-compatible models; see createClaudeClient's ICO_PROVIDER branch.
-  const isDeepSeek = (env['ICO_PROVIDER'] ?? 'anthropic') === 'deepseek';
-  const deepSeekModel = env['DEEPSEEK_MODEL'] ?? 'deepseek-v4-flash';
-
-  const apiKey = (isDeepSeek ? env['DEEPSEEK_API_KEY'] : env['ANTHROPIC_API_KEY']) ?? '';
-  if (apiKey === '') {
+  // Provider selection is fully model-agnostic: ICO_PROVIDER (default `anthropic`)
+  // resolves to a provider record (wire format, base URL, key env, default model)
+  // via the shared registry. The compiler routes on the same record, so config and
+  // transport never disagree about which backend is active.
+  const provider = resolveProvider(env);
+  const apiKey = resolveApiKey(provider, env);
+  if (apiKey === '' && providerRequiresKey(provider)) {
+    const keyHint = provider.keyEnv.length > 0 ? provider.keyEnv.join(' or ') : 'ICO_API_KEY';
     throw new Error(
-      isDeepSeek
-        ? 'DEEPSEEK_API_KEY is required (ICO_PROVIDER=deepseek). Set it in your environment or .env file.'
-        : 'ANTHROPIC_API_KEY is required. Set it in your environment or .env file.\n' +
-            'See .env.example for configuration options.',
+      `${keyHint} is required for ICO_PROVIDER=${provider.id} (${provider.label}). ` +
+        'Set it in your environment or .env file.\nSee .env.example for configuration options.',
     );
   }
 
+  // The model default is the provider's own default unless ICO_MODEL overrides it.
+  // The research model follows the same rule, but keeps Anthropic's opus default
+  // when the provider is Anthropic (a deliberately stronger model for research).
+  const model = resolveModel(provider, env);
+  const researchModel =
+    env['ICO_RESEARCH_MODEL'] ?? (provider.id === 'anthropic' ? 'claude-opus-4-6' : model);
+
   const config = {
     workspace: env['ICO_WORKSPACE'] ?? './workspace',
-    model: env['ICO_MODEL'] ?? (isDeepSeek ? deepSeekModel : 'claude-sonnet-4-6'),
-    researchModel: env['ICO_RESEARCH_MODEL'] ?? (isDeepSeek ? deepSeekModel : 'claude-opus-4-6'),
+    provider: provider.id,
+    model,
+    researchModel,
     logLevel: isValidLogLevel(env['ICO_LOG_LEVEL']) ? env['ICO_LOG_LEVEL'] : 'info',
   };
 

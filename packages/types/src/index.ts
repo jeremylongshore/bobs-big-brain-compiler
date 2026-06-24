@@ -40,6 +40,17 @@ export {
 export { type Result, ok, err, isOk, isErr } from './result.js';
 
 export {
+  type WireFormat,
+  type ProviderEnv,
+  type ProviderConfig,
+  resolveProvider,
+  resolveApiKey,
+  resolveModel,
+  providerRequiresKey,
+  listBuiltinProviders,
+} from './providers.js';
+
+export {
   type SpoolMemorySource,
   type SpoolTrustLevel,
   type SpoolMemoryCategory,

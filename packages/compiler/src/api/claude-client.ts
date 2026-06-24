@@ -13,13 +13,19 @@
 
 import Anthropic, { APIError } from '@anthropic-ai/sdk';
 
-import { err, ok, type Result } from '@ico/types';
+import {
+  err,
+  ok,
+  type ProviderConfig,
+  resolveModel,
+  resolveProvider,
+  type Result,
+} from '@ico/types';
 
 // ---------------------------------------------------------------------------
 // Environment defaults
 // ---------------------------------------------------------------------------
 
-const DEFAULT_MODEL = process.env['ICO_MODEL'] ?? 'claude-sonnet-4-6';
 const DEFAULT_TIMEOUT_MS = parseInt(process.env['ICO_API_TIMEOUT'] ?? '120000', 10);
 const DEFAULT_MAX_TOKENS = parseInt(process.env['MAX_TOKENS_PER_OPERATION'] ?? '4096', 10);
 
@@ -52,7 +58,7 @@ const INJECTION_PATTERNS: ReadonlyArray<RegExp> = [
 
 /** Options for a single completion request. */
 export interface CompletionOptions {
-  /** Model to use. Defaults to ICO_MODEL env var, or 'claude-sonnet-4-6'. */
+  /** Model to use. Defaults to ICO_MODEL, else the selected provider's default model. */
   model?: string;
   /** Maximum tokens in the response. Defaults to MAX_TOKENS_PER_OPERATION env var, or 4096. */
   maxTokens?: number;
@@ -215,18 +221,19 @@ async function attempt(
 }
 
 // ---------------------------------------------------------------------------
-// Internal: DeepSeek (OpenAI-compatible) adapter
+// Internal: OpenAI-compatible adapter
 //
-// DeepSeek speaks the OpenAI chat-completions API. We expose it as an
-// AnthropicLike duck type so createClaudeClient's retry / error-sanitize /
-// token-accounting logic is reused verbatim — only the transport differs.
-// Selected via ICO_PROVIDER=deepseek (DEEPSEEK_API_KEY required). No new SDK
-// dependency: Node's global fetch carries it.
+// Many providers (OpenAI, Groq, NVIDIA, DeepSeek-openai, and any local
+// Ollama/vLLM/LM-Studio server) speak the OpenAI chat-completions API. We expose
+// that wire format as an AnthropicLike duck type so createClaudeClient's retry /
+// error-sanitize / token-accounting logic is reused verbatim — only the transport
+// differs. Selected via ICO_PROVIDER (any openai-wire provider) with the matching
+// key env. No new SDK dependency: Node's global fetch carries it.
 // ---------------------------------------------------------------------------
 
 interface OpenAiChatResponse {
-  // `reasoning_content` carries the output of DeepSeek reasoning models
-  // (deepseek-reasoner / deepseek-v4-flash); plain chat models use `content`.
+  // `reasoning_content` carries the output of reasoning models (e.g.
+  // deepseek-reasoner); plain chat models use `content`.
   choices?: Array<{
     message?: { content?: string; reasoning_content?: string };
     finish_reason?: string;
@@ -235,23 +242,34 @@ interface OpenAiChatResponse {
   model?: string;
 }
 
-function createDeepSeekAdapter(apiKey: string): AnthropicLike {
-  const baseUrl = (process.env['DEEPSEEK_BASE_URL'] ?? 'https://api.deepseek.com').replace(
-    /\/+$/,
-    '',
-  );
-  // Default to `deepseek-chat` (a plain chat model) — NOT a reasoning model.
-  // Reasoning models (e.g. deepseek-v4-flash) return their output in
-  // `reasoning_content`, so the previous default produced empty `content` and
-  // every cross-source pass compiled 0 pages (bead intentional-cognition-os-dad).
-  const fallbackModel = process.env['DEEPSEEK_MODEL'] ?? 'deepseek-chat';
+/** Is this model id usable by an OpenAI-wire backend (i.e. not an Anthropic model)? */
+function isOpenAiWireModel(model: string): boolean {
+  // An Anthropic model name (claude-*) is meaningless to an OpenAI-wire backend;
+  // treat the provider default as authoritative instead. We accept any model that
+  // does NOT look like an Anthropic model, so callers can pass through
+  // provider-native ids (gpt-*, llama-*, deepseek-*, …) freely.
+  return !model.toLowerCase().startsWith('claude');
+}
+
+/**
+ * Build an OpenAI-chat-completions adapter for an openai-wire {@link ProviderConfig}.
+ *
+ * @param provider - The resolved provider (supplies baseURL + defaultModel).
+ * @param apiKey   - The provider key. May be empty for a keyless local server,
+ *                   in which case no Authorization header is sent.
+ */
+function createOpenAiAdapter(provider: ProviderConfig, apiKey: string): AnthropicLike {
+  const baseUrl = (provider.baseURL ?? 'https://api.openai.com/v1').replace(/\/+$/, '');
+  const fallbackModel = provider.defaultModel;
+  const label = provider.label;
 
   return {
     messages: {
       async create(params, options) {
-        // Anthropic model names (e.g. claude-sonnet-4-6) are meaningless to DeepSeek;
-        // honor an explicit deepseek-* model, otherwise use the configured fallback.
-        const model = params.model.startsWith('deepseek') ? params.model : fallbackModel;
+        // Anthropic model names (e.g. claude-sonnet-4-6) are meaningless to an
+        // OpenAI-wire backend; honor a provider-native model, otherwise fall back
+        // to the provider's default.
+        const model = isOpenAiWireModel(params.model) ? params.model : fallbackModel;
 
         const controller = new AbortController();
         const timer =
@@ -260,9 +278,14 @@ function createDeepSeekAdapter(apiKey: string): AnthropicLike {
             : undefined;
 
         try {
+          const headers: Record<string, string> = { 'content-type': 'application/json' };
+          // Only send Authorization when we actually have a key (local servers
+          // are often keyless; an empty Bearer token can be rejected outright).
+          if (apiKey !== '') headers['authorization'] = `Bearer ${apiKey}`;
+
           const res = await fetch(`${baseUrl}/chat/completions`, {
             method: 'POST',
-            headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+            headers,
             body: JSON.stringify({
               model,
               max_tokens: params.max_tokens,
@@ -289,7 +312,7 @@ function createDeepSeekAdapter(apiKey: string): AnthropicLike {
                     : status >= 500
                       ? 'server_error'
                       : 'bad_request_error';
-            throw new Error(`DeepSeek API ${category} (HTTP ${status}): ${body.slice(0, 200)}`);
+            throw new Error(`${label} API ${category} (HTTP ${status}): ${body.slice(0, 200)}`);
           }
 
           const data = (await res.json()) as OpenAiChatResponse;
@@ -320,25 +343,54 @@ function createDeepSeekAdapter(apiKey: string): AnthropicLike {
 // ---------------------------------------------------------------------------
 
 /**
+ * Build the transport for a resolved {@link ProviderConfig}.
+ *
+ * - `openai`-wire providers route through the in-process OpenAI-compatible
+ *   fetch adapter.
+ * - `anthropic`-wire providers use the Anthropic SDK, optionally pointed at an
+ *   Anthropic-*compatible* base URL (e.g. DeepSeek's `/anthropic` endpoint or a
+ *   custom gateway). A `null` base URL means the SDK default (native Anthropic).
+ */
+function buildTransport(provider: ProviderConfig, apiKey: string): AnthropicLike {
+  if (provider.wire === 'openai') {
+    return createOpenAiAdapter(provider, apiKey);
+  }
+  const anthropicOptions: { apiKey: string; maxRetries: number; baseURL?: string } = {
+    apiKey,
+    maxRetries: 0,
+  };
+  if (provider.baseURL !== null) {
+    anthropicOptions.baseURL = provider.baseURL;
+  }
+  return new Anthropic(anthropicOptions) as unknown as AnthropicLike;
+}
+
+/**
  * Create a {@link ClaudeClient}.
  *
- * Provider is selected by `ICO_PROVIDER` (default `anthropic`): `deepseek` routes
- * through the OpenAI-compatible DeepSeek adapter; anything else uses the Anthropic SDK.
- * Either way the same retry / error-sanitize / Result-typed surface is returned.
+ * Provider is selected by `ICO_PROVIDER` (default `anthropic`) via the provider
+ * registry: `openai`-wire providers (OpenAI, Groq, NVIDIA, DeepSeek, local
+ * Ollama/vLLM) route through the in-process OpenAI-compatible adapter;
+ * `anthropic`-wire providers (Anthropic native, DeepSeek-anthropic, custom)
+ * use the Anthropic SDK with an optional base-URL override. Either way the same
+ * retry / error-sanitize / Result-typed surface is returned.
  *
- * @param apiKey            - Provider API key (Anthropic or DeepSeek per ICO_PROVIDER). Never logged.
+ * @param apiKey            - Provider API key for the selected provider. Never logged.
  * @param anthropicInstance - Optional SDK-shaped object; provide in tests to avoid real HTTP
  *                            calls. Must satisfy the {@link AnthropicLike} duck type. Takes
  *                            precedence over the provider switch.
  */
 export function createClaudeClient(apiKey: string, anthropicInstance?: unknown): ClaudeClient {
-  const provider = process.env['ICO_PROVIDER'] ?? 'anthropic';
+  const provider = resolveProvider(process.env);
   const sdkClient: AnthropicLike =
     anthropicInstance != null
       ? (anthropicInstance as AnthropicLike)
-      : provider === 'deepseek'
-        ? createDeepSeekAdapter(apiKey)
-        : (new Anthropic({ apiKey, maxRetries: 0 }) as unknown as AnthropicLike);
+      : buildTransport(provider, apiKey);
+
+  // Default model is provider-aware: `ICO_MODEL` wins, otherwise the selected
+  // provider's default (so a non-Anthropic provider never falls back to a Claude
+  // model name it can't serve).
+  const defaultModel = resolveModel(provider, process.env);
 
   return {
     async createCompletion(
@@ -347,7 +399,7 @@ export function createClaudeClient(apiKey: string, anthropicInstance?: unknown):
       options?: CompletionOptions,
     ): Promise<Result<CompletionResult, Error>> {
       const resolved: Required<CompletionOptions> = {
-        model: options?.model ?? DEFAULT_MODEL,
+        model: options?.model ?? defaultModel,
         maxTokens: options?.maxTokens ?? DEFAULT_MAX_TOKENS,
         temperature: options?.temperature ?? 0,
         timeout: options?.timeout ?? DEFAULT_TIMEOUT_MS,
