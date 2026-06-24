@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.18.0] - 2026-06-24
+
+- feat(compiler): cross-batch contradiction detection via reduce pass (v2) (#150) (25498cf)
+
 ## [v1.17.3] - 2026-06-24
 
 - fix(cli): read spool.tenantId from .ico/config.json (was a dead path) (#148) (ed2ef9d)
