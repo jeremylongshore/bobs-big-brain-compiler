@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.17.1] - 2026-06-24
+
+- fix(compiler): default DeepSeek to deepseek-chat + read reasoning_content (#146) (03786a3)
+
 ## [v1.17.0] - 2026-06-23
 
 - feat(compiler): batch the cross-source compile passes (scale to large corpora) (#145) (c4062d4)
