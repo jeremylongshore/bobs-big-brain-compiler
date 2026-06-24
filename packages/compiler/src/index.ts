@@ -30,6 +30,15 @@ export {
   type CompletionResult,
 } from './api/claude-client.js';
 export {
+  resolveProvider,
+  resolveApiKey,
+  resolveModel,
+  providerRequiresKey,
+  listBuiltinProviders,
+  type ProviderConfig,
+  type WireFormat,
+} from '@ico/types';
+export {
   calculateCost,
   getTokenUsageSummary,
   formatTokenUsage,

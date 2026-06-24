@@ -15,6 +15,12 @@ describe('loadConfig', () => {
     mkdirSync(tempDir, { recursive: true });
     // Clear relevant env vars
     delete process.env['ANTHROPIC_API_KEY'];
+    delete process.env['DEEPSEEK_API_KEY'];
+    delete process.env['GROQ_API_KEY'];
+    delete process.env['ICO_PROVIDER'];
+    delete process.env['ICO_PROVIDER_WIRE'];
+    delete process.env['ICO_BASE_URL'];
+    delete process.env['ICO_API_KEY'];
     delete process.env['ICO_WORKSPACE'];
     delete process.env['ICO_MODEL'];
     delete process.env['ICO_RESEARCH_MODEL'];
@@ -32,6 +38,7 @@ describe('loadConfig', () => {
     const config = loadConfig(tempDir);
     expect(config.apiKey).toBe('sk-ant-test-key-123');
     expect(config.workspace).toBe('./workspace');
+    expect(config.provider).toBe('anthropic');
     expect(config.model).toBe('claude-sonnet-4-6');
     expect(config.researchModel).toBe('claude-opus-4-6');
     expect(config.logLevel).toBe('info');
@@ -39,6 +46,50 @@ describe('loadConfig', () => {
 
   it('throws when ANTHROPIC_API_KEY is missing', () => {
     expect(() => loadConfig(tempDir)).toThrow('ANTHROPIC_API_KEY is required');
+  });
+
+  it('selects a non-Anthropic provider with its own key and default model', () => {
+    writeFileSync(join(tempDir, '.env'), 'ICO_PROVIDER=groq\nGROQ_API_KEY=gsk-xyz\n');
+    const config = loadConfig(tempDir);
+    expect(config.provider).toBe('groq');
+    expect(config.apiKey).toBe('gsk-xyz');
+    // The model + research model fall back to the provider's default, not Claude.
+    expect(config.model).toBe('llama-3.3-70b-versatile');
+    expect(config.researchModel).toBe('llama-3.3-70b-versatile');
+  });
+
+  it('reports the provider-specific key requirement when its key is missing', () => {
+    writeFileSync(join(tempDir, '.env'), 'ICO_PROVIDER=deepseek\n');
+    expect(() => loadConfig(tempDir)).toThrow(/DEEPSEEK_API_KEY is required/);
+  });
+
+  it('accepts the generic ICO_API_KEY for any provider', () => {
+    writeFileSync(join(tempDir, '.env'), 'ICO_PROVIDER=nvidia\nICO_API_KEY=nvapi-generic\n');
+    const config = loadConfig(tempDir);
+    expect(config.provider).toBe('nvidia');
+    expect(config.apiKey).toBe('nvapi-generic');
+  });
+
+  it('loads a keyless local provider without throwing', () => {
+    writeFileSync(join(tempDir, '.env'), 'ICO_PROVIDER=local\n');
+    const config = loadConfig(tempDir);
+    expect(config.provider).toBe('local');
+    expect(config.apiKey).toBe('');
+    expect(config.model).toBe('llama3.1');
+  });
+
+  it('throws on an unknown provider id', () => {
+    writeFileSync(join(tempDir, '.env'), 'ICO_PROVIDER=not-a-provider\nICO_API_KEY=x\n');
+    expect(() => loadConfig(tempDir)).toThrow(/Unknown ICO_PROVIDER/);
+  });
+
+  it('ICO_MODEL overrides the provider default model', () => {
+    writeFileSync(
+      join(tempDir, '.env'),
+      'ICO_PROVIDER=groq\nGROQ_API_KEY=gsk\nICO_MODEL=mixtral-8x7b\n',
+    );
+    const config = loadConfig(tempDir);
+    expect(config.model).toBe('mixtral-8x7b');
   });
 
   it('env vars override .env file', () => {
