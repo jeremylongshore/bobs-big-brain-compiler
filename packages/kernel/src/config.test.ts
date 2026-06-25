@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -11,8 +11,10 @@ describe('loadConfig', () => {
   const originalEnv = { ...process.env };
 
   beforeEach(() => {
-    tempDir = join(tmpdir(), `ico-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    mkdirSync(tempDir, { recursive: true });
+    // mkdtempSync atomically creates a uniquely-named dir with a secure random
+    // suffix (no predictable Date.now()/Math.random() path in the shared tmp —
+    // clears CodeQL js/insecure-temporary-file).
+    tempDir = mkdtempSync(join(tmpdir(), 'ico-test-'));
     // Clear relevant env vars
     delete process.env['ANTHROPIC_API_KEY'];
     delete process.env['DEEPSEEK_API_KEY'];

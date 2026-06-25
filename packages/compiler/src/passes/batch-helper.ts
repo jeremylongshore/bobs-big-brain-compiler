@@ -152,7 +152,9 @@ export function buildBatchDigest(
 ): DigestEntry[] {
   const entries: DigestEntry[] = [];
   for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-    for (const doc of batches[batchIndex]!) {
+    const batch = batches[batchIndex];
+    if (!batch) continue;
+    for (const doc of batch) {
       const id = extractFrontmatterField(doc, 'id');
       if (id === undefined || id.length === 0) continue;
       const title = extractFrontmatterField(doc, 'title') ?? fallbackTitle;
@@ -180,13 +182,10 @@ export function renderBatchDigest(entries: ReadonlyArray<DigestEntry>): string {
     if (bucket === undefined) byBatch.set(entry.batchIndex, [entry]);
     else bucket.push(entry);
   }
-  const sortedBatchIndexes = [...byBatch.keys()].sort((a, b) => a - b);
-  return sortedBatchIndexes
-    .map((batchIndex) => {
-      const lines = byBatch
-        .get(batchIndex)!
-        .map((entry) => `- ${entry.id} — ${entry.title}`)
-        .join('\n');
+  return [...byBatch.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([batchIndex, bucket]) => {
+      const lines = bucket.map((entry) => `- ${entry.id} — ${entry.title}`).join('\n');
       return `## Batch ${batchIndex}\n${lines}`;
     })
     .join('\n\n');
