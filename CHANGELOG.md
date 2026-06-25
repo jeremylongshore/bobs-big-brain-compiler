@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.19.1] - 2026-06-25
+
+- fix(compiler,kernel): address review feedback on #149/#150 (#151) (decc7f1)
+
 ## [v1.19.0] - 2026-06-24
 
 - feat(compiler): model-agnostic provider registry (anthropic/openai/local) (#149) (22914b0)
