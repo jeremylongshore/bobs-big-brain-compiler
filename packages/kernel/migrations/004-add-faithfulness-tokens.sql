@@ -1,0 +1,37 @@
+-- Migration: 004-add-faithfulness-tokens
+-- Description: Add a SIBLING token meter to `compilations` for the sampled
+--              compile-faithfulness eval (e06.8).
+--
+--              The compile-faithfulness judge (an LLM-as-judge, run on
+--              DeepSeek off the hot compile path) consumes tokens of its own.
+--              The bead requires those judge tokens be recorded so the meter
+--              is VISIBLE — cost parity with the compile itself. We record them
+--              in a SEPARATE column rather than overwriting `tokens_used`:
+--              `tokens_used` is the compile-side meter and must stay intact so
+--              the two costs are comparable side by side (the whole point of
+--              "cost parity" is being able to see BOTH numbers).
+--
+--              `faithfulness_tokens_used` is NULL until a faithfulness eval has
+--              scored the page; the eval is diagnostic and NEVER runs on the
+--              hot compile path, so an un-evaluated compilation legitimately
+--              carries NULL here. Writing this column is the eval's ONLY touch
+--              of durable state — it records the meter, not the score. The
+--              score + report are emitted to the caller and the append-only
+--              audit/trace layer, never back into the semantic tables. This
+--              respects the deterministic/probabilistic boundary (003-AT-ARCH):
+--              the judge proposes a number; the kernel owns whether/where it
+--              is recorded, and the recorded fact is a cost meter, not a
+--              knowledge claim.
+--
+--              SQLite ADD COLUMN is a cheap, non-rewriting change (the column
+--              is nullable with no default), so no table rebuild is needed.
+-- Date: 2026-07-01
+
+-- === UP ===
+ALTER TABLE compilations ADD COLUMN faithfulness_tokens_used INTEGER;
+
+-- === DOWN ===
+-- SQLite < 3.35 cannot DROP COLUMN; even on 3.35+ dropping is a rewrite and
+-- would discard recorded meters. Intentionally no-op: the column is nullable
+-- and inert to all existing queries. Restore from a pre-migration backup if a
+-- true rollback of the schema is required.

@@ -33,11 +33,23 @@ export interface ModelPricing {
 // Pricing table
 // ---------------------------------------------------------------------------
 
-/** Default pricing for common Claude models (USD per 1M tokens). */
+/**
+ * Default pricing for common models (USD per 1M tokens).
+ *
+ * DeepSeek is the LIVE compile + faithfulness-judge provider (teamkb-compile
+ * decision: the real eval provider is DeepSeek, auto-selected from
+ * `DEEPSEEK_API_KEY`; Anthropic labels route to the stub). Pricing it here —
+ * roughly 50× cheaper than Sonnet — is what makes the faithfulness cost model
+ * honest: pricing the judge at Anthropic rates was the exact ~50× over-estimate
+ * flagged in the e06 risk register (R12), so the judge's cost is reported at
+ * DeepSeek rates, not the Anthropic fallback.
+ */
 export const MODEL_PRICING: Record<string, ModelPricing> = {
   'claude-sonnet-4-6': { inputPerMillion: 3, outputPerMillion: 15 },
   'claude-opus-4-6': { inputPerMillion: 15, outputPerMillion: 75 },
   'claude-haiku-4-5': { inputPerMillion: 0.8, outputPerMillion: 4 },
+  // DeepSeek `deepseek-chat` (deepseek-v3 class) — the live provider.
+  'deepseek-chat': { inputPerMillion: 0.28, outputPerMillion: 0.42 },
 };
 
 // ---------------------------------------------------------------------------

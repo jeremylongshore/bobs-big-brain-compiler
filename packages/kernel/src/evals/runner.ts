@@ -108,6 +108,17 @@ export function runEval(
         ),
       );
       break;
+    case 'faithfulness':
+      // Faithfulness evals also require a ClaudeClient (the LLM-as-judge) and
+      // read raw sources through provenance — both live in @ico/compiler.
+      // Routed through the compiler-side runner for the same layering reason
+      // as `compilation`; hitting the kernel runner is a configuration error.
+      outcome = err(
+        new Error(
+          `Faithfulness eval '${spec.id}' must be dispatched through @ico/compiler's runFaithfulnessEval — not the kernel runner.`,
+        ),
+      );
+      break;
   }
   if (!outcome.ok) return err(outcome.error);
   const result = outcome.value;

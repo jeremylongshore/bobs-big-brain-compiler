@@ -24,7 +24,13 @@
 // ---------------------------------------------------------------------------
 
 /** Supported handler types. New handlers add to this union. */
-export type EvalType = 'retrieval' | 'smoke' | 'compilation' | 'citation' | 'functional-quality';
+export type EvalType =
+  | 'retrieval'
+  | 'smoke'
+  | 'compilation'
+  | 'citation'
+  | 'functional-quality'
+  | 'faithfulness';
 
 /** Common fields shared by every eval spec. */
 export interface BaseEvalSpec {
@@ -168,13 +174,64 @@ export interface FunctionalQualityEvalSpec extends BaseEvalSpec {
   intent?: string;
 }
 
+/**
+ * Compile-faithfulness handler (e06.8) — the groundedness check the receipt
+ * does NOT provide.
+ *
+ * The audit chain attests INTEGRITY (a page was not edited/reordered after the
+ * fact), not TRUTH. ICO's six Claude compile passes are trusted, not evaluated:
+ * a hallucinated synthesis that clears the structural CI guards (Zod schema,
+ * concept-count, word-count) still gets a clean receipt. This spec closes that
+ * gap by tracing a compiled wiki page's claims back to its brain/raw source(s)
+ * via the existing provenance (`compilations.source_id` + the
+ * `compilation_sources` junction, 010-AT-DBSC) and asking an LLM-as-judge
+ * whether each claim is SUPPORTED by the cited raw text.
+ *
+ * Unlike `compilation` (which scores a page against a subjective quality
+ * rubric with no source in view), faithfulness scores the page AGAINST ITS
+ * OWN SOURCES — it is a grounded, provenance-anchored check, and it samples a
+ * FIXED NUMBER of pages per run (`sample_size`, N pages — never a percentage)
+ * so the per-run judge cost is bounded and predictable.
+ *
+ * The handler lives in `@ico/compiler` (it needs a `ClaudeClient`); this spec
+ * type is declared here so the kernel loader validates its YAML at the same
+ * trust boundary as every other eval. The judge writes NO knowledge into the
+ * semantic tables — it emits a score + report and records only its own token
+ * meter (`compilations.faithfulness_tokens_used`), respecting the
+ * deterministic/probabilistic boundary (003-AT-ARCH).
+ */
+export interface FaithfulnessEvalSpec extends BaseEvalSpec {
+  type: 'faithfulness';
+  /**
+   * FIXED per-run sample size: the maximum number of compiled pages the judge
+   * scores this run (N pages, NOT a percentage). Bounds the judge cost so it
+   * stays predictable and comparable to the compile cost. Defaults to 5.
+   */
+  sample_size?: number;
+  /**
+   * Optional wiki-subdirectory filter (e.g. `sources`, `topics`). When set,
+   * only pages under these subdirs are eligible for the sample. Empty/omitted
+   * = all compiled pages with traceable provenance are eligible.
+   */
+  wiki_subdirs?: string[];
+  /**
+   * Deterministic seed for the sample selection so a run is reproducible.
+   * When omitted, pages are sampled by a stable ordering (compiled_at, id) —
+   * still deterministic, just newest-first rather than seed-shuffled.
+   */
+  seed?: number;
+  /** Optional model override. Defaults to the resolved provider's model (DeepSeek in prod). */
+  model?: string;
+}
+
 /** Union of every supported spec shape. */
 export type EvalSpec =
   | RetrievalEvalSpec
   | SmokeEvalSpec
   | CompilationEvalSpec
   | CitationEvalSpec
-  | FunctionalQualityEvalSpec;
+  | FunctionalQualityEvalSpec
+  | FaithfulnessEvalSpec;
 
 // ---------------------------------------------------------------------------
 // Result shape

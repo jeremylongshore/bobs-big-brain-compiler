@@ -22,7 +22,7 @@ import { dirname, resolve as resolvePath } from 'node:path';
 
 import type { Command } from 'commander';
 
-import { createClaudeClient, runCompilationEval } from '@ico/compiler';
+import { createClaudeClient, runCompilationEval, runFaithfulnessEval } from '@ico/compiler';
 import {
   closeDatabase,
   type EvalBatchResult,
@@ -118,7 +118,11 @@ export async function runEvalCommand(
 
     let claudeClient: ReturnType<typeof createClaudeClient> | null = null;
     let defaultModel: string | undefined;
-    const needsClaude = specs.some((s) => s.type === 'compilation');
+    // Both compilation (rubric) and faithfulness (groundedness) evals need an
+    // LLM: compilation asks a quality rubric; faithfulness asks the judge
+    // whether a page's claims are grounded in its raw source(s). The judge runs
+    // on the live provider (DeepSeek in prod) via the same client.
+    const needsClaude = specs.some((s) => s.type === 'compilation' || s.type === 'faithfulness');
     if (needsClaude) {
       let config: { apiKey: string; model: string };
       try {
@@ -127,7 +131,7 @@ export async function runEvalCommand(
         return {
           ok: false,
           error: new Error(
-            `Compilation evals need a Claude key. Config load failed: ${e instanceof Error ? e.message : String(e)}`,
+            `Compilation/faithfulness evals need a provider key. Config load failed: ${e instanceof Error ? e.message : String(e)}`,
           ),
         };
       }
@@ -156,6 +160,26 @@ export async function runEvalCommand(
         });
         result = r.ok
           ? r.value
+          : {
+              spec,
+              passed: false,
+              score: 0,
+              threshold: spec.threshold ?? 1,
+              details: `Handler crashed: ${r.error.message}`,
+              durationMs: 0,
+            };
+      } else if (spec.type === 'faithfulness') {
+        // claudeClient is non-null here — built above when any faithfulness
+        // spec was present. The handler samples N pages, judges groundedness
+        // against raw sources, and records judge tokens on each page's row.
+        const r = await runFaithfulnessEval(db, wsPath, spec, claudeClient!, {
+          correlationId,
+          ...(spec.model === undefined && defaultModel !== undefined
+            ? { model: defaultModel }
+            : {}),
+        });
+        result = r.ok
+          ? r.value.result
           : {
               spec,
               passed: false,
