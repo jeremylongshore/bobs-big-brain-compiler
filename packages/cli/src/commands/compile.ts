@@ -23,7 +23,7 @@
  * @module commands/compile
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { Command } from 'commander';
@@ -366,14 +366,17 @@ async function runGap(ctx: CompileContext): Promise<void> {
  * @returns The changed-file list (deduplicated, order-stable).
  */
 export function parseChangedList(arg: string, workspacePath: string): ChangedFile[] {
-  let text = arg;
-  // If the argument names a readable file, treat it as a manifest.
+  // Resolve manifest-vs-inline with a SINGLE read, not exists/stat-then-read:
+  // reading once (and deciding from the result) closes the check-then-use
+  // (TOCTOU) window where the path could change between the check and the read
+  // — the same one-read discipline `ico ingest` uses. If the read succeeds the
+  // argument is a manifest file; if it throws (ENOENT/EISDIR/…) the argument is
+  // an inline comma/newline list, used verbatim.
+  let text: string;
   try {
-    if (existsSync(arg) && statSync(arg).isFile()) {
-      text = readFileSync(arg, 'utf-8');
-    }
+    text = readFileSync(arg, 'utf-8');
   } catch {
-    // Not a manifest — fall through and treat `arg` as an inline list.
+    text = arg;
   }
 
   const seen = new Set<string>();
