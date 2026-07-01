@@ -23,16 +23,19 @@
  * @module commands/compile
  */
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { Command } from 'commander';
 
 import {
   addBacklinks,
+  type ChangedFile,
   type ClaudeClient,
+  computeAffectedSet,
   createClaudeClient,
   detectContradictions,
+  evaluateCostGate,
   extractConcepts,
   getUncompiledSources,
   identifyGaps,
@@ -46,6 +49,7 @@ import {
   initDatabase,
   loadConfig,
   rebuildWikiIndex,
+  withWriteLock,
 } from '@ico/kernel';
 
 import { formatError, formatInfo, formatSuccess, formatWarning } from '../lib/output.js';
@@ -342,6 +346,197 @@ async function runGap(ctx: CompileContext): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Incremental compile — governed freshness (e06.5 / R12 / umbrella #27)
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a `--changed` argument into the `ChangedFile[]` the diff consumes.
+ *
+ * The argument is a comma- and/or newline-separated list of workspace-relative
+ * raw paths (e.g. `raw/notes/a.md,raw/notes/b.md`) OR a path to a manifest file
+ * containing one such path per line. Each path's CURRENT content hash is
+ * computed from disk so the diff can compare it against the `sources` table.
+ *
+ * A path that cannot be read on disk is still returned (with an empty hash) so
+ * the diff treats it as changed/new and fails toward freshness — a compile
+ * trigger should never be silently dropped because a file read hiccuped.
+ *
+ * @param arg           - The raw `--changed` value.
+ * @param workspacePath - Absolute workspace root (paths resolve against it).
+ * @returns The changed-file list (deduplicated, order-stable).
+ */
+export function parseChangedList(arg: string, workspacePath: string): ChangedFile[] {
+  let text = arg;
+  // If the argument names a readable file, treat it as a manifest.
+  try {
+    if (existsSync(arg) && statSync(arg).isFile()) {
+      text = readFileSync(arg, 'utf-8');
+    }
+  } catch {
+    // Not a manifest — fall through and treat `arg` as an inline list.
+  }
+
+  const seen = new Set<string>();
+  const out: ChangedFile[] = [];
+  for (const token of text.split(/[\n,]/)) {
+    const relPath = token.trim();
+    if (relPath === '' || seen.has(relPath)) continue;
+    seen.add(relPath);
+    const absPath = join(workspacePath, relPath);
+    const hashResult = computeFileHash(absPath);
+    out.push({ path: relPath, hash: hashResult.ok ? hashResult.value : '' });
+  }
+  return out;
+}
+
+/**
+ * Run an incremental compile: regenerate ONLY the pages affected by a set of
+ * changed raw files, gated by the DeepSeek-priced cost model, serialised under
+ * the `~/.teamkb` write-lock.
+ *
+ * The affected pages re-enter the SAME pass pipeline as a full compile — there
+ * is no fast-path that skips govern. Today this drives the summarize pass for
+ * affected single-source pages and re-runs the cross-source passes (topics,
+ * contradictions, gaps) when the conservative sweep fired; extract/link follow
+ * the full-compile ordering. When nothing is affected it is a no-op.
+ *
+ * @returns the process exit code (0 = ran or no-op; 3 = deferred by cost gate;
+ *          4 = coalesced within the debounce window). Non-zero-but-benign codes
+ *          let a CI trigger distinguish "did nothing on purpose" from failure.
+ */
+export async function runIncremental(
+  ctx: CompileContext,
+  changed: ChangedFile[],
+  opts: {
+    dryRun: boolean;
+    dailyCeilingUsd?: number;
+    debounceWindowSeconds?: number;
+    lastCompileAtMs?: number | null;
+  },
+): Promise<number> {
+  // 1. Diff — which pages are affected? (fail toward freshness)
+  const affectedResult = computeAffectedSet(ctx.db, changed);
+  if (!affectedResult.ok) {
+    process.stderr.write(formatError(`Diff failed: ${affectedResult.error.message}`) + '\n');
+    return 1;
+  }
+  const affected = affectedResult.value;
+
+  process.stdout.write(
+    formatInfo(
+      `Incremental diff: ${affected.changedSourcePaths.length} changed, ` +
+        `${affected.newSourcePaths.length} new, ${affected.unchangedSourcePaths.length} unchanged; ` +
+        `${affected.affectedPages.length} page(s) to recompile` +
+        (affected.conservativeSweep ? ' (conservative cross-source sweep applied)' : ''),
+    ) + '\n',
+  );
+
+  // 2. Cost gate — enforce the per-UTC-day ceiling + debounce window.
+  const gateResult = evaluateCostGate(
+    ctx.db,
+    {
+      affectedTypes: affected.affectedPages.map((p) => p.type),
+      lastCompileAtMs: opts.lastCompileAtMs ?? null,
+    },
+    {
+      model: ctx.model,
+      ...(opts.dailyCeilingUsd !== undefined && { dailyCeilingUsd: opts.dailyCeilingUsd }),
+      ...(opts.debounceWindowSeconds !== undefined && {
+        debounceWindowSeconds: opts.debounceWindowSeconds,
+      }),
+    },
+  );
+  if (!gateResult.ok) {
+    process.stderr.write(formatError(`Cost gate failed: ${gateResult.error.message}`) + '\n');
+    return 1;
+  }
+  const verdict = gateResult.value;
+  process.stdout.write(
+    formatInfo(
+      `Cost gate [${verdict.pricedModel}]: projected $${verdict.projectedCostUsd.toFixed(4)}, ` +
+        `day total $${verdict.projectedDayTotalUsd.toFixed(4)} / $${verdict.ceilingUsd.toFixed(2)} ceiling`,
+    ) + '\n',
+  );
+
+  if (verdict.decision === 'coalesce') {
+    process.stdout.write(formatWarning(verdict.reason) + '\n');
+    return 4;
+  }
+  if (verdict.decision === 'defer') {
+    process.stdout.write(formatWarning(verdict.reason) + '\n');
+    return 3;
+  }
+
+  if (affected.affectedPages.length === 0) {
+    process.stdout.write(formatSuccess('Nothing affected — brain is already fresh.') + '\n');
+    return 0;
+  }
+
+  if (opts.dryRun) {
+    process.stdout.write(formatInfo('Dry run — affected pages (not recompiling):') + '\n');
+    for (const p of affected.affectedPages) {
+      process.stdout.write(formatInfo(`  ${p.type}\t${p.outputPath}\t(${p.reason})`) + '\n');
+    }
+    process.stdout.write(formatSuccess(verdict.reason) + '\n');
+    return 0;
+  }
+
+  // 3. Recompile under the single-writer lock (serialises vs nightly + backup).
+  const lockResult = await withWriteLock(async () => {
+    // Affected single-source pages recompile via the summarize pass (it reads
+    // uncompiled/changed sources from the DB). Cross-source passes re-run when
+    // the conservative sweep flagged them. Deltas run the FULL pipeline — no
+    // fast-path around govern.
+    const hasSingleSource = affected.affectedPages.some((p) =>
+      ['summary', 'concept', 'entity'].includes(p.type),
+    );
+    const hasCrossSource =
+      affected.conservativeSweep ||
+      affected.affectedPages.some((p) =>
+        ['topic', 'contradiction', 'open-question'].includes(p.type),
+      );
+
+    if (hasSingleSource) {
+      await runSummarize(ctx);
+      await runExtract(ctx);
+    }
+    if (hasCrossSource) {
+      await runSynthesize(ctx);
+      await runLink(ctx);
+      await runContradict(ctx);
+      await runGap(ctx);
+    }
+    rebuildWikiIndex(ctx.workspacePath);
+  });
+
+  if (!lockResult.ok) {
+    process.stderr.write(
+      formatError(`Incremental compile failed: ${lockResult.error.message}`) + '\n',
+    );
+    return 1;
+  }
+  if (!lockResult.value.ran) {
+    // Another ~/.teamkb writer held the lock — skip-graceful, defer to next trigger.
+    process.stdout.write(
+      formatWarning(
+        'Another ~/.teamkb writer holds the lock — skipped (will retry next trigger).',
+      ) + '\n',
+    );
+    return 4;
+  }
+  if (!lockResult.value.locked) {
+    process.stdout.write(
+      formatWarning(
+        'flock not on PATH — ran WITHOUT the ~/.teamkb writer lock (concurrent backup/compile could skew the brain).',
+      ) + '\n',
+    );
+  }
+
+  process.stdout.write(formatSuccess('Incremental compile complete.') + '\n');
+  return 0;
+}
+
+// ---------------------------------------------------------------------------
 // Compile command registration
 // ---------------------------------------------------------------------------
 
@@ -370,113 +565,166 @@ export function register(program: Command): void {
     .description('Compile knowledge from sources')
     .addHelpText(
       'after',
-      `\nTargets:\n  sources         Summarize uncompiled sources\n  concepts        Extract concepts from summaries\n  topics          Synthesize topic pages\n  links           Add backlinks\n  contradictions  Detect contradictions\n  gaps            Identify knowledge gaps\n  all             Run all passes in order\n\nExamples:\n  $ ico compile sources\n  $ ico compile all\n  $ ico compile concepts --model claude-opus-4-6`,
+      `\nTargets:\n  sources         Summarize uncompiled sources\n  concepts        Extract concepts from summaries\n  topics          Synthesize topic pages\n  links           Add backlinks\n  contradictions  Detect contradictions\n  gaps            Identify knowledge gaps\n  all             Run all passes in order\n\nIncremental (governed freshness — regenerate only affected pages):\n  --changed <list>          Comma/newline list of changed raw paths, or a manifest file.\n                            Recompiles only the affected pages, gated by the cost model,\n                            serialised under the ~/.teamkb write-lock. Enters the full\n                            pipeline (no fast-path around govern).\n  --dry-run                 With --changed: print the affected set + cost verdict; do not compile.\n  --daily-ceiling-usd <n>   Override the per-UTC-day spend ceiling (default $1.00).\n  --debounce-seconds <n>    Override the coalescing window (default 300s).\n\nExamples:\n  $ ico compile sources\n  $ ico compile all\n  $ ico compile concepts --model claude-opus-4-6\n  $ ico compile all --changed raw/notes/a.md,raw/notes/b.md\n  $ ico compile all --changed .changed-manifest --dry-run`,
     )
     .option('--model <model>', 'Override model for this pass')
-    .action(async (target: string, opts: { model?: string }, cmd: Command) => {
-      const globalOpts = cmd.optsWithGlobals<GlobalOptions & { model?: string }>();
-      const modelOverride = opts.model ?? globalOpts.model;
+    .option(
+      '--changed <list>',
+      'Incremental: comma/newline list of changed raw paths, or a manifest file',
+    )
+    .option('--dry-run', 'With --changed: report the affected set + cost verdict without compiling')
+    .option(
+      '--daily-ceiling-usd <n>',
+      'Incremental cost gate: per-UTC-day USD ceiling (default 1.00)',
+    )
+    .option(
+      '--debounce-seconds <n>',
+      'Incremental cost gate: coalescing window in seconds (default 300)',
+    )
+    .action(
+      async (
+        target: string,
+        opts: {
+          model?: string;
+          changed?: string;
+          dryRun?: boolean;
+          dailyCeilingUsd?: string;
+          debounceSeconds?: string;
+        },
+        cmd: Command,
+      ) => {
+        const globalOpts = cmd.optsWithGlobals<GlobalOptions & { model?: string }>();
+        const modelOverride = opts.model ?? globalOpts.model;
 
-      if (!isValidTarget(target)) {
-        process.stderr.write(
-          formatError(
-            `Unknown compile target: "${target}". Valid targets: ${VALID_TARGETS.join(', ')}`,
-          ) + '\n',
-        );
-        process.exit(1);
-      }
-
-      // Resolve workspace.
-      const wsResult = resolveWorkspace(
-        globalOpts.workspace !== undefined ? { workspace: globalOpts.workspace } : undefined,
-      );
-      if (!wsResult.ok) {
-        process.stderr.write(formatError(wsResult.error.message) + '\n');
-        process.exit(1);
-      }
-      const { root: workspacePath, dbPath } = wsResult.value;
-
-      // Open database.
-      const dbResult = initDatabase(dbPath);
-      if (!dbResult.ok) {
-        process.stderr.write(
-          formatError(`Failed to open database: ${dbResult.error.message}`) + '\n',
-        );
-        process.exit(1);
-      }
-      const db = dbResult.value;
-
-      // Load config. The link pass is deterministic and does not need an API key,
-      // so we gracefully degrade when the key is absent.
-      let config: { apiKey: string; model: string };
-      try {
-        const loaded = loadConfig(workspacePath);
-        config = { apiKey: loaded.apiKey, model: loaded.model };
-      } catch (e) {
-        if (target === 'links') {
-          // Link pass is deterministic — no API key required.
-          config = { apiKey: '', model: modelOverride ?? 'claude-sonnet-4-6' };
-        } else {
-          closeDatabase(db);
-          process.stderr.write(formatError(e instanceof Error ? e.message : String(e)) + '\n');
+        if (!isValidTarget(target)) {
+          process.stderr.write(
+            formatError(
+              `Unknown compile target: "${target}". Valid targets: ${VALID_TARGETS.join(', ')}`,
+            ) + '\n',
+          );
           process.exit(1);
         }
-      }
 
-      const model = modelOverride ?? config.model;
-      const client = createClaudeClient(config.apiKey);
-      const ctx: CompileContext = { workspacePath, dbPath, db, client, model };
+        // Resolve workspace.
+        const wsResult = resolveWorkspace(
+          globalOpts.workspace !== undefined ? { workspace: globalOpts.workspace } : undefined,
+        );
+        if (!wsResult.ok) {
+          process.stderr.write(formatError(wsResult.error.message) + '\n');
+          process.exit(1);
+        }
+        const { root: workspacePath, dbPath } = wsResult.value;
 
-      try {
-        if (target === 'all') {
-          // Run all passes in order within a single DB session.
-          process.stdout.write(formatInfo('Running all compilation passes in order...\n') + '\n');
+        // Open database.
+        const dbResult = initDatabase(dbPath);
+        if (!dbResult.ok) {
+          process.stderr.write(
+            formatError(`Failed to open database: ${dbResult.error.message}`) + '\n',
+          );
+          process.exit(1);
+        }
+        const db = dbResult.value;
 
-          process.stdout.write(formatInfo('[1/6] Summarize...') + '\n');
-          await runSummarize(ctx);
-
-          process.stdout.write(formatInfo('[2/6] Extract...') + '\n');
-          await runExtract(ctx);
-
-          process.stdout.write(formatInfo('[3/6] Synthesize...') + '\n');
-          await runSynthesize(ctx);
-
-          process.stdout.write(formatInfo('[4/6] Link...') + '\n');
-          await runLink(ctx);
-
-          process.stdout.write(formatInfo('[5/6] Contradict...') + '\n');
-          await runContradict(ctx);
-
-          process.stdout.write(formatInfo('[6/6] Gap...') + '\n');
-          await runGap(ctx);
-
-          process.stdout.write('\n');
-          process.stdout.write(formatSuccess('All compilation passes complete.') + '\n');
-          return;
+        // Load config. The link pass is deterministic and does not need an API key,
+        // so we gracefully degrade when the key is absent.
+        let config: { apiKey: string; model: string };
+        try {
+          const loaded = loadConfig(workspacePath);
+          config = { apiKey: loaded.apiKey, model: loaded.model };
+        } catch (e) {
+          if (target === 'links') {
+            // Link pass is deterministic — no API key required.
+            config = { apiKey: '', model: modelOverride ?? 'claude-sonnet-4-6' };
+          } else {
+            closeDatabase(db);
+            process.stderr.write(formatError(e instanceof Error ? e.message : String(e)) + '\n');
+            process.exit(1);
+          }
         }
 
-        switch (target) {
-          case 'sources':
+        const model = modelOverride ?? config.model;
+        const client = createClaudeClient(config.apiKey);
+        const ctx: CompileContext = { workspacePath, dbPath, db, client, model };
+
+        try {
+          // Incremental / governed-freshness path (e06.5 / R12 / umbrella #27):
+          // when --changed is supplied, recompile ONLY the affected pages, gated
+          // by the DeepSeek-priced cost model + debounce window, under the
+          // ~/.teamkb write-lock. Short-circuits the normal target dispatch.
+          if (opts.changed !== undefined) {
+            const changed = parseChangedList(opts.changed, workspacePath);
+            const parseNumber = (raw: string | undefined, label: string): number | undefined => {
+              if (raw === undefined) return undefined;
+              const n = Number(raw);
+              if (!Number.isFinite(n) || n < 0) {
+                process.stderr.write(
+                  formatError(`Invalid ${label}: "${raw}" (must be a non-negative number).`) + '\n',
+                );
+                process.exit(1);
+              }
+              return n;
+            };
+            const dailyCeilingUsd = parseNumber(opts.dailyCeilingUsd, '--daily-ceiling-usd');
+            const debounceWindowSeconds = parseNumber(opts.debounceSeconds, '--debounce-seconds');
+            const exitCode = await runIncremental(ctx, changed, {
+              dryRun: opts.dryRun === true,
+              ...(dailyCeilingUsd !== undefined && { dailyCeilingUsd }),
+              ...(debounceWindowSeconds !== undefined && { debounceWindowSeconds }),
+            });
+            if (exitCode !== 0) process.exitCode = exitCode;
+            return;
+          }
+
+          if (target === 'all') {
+            // Run all passes in order within a single DB session.
+            process.stdout.write(formatInfo('Running all compilation passes in order...\n') + '\n');
+
+            process.stdout.write(formatInfo('[1/6] Summarize...') + '\n');
             await runSummarize(ctx);
-            break;
-          case 'concepts':
+
+            process.stdout.write(formatInfo('[2/6] Extract...') + '\n');
             await runExtract(ctx);
-            break;
-          case 'topics':
+
+            process.stdout.write(formatInfo('[3/6] Synthesize...') + '\n');
             await runSynthesize(ctx);
-            break;
-          case 'links':
+
+            process.stdout.write(formatInfo('[4/6] Link...') + '\n');
             await runLink(ctx);
-            break;
-          case 'contradictions':
+
+            process.stdout.write(formatInfo('[5/6] Contradict...') + '\n');
             await runContradict(ctx);
-            break;
-          case 'gaps':
+
+            process.stdout.write(formatInfo('[6/6] Gap...') + '\n');
             await runGap(ctx);
-            break;
+
+            process.stdout.write('\n');
+            process.stdout.write(formatSuccess('All compilation passes complete.') + '\n');
+            return;
+          }
+
+          switch (target) {
+            case 'sources':
+              await runSummarize(ctx);
+              break;
+            case 'concepts':
+              await runExtract(ctx);
+              break;
+            case 'topics':
+              await runSynthesize(ctx);
+              break;
+            case 'links':
+              await runLink(ctx);
+              break;
+            case 'contradictions':
+              await runContradict(ctx);
+              break;
+            case 'gaps':
+              await runGap(ctx);
+              break;
+          }
+        } finally {
+          closeDatabase(db);
         }
-      } finally {
-        closeDatabase(db);
-      }
-    });
+      },
+    );
 }

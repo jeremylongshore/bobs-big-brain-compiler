@@ -14,6 +14,24 @@ export {
   type StalePageInfo,
 } from './staleness.js';
 export {
+  computeAffectedSet,
+  INCREMENTAL_TYPE_SETS,
+  type AffectedPage,
+  type AffectedReason,
+  type AffectedSet,
+  type ChangedFile,
+} from './incremental.js';
+export {
+  evaluateCostGate,
+  costOfTokens,
+  resolvePricingModel,
+  DEFAULT_COST_GATE_CONFIG,
+  type CostGateConfig,
+  type CostGateInput,
+  type CostGateVerdict,
+  type CostLineItem,
+} from './cost-gate.js';
+export {
   detectOrphans,
   extractWikilinks,
   type LintResult,

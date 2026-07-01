@@ -136,6 +136,15 @@ export {
   type MemoryMapSection,
 } from './procfs.js';
 
+// Brain single-writer lock — serialises ~/.teamkb writers (nightly compile,
+// on-push incremental compile, backup) under the e06.12 flock. See `./write-lock.ts`.
+export {
+  withWriteLock,
+  resolveLockPath,
+  type WriteLockOptions,
+  type WriteLockResult,
+} from './write-lock.js';
+
 // Configuration
 export { loadConfig, redactSecrets, type IcoConfig } from './config.js';
 export { Logger, createLogger } from './logger.js';
