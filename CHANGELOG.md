@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.20.0] - 2026-07-01
+
+- feat(evals): sampled compile-faithfulness (groundedness) eval (#153) (f428ab5)
+
 ## [v1.19.1] - 2026-06-25
 
 - fix(compiler,kernel): address review feedback on #149/#150 (#151) (decc7f1)
