@@ -74,6 +74,37 @@ export interface CompileContext {
 }
 
 // ---------------------------------------------------------------------------
+// Pass-failure signal
+// ---------------------------------------------------------------------------
+
+/**
+ * A recoverable compile-pass failure that carries the intended process exit
+ * code WITHOUT terminating the process.
+ *
+ * The pass runners (`runSummarize`/`runExtract`/…) previously called
+ * `process.exit(1|2)` directly. That immediately killed Node, bypassing the
+ * action handler's `finally { closeDatabase(db) }` — so a mid-compile failure
+ * (especially on the incremental / governed-freshness path, which reuses the
+ * same runners under the `~/.teamkb` write-lock) left the SQLite connection
+ * open, risking a stale lock, an unflushed WAL, or corruption (Gemini review,
+ * PR #154).
+ *
+ * Now a pass THROWS this error instead. The single action-handler `try/catch/
+ * finally` catches it, lets `finally` close the database, THEN sets
+ * `process.exitCode` — cleanup always runs, on every path, before exit.
+ */
+export class CompilePassError extends Error {
+  constructor(
+    /** The process exit code this failure should ultimately produce. */
+    public readonly exitCode: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'CompilePassError';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
 
@@ -115,22 +146,24 @@ export function isAuthError(message: string): boolean {
  * Run the summarize pass: read uncompiled sources from the DB and call
  * summarizeSource for each one.
  *
- * Exit-code contract (per bead `u0j`):
- *   0 — at least one source compiled OR nothing to do (zero uncompiled sources)
- *   1 — all sources failed for non-auth reasons (likely transient or content-level)
- *   2 — Claude API authentication failed (fast-fail on first 401/403)
+ * Failure contract (per bead `u0j`): on failure this THROWS a
+ * `CompilePassError` carrying the intended exit code, rather than calling
+ * `process.exit` — so the action handler can close the database before the
+ * process exits (Gemini review, PR #154). Codes:
+ *   (returns) — at least one source compiled OR nothing to do (zero uncompiled sources)
+ *   throws exitCode 1 — all sources failed for non-auth reasons (likely transient / content-level)
+ *   throws exitCode 2 — Claude API authentication failed (fast-fail on first 401/403)
  *
- * The previous behavior was to log per-source failures as warnings and exit 0
+ * The original behavior was to log per-source failures as warnings and exit 0
  * regardless of total failure count — masked bad API keys as silent success
  * with empty wiki dirs.
  */
 export async function runSummarize(ctx: CompileContext): Promise<void> {
   const uncompiledResult = getUncompiledSources(ctx.db);
   if (!uncompiledResult.ok) {
-    process.stderr.write(
-      formatError(`Failed to list sources: ${uncompiledResult.error.message}`) + '\n',
-    );
-    process.exit(1);
+    const msg = `Failed to list sources: ${uncompiledResult.error.message}`;
+    process.stderr.write(formatError(msg) + '\n');
+    throw new CompilePassError(1, msg);
   }
 
   const sources = uncompiledResult.value;
@@ -186,12 +219,10 @@ export async function runSummarize(ctx: CompileContext): Promise<void> {
       // remaining source identically. Exit 2 distinguishes config failures
       // from per-source content failures (exit 1).
       if (isAuthError(errMsg)) {
-        process.stderr.write(
-          formatError(
-            'Claude API authentication failed. Check ANTHROPIC_API_KEY in your .env or environment.',
-          ) + '\n',
-        );
-        process.exit(2);
+        const msg =
+          'Claude API authentication failed. Check ANTHROPIC_API_KEY in your .env or environment.';
+        process.stderr.write(formatError(msg) + '\n');
+        throw new CompilePassError(2, msg);
       }
       continue;
     }
@@ -213,12 +244,9 @@ export async function runSummarize(ctx: CompileContext): Promise<void> {
   // orchestrator, operators) see the failure instead of cascading
   // "no input found" warnings through the rest of the pipeline.
   if (compiled === 0 && failed > 0) {
-    process.stderr.write(
-      formatError(
-        `Summarize pass: ALL ${failed} source(s) failed. Workspace produced no compiled output.`,
-      ) + '\n',
-    );
-    process.exit(1);
+    const msg = `Summarize pass: ALL ${failed} source(s) failed. Workspace produced no compiled output.`;
+    process.stderr.write(formatError(msg) + '\n');
+    throw new CompilePassError(1, msg);
   }
 
   process.stdout.write(
@@ -246,7 +274,7 @@ async function runExtract(ctx: CompileContext): Promise<void> {
 
   if (!result.ok) {
     process.stderr.write(formatError(result.error.message) + '\n');
-    process.exit(1);
+    throw new CompilePassError(1, result.error.message);
   }
 
   rebuildWikiIndex(ctx.workspacePath);
@@ -266,7 +294,7 @@ async function runSynthesize(ctx: CompileContext): Promise<void> {
 
   if (!result.ok) {
     process.stderr.write(formatError(result.error.message) + '\n');
-    process.exit(1);
+    throw new CompilePassError(1, result.error.message);
   }
 
   rebuildWikiIndex(ctx.workspacePath);
@@ -284,7 +312,7 @@ async function runLink(ctx: CompileContext): Promise<void> {
 
   if (!result.ok) {
     process.stderr.write(formatError(result.error.message) + '\n');
-    process.exit(1);
+    throw new CompilePassError(1, result.error.message);
   }
 
   process.stdout.write(
@@ -304,7 +332,7 @@ async function runContradict(ctx: CompileContext): Promise<void> {
 
   if (!result.ok) {
     process.stderr.write(formatError(result.error.message) + '\n');
-    process.exit(1);
+    throw new CompilePassError(1, result.error.message);
   }
 
   rebuildWikiIndex(ctx.workspacePath);
@@ -331,7 +359,7 @@ async function runGap(ctx: CompileContext): Promise<void> {
 
   if (!result.ok) {
     process.stderr.write(formatError(result.error.message) + '\n');
-    process.exit(1);
+    throw new CompilePassError(1, result.error.message);
   }
 
   rebuildWikiIndex(ctx.workspacePath);
@@ -513,10 +541,18 @@ export async function runIncremental(
   });
 
   if (!lockResult.ok) {
+    // A sub-pass that failed inside the critical section threw a
+    // CompilePassError; withWriteLock caught it and RELEASED the lock (its
+    // `finally` closes the flock holder), then surfaced it here as a failed
+    // Result. Preserve the sub-pass's intended exit code (e.g. 2 for an auth
+    // failure) instead of flattening every failure to 1, matching the
+    // full-compile path. The DB stays open — the CLI action handler's
+    // `finally { closeDatabase(db) }` still runs because nothing called
+    // process.exit (Gemini review, PR #154).
     process.stderr.write(
       formatError(`Incremental compile failed: ${lockResult.error.message}`) + '\n',
     );
-    return 1;
+    return lockResult.error instanceof CompilePassError ? lockResult.error.exitCode : 1;
   }
   if (!lockResult.value.ran) {
     // Another ~/.teamkb writer held the lock — skip-graceful, defer to next trigger.
@@ -660,10 +696,12 @@ export function register(program: Command): void {
               if (raw === undefined) return undefined;
               const n = Number(raw);
               if (!Number.isFinite(n) || n < 0) {
-                process.stderr.write(
-                  formatError(`Invalid ${label}: "${raw}" (must be a non-negative number).`) + '\n',
-                );
-                process.exit(1);
+                // Throw (don't process.exit) so the action handler's
+                // `finally { closeDatabase(db) }` runs — the DB is already open
+                // here on the incremental path (Gemini review, PR #154).
+                const msg = `Invalid ${label}: "${raw}" (must be a non-negative number).`;
+                process.stderr.write(formatError(msg) + '\n');
+                throw new CompilePassError(1, msg);
               }
               return n;
             };
@@ -724,6 +762,17 @@ export function register(program: Command): void {
             case 'gaps':
               await runGap(ctx);
               break;
+          }
+        } catch (e) {
+          // A pass failure now THROWS (CompilePassError) instead of calling
+          // process.exit mid-run, so this catch runs, the `finally` below
+          // closes the DB, and only THEN do we set the exit code — the SQLite
+          // connection is never abandoned open (Gemini review, PR #154).
+          if (e instanceof CompilePassError) {
+            process.exitCode = e.exitCode;
+          } else {
+            // Unexpected error — re-throw after the DB is closed by `finally`.
+            throw e;
           }
         } finally {
           closeDatabase(db);

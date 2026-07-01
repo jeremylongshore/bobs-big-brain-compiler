@@ -3,6 +3,12 @@
  * that makes runSummarize fail loudly on auth errors and all-source failures
  * instead of silently exiting 0 with empty wiki dirs.
  *
+ * Failure semantics (Gemini review, PR #154): a pass no longer calls
+ * `process.exit` mid-run — it THROWS a `CompilePassError` carrying the intended
+ * exit code, so the CLI action handler can close the database before exit.
+ * These tests assert on the thrown error + its `.exitCode` rather than a mocked
+ * `process.exit`.
+ *
  * Tests exercise `runSummarize` directly with mocked kernel + compiler deps.
  * The kernel modules and `summarizeSource` are mocked at the @ico/* package
  * boundary; readFileSync and rebuildWikiIndex side-effects are stubbed.
@@ -45,7 +51,7 @@ vi.mock('@ico/kernel', async () => {
 
 import { getUncompiledSources, summarizeSource } from '@ico/compiler';
 
-import { type CompileContext, isAuthError, runSummarize } from './compile.js';
+import { type CompileContext, CompilePassError, isAuthError, runSummarize } from './compile.js';
 
 // ---------------------------------------------------------------------------
 // Per-test scaffolding
@@ -62,11 +68,11 @@ beforeEach(() => {
 
   vi.clearAllMocks();
 
-  // process.exit throws so we can assert the exit code via a captured throw,
-  // matching the spool.test.ts pattern. The handler doesn't reset between
-  // tests so each test must use try/catch or expect(...).rejects.
+  // A pass must NOT call process.exit (that would bypass the action handler's
+  // DB cleanup). This spy throws if it is ever called, so any accidental
+  // process.exit surfaces as a hard test failure rather than a silent regression.
   exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
-    throw new Error(`__exit__:${code ?? 0}`);
+    throw new Error(`process.exit(${code ?? 0}) must not be called from a pass`);
   }) as never);
   stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
   stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
@@ -113,8 +119,22 @@ function writeSource(relPath: string, content: string): void {
   writeFileSync(abs, content, 'utf-8');
 }
 
+/**
+ * Assert the pass fails by THROWING a CompilePassError carrying `code` — and
+ * that it never called process.exit (which would strand the DB open). Invokes
+ * `fn` exactly once so callers can still assert mock call counts afterward. The
+ * name is retained from the pre-#154 process.exit era; the contract is a throw.
+ */
 async function expectExit(code: number, fn: () => Promise<void>): Promise<void> {
-  await expect(fn()).rejects.toThrow(`__exit__:${code}`);
+  let thrown: unknown;
+  try {
+    await fn();
+  } catch (e) {
+    thrown = e;
+  }
+  expect(thrown).toBeInstanceOf(CompilePassError);
+  expect((thrown as CompilePassError).exitCode).toBe(code);
+  expect(exitSpy).not.toHaveBeenCalled();
 }
 
 // ---------------------------------------------------------------------------

@@ -287,17 +287,25 @@ export function evaluateCostGate(
   const projectedCostUsd = costOfTokens(projectedTokens, cfg.model);
 
   // ---- Today's spend (UTC) from compilations dated today ------------------
-  const utcDay = new Date(nowMs).toISOString().slice(0, 10); // YYYY-MM-DD
+  // `compiled_at` is stored as an ISO-8601 UTC string, which sorts
+  // lexicographically, so a half-open [startOfDay, startOfNextDay) range picks
+  // out today's rows while remaining SARGable — an index on `compiled_at` can
+  // satisfy it. `substr(compiled_at, 1, 10) = ?` was equivalent but wrapped the
+  // column in a function, defeating any index and forcing a full table scan on
+  // every cost-gate evaluation.
+  const dayStart = new Date(nowMs).toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+  const nextDayStart = new Date(nowMs + 86_400_000).toISOString().slice(0, 10); // +1 UTC day
   let spendRows: TodaySpendRow[];
   try {
     spendRows = db
-      .prepare<[string], TodaySpendRow>(
+      .prepare<[string, string], TodaySpendRow>(
         `SELECT model, SUM(tokens_used) AS total_tokens
            FROM compilations
-          WHERE tokens_used IS NOT NULL AND substr(compiled_at, 1, 10) = ?
+          WHERE tokens_used IS NOT NULL
+            AND compiled_at >= ? AND compiled_at < ?
           GROUP BY model`,
       )
-      .all(utcDay);
+      .all(dayStart, nextDayStart);
   } catch (e) {
     return err(e instanceof Error ? e : new Error(String(e)));
   }

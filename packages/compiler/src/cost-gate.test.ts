@@ -168,6 +168,65 @@ describe('cost gate — daily ceiling enforcement', () => {
     expect(result.value.decision).toBe('proceed');
     expect(result.value.projectedCostUsd).toBe(0);
   });
+
+  // The today-spend query was changed from `substr(compiled_at,1,10) = ?` to a
+  // SARGable half-open range `compiled_at >= dayStart AND < nextDayStart`
+  // (Gemini review, PR #154 — index-friendly, same result). Prove the range
+  // has identical day-boundary semantics: yesterday out, today's edges in,
+  // tomorrow out.
+  it('counts EXACTLY today (UTC) toward spend — SARGable range boundary check', () => {
+    // Huge spend today at the very start of the UTC day (00:00:00) — must count.
+    insertCompilation(db, {
+      id: 'today-start',
+      type: 'topic',
+      tokensUsed: 300_000_000, // ~$96 on DeepSeek → well over a $1 ceiling
+      compiledAt: `${TODAY}T00:00:00.000Z`,
+    });
+    // Yesterday just before midnight — must NOT count.
+    insertCompilation(db, {
+      id: 'yesterday-late',
+      type: 'topic',
+      tokensUsed: 300_000_000,
+      compiledAt: '2026-06-29T23:59:59.999Z',
+    });
+    // Tomorrow just after midnight — must NOT count.
+    insertCompilation(db, {
+      id: 'tomorrow-early',
+      type: 'topic',
+      tokensUsed: 300_000_000,
+      compiledAt: '2026-07-01T00:00:00.000Z',
+    });
+
+    const result = evaluateCostGate(
+      db,
+      { affectedTypes: ['summary'], nowMs: NOW, lastCompileAtMs: null },
+      { dailyCeilingUsd: 1.0, model: 'deepseek-chat' },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Only the single today row counts (~$96), NOT 3× that — yesterday/tomorrow
+    // are excluded. If the boundary were wrong, spentTodayUsd would be ~3× or 0.
+    const oneDayUsd = costOfTokens(300_000_000, 'deepseek-chat');
+    expect(result.value.spentTodayUsd).toBeCloseTo(oneDayUsd, 2);
+    expect(result.value.decision).toBe('defer');
+  });
+
+  it('spends $0 today when the only prior compile was yesterday (range excludes it)', () => {
+    insertCompilation(db, {
+      id: 'yesterday-only',
+      type: 'summary',
+      tokensUsed: 5_000,
+      compiledAt: '2026-06-29T12:00:00.000Z',
+    });
+    const result = evaluateCostGate(
+      db,
+      { affectedTypes: ['summary'], nowMs: NOW, lastCompileAtMs: null },
+      { dailyCeilingUsd: 1.0, model: 'deepseek-chat' },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.spentTodayUsd).toBe(0);
+  });
 });
 
 describe('cost gate — debounce / coalescing window', () => {
