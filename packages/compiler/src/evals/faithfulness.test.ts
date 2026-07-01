@@ -33,6 +33,7 @@ import {
 import { ok } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
+import { calculateCost } from '../token-tracker.js';
 import { runFaithfulnessEval } from './faithfulness.js';
 
 interface Env {
@@ -322,6 +323,114 @@ describe('runFaithfulnessEval — honest failure modes', () => {
     if (!res.ok) return;
     expect(res.value.report.pages[0]!.scored).toBe(false);
     expect(res.value.report.pages[0]!.note).toContain('missing');
+  });
+});
+
+describe('runFaithfulnessEval — bounded-parallel judge calls', () => {
+  /** Seed N grounded single-source pages, each page trivially supported. */
+  function seedPages(n: number): void {
+    for (let i = 1; i <= n; i += 1) {
+      writeRaw(`n/${i}.md`, 'alpha beta gamma');
+      insertSource(`s${i}`, `raw/n/${i}.md`);
+      writeWiki(`sources/${i}.md`, 'alpha');
+      insertCompilation(
+        `c${i}`,
+        `s${i}`,
+        'summary',
+        `wiki/sources/${i}.md`,
+        // Descending timestamps so newest-first ordering is c1..cN as written.
+        `2026-02-${String(n - i + 1).padStart(2, '0')}T00:00:00.000Z`,
+      );
+    }
+  }
+
+  it('never exceeds the concurrency bound and preserves aggregate determinism', async () => {
+    seedPages(8);
+
+    // Instrument the stub to track concurrent in-flight judge calls.
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const client: ClaudeClient = {
+      createCompletion: vi.fn(async () => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        // Yield so overlapping calls actually interleave within the pool.
+        await new Promise((r) => setTimeout(r, 5));
+        inFlight -= 1;
+        return ok({
+          content: JSON.stringify({
+            claims: [{ claim: 'alpha', supported: true, why: 'present' }],
+            summary: 'stub',
+          }),
+          inputTokens: 300,
+          outputTokens: 80,
+          model: 'deepseek-chat',
+          stopReason: 'end_turn',
+        });
+      }),
+    };
+
+    const res = await runFaithfulnessEval(env.db, env.wsRoot, spec({ sample_size: 8 }), client, {
+      concurrency: 3,
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // Bound respected: at most 3 judge calls in flight at once.
+    expect(maxInFlight).toBeLessThanOrEqual(3);
+    expect(maxInFlight).toBeGreaterThan(1); // proves overlap actually happened
+    // All 8 pages scored; every page grounded → mean 1.
+    expect(res.value.report.pages).toHaveLength(8);
+    expect(res.value.result.score).toBe(1);
+    // Results are collected in sample (newest-first) order regardless of which
+    // page's judge finished first.
+    expect(res.value.report.pages.map((p) => p.compilationId)).toEqual([
+      'c1',
+      'c2',
+      'c3',
+      'c4',
+      'c5',
+      'c6',
+      'c7',
+      'c8',
+    ]);
+  });
+
+  it('prices the exact input/output token split, not a 50/50 heuristic', async () => {
+    // One grounded page; the judge reports an asymmetric token split (input ≫
+    // output), which the accurate cost must reflect.
+    writeRaw('n/a.md', 'alpha beta gamma');
+    insertSource('s1', 'raw/n/a.md');
+    writeWiki('sources/a.md', 'alpha');
+    insertCompilation('c1', 's1', 'summary', 'wiki/sources/a.md', '2026-02-01T00:00:00.000Z');
+
+    const client: ClaudeClient = {
+      createCompletion: vi.fn().mockResolvedValue(
+        ok({
+          content: JSON.stringify({
+            claims: [{ claim: 'alpha', supported: true, why: 'present' }],
+            summary: 'stub',
+          }),
+          inputTokens: 9000,
+          outputTokens: 100,
+          model: 'deepseek-chat',
+          stopReason: 'end_turn',
+        }),
+      ),
+    };
+
+    const res = await runFaithfulnessEval(env.db, env.wsRoot, spec(), client);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // 9000 + 100 = 9100 judge tokens on the meter (lumped total unchanged).
+    expect(res.value.report.totalJudgeTokens).toBe(9100);
+    expect(faithMeter('c1')).toBe(9100);
+    // Accurate cost = price(9000 input, 100 output), which must differ from the
+    // old 50/50 heuristic price(4550, 4550) because input/output rates differ.
+    const accurate = res.value.report.estimatedJudgeCostUsd;
+    const heuristic = calculateCost(4550, 4550, 'deepseek-chat');
+    expect(accurate).toBeGreaterThan(0);
+    expect(accurate).not.toBeCloseTo(heuristic, 10);
+    expect(accurate).toBeCloseTo(calculateCost(9000, 100, 'deepseek-chat'), 10);
   });
 });
 

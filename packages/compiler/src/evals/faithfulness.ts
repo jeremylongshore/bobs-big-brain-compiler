@@ -78,6 +78,15 @@ export interface FaithfulnessEvalOptions {
    * truncated.
    */
   maxSourceChars?: number;
+  /**
+   * Maximum concurrent judge (LLM) calls. The per-page judge calls are
+   * independent, so we run them through a BOUNDED pool rather than sequentially
+   * (which serially blocks ~1-2s per page) or as an unbounded fan-out (which
+   * would hammer the provider's rate limit). Defaults to 4. Clamped to
+   * `[1, sampleSize]`. Determinism of the aggregate is preserved by collecting
+   * results back into sample order regardless of completion order.
+   */
+  concurrency?: number;
 }
 
 /** Per-page faithfulness outcome, surfaced in the diagnostic report. */
@@ -270,6 +279,145 @@ function readSourceBlocks(
 }
 
 // ---------------------------------------------------------------------------
+// Internal: score one page (read page + sources → judge → record token meter)
+// ---------------------------------------------------------------------------
+
+/**
+ * A scored page plus the exact input/output token split for that judge call.
+ * The split is tracked so the run-level cost can be priced accurately (input
+ * and output tokens have different per-million rates) rather than via a 50/50
+ * heuristic of the lumped total.
+ */
+interface ScoredPage {
+  page: FaithfulnessPageScore;
+  inputTokens: number;
+  outputTokens: number;
+  /** The judge model this page actually ran on (from the completion). */
+  judgeModel?: string;
+}
+
+/**
+ * Score a single sampled page. Reads the compiled page + its cited raw
+ * source(s), asks the judge for per-claim verdicts, computes page groundedness,
+ * and records the judge's token cost onto the compilation row (the ONE durable
+ * write). Never throws; a page that cannot be read or judged comes back
+ * `scored: false` with a note and zero tokens, exactly as the sequential path did.
+ */
+async function scorePage(
+  db: Database,
+  workspacePath: string,
+  item: FaithfulnessSampleItem,
+  client: ClaudeClient,
+  completionOpts: { model?: string; maxTokens: number },
+  maxSourceChars: number,
+): Promise<ScoredPage> {
+  const base = { compilationId: item.compilationId, outputPath: item.outputPath };
+  const unscored = (note: string, judgeTokens = 0): ScoredPage => ({
+    page: { ...base, score: 0, supported: 0, total: 0, judgeTokens, note, scored: false },
+    inputTokens: 0,
+    outputTokens: 0,
+  });
+
+  const absPage = resolve(workspacePath, item.outputPath);
+  if (!existsSync(absPage)) return unscored('compiled page missing on disk');
+
+  let pageContent: string;
+  try {
+    pageContent = readFileSync(absPage, 'utf-8');
+  } catch (e) {
+    return unscored(`read failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  const blocksResult = readSourceBlocks(workspacePath, item, maxSourceChars);
+  if (!blocksResult.ok) return unscored(blocksResult.error.message);
+
+  const userPrompt = buildUserPrompt(item.outputPath, pageContent, blocksResult.value);
+  const completion = await client.createCompletion(SYSTEM_PROMPT, userPrompt, completionOpts);
+  if (!completion.ok) return unscored(`judge error: ${completion.error.message}`);
+
+  const inputTokens = completion.value.inputTokens;
+  const outputTokens = completion.value.outputTokens;
+  const judgeTokens = inputTokens + outputTokens;
+  const judgeModel = completion.value.model;
+
+  const parsed = parseJudgeResponse(completion.value.content);
+  if (!parsed.ok) {
+    // Still record the token cost — the tokens were spent even on a bad parse.
+    recordFaithfulnessTokens(db, item.compilationId, judgeTokens);
+    return {
+      page: {
+        ...base,
+        score: 0,
+        supported: 0,
+        total: 0,
+        judgeTokens,
+        note: `unparseable judge output: ${parsed.error.message}`,
+        scored: false,
+      },
+      inputTokens,
+      outputTokens,
+      judgeModel,
+    };
+  }
+
+  const total = parsed.value.claims.length;
+  const supported = parsed.value.claims.filter((c) => c.supported).length;
+  // A page with zero assessable claims is vacuously grounded (score 1) — it
+  // makes no unsupported claim. Mark it scored so it counts, but note it.
+  const pageScore = total === 0 ? 1 : supported / total;
+
+  // The ONE durable write: record judge token cost on the compilation row.
+  // `better-sqlite3` is synchronous, so concurrently-resolved promises perform
+  // this write serially on the main thread — no race, no interleaving.
+  const rec = recordFaithfulnessTokens(db, item.compilationId, judgeTokens);
+  const note = !rec.ok
+    ? `scored but token meter not recorded: ${rec.error.message}`
+    : total === 0
+      ? 'no assessable claims (vacuously grounded)'
+      : parsed.value.summary;
+
+  return {
+    page: { ...base, score: pageScore, supported, total, judgeTokens, note, scored: true },
+    inputTokens,
+    outputTokens,
+    judgeModel,
+  };
+}
+
+/**
+ * Map `items` through `worker` with a BOUNDED concurrency pool, preserving
+ * input order in the result. A shared cursor hands each of `limit` workers the
+ * next index; each result is written back to its original slot, so the returned
+ * array is order-stable regardless of which page's judge call finishes first.
+ * This keeps the aggregate score deterministic while letting independent judge
+ * calls overlap.
+ */
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const runners: Promise<void>[] = [];
+  const bound = Math.max(1, Math.min(limit, items.length));
+  for (let w = 0; w < bound; w += 1) {
+    runners.push(
+      (async () => {
+        for (;;) {
+          const index = cursor;
+          cursor += 1;
+          if (index >= items.length) return;
+          results[index] = await worker(items[index]!, index);
+        }
+      })(),
+    );
+  }
+  await Promise.all(runners);
+  return results;
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -327,141 +475,37 @@ export async function runFaithfulnessEval(
   if (!sampleResult.ok) return err(sampleResult.error);
   const sample = sampleResult.value;
 
-  const pages: FaithfulnessPageScore[] = [];
-  let judgeModel = options.model ?? spec.model ?? 'unknown';
+  const completionOpts: { model?: string; maxTokens: number } = { maxTokens };
+  const modelOverride = options.model ?? spec.model;
+  if (modelOverride !== undefined) completionOpts.model = modelOverride;
 
-  for (const item of sample) {
-    const absPage = resolve(workspacePath, item.outputPath);
-    if (!existsSync(absPage)) {
-      pages.push({
-        compilationId: item.compilationId,
-        outputPath: item.outputPath,
-        score: 0,
-        supported: 0,
-        total: 0,
-        judgeTokens: 0,
-        note: 'compiled page missing on disk',
-        scored: false,
-      });
-      continue;
-    }
-    let pageContent: string;
-    try {
-      pageContent = readFileSync(absPage, 'utf-8');
-    } catch (e) {
-      pages.push({
-        compilationId: item.compilationId,
-        outputPath: item.outputPath,
-        score: 0,
-        supported: 0,
-        total: 0,
-        judgeTokens: 0,
-        note: `read failed: ${e instanceof Error ? e.message : String(e)}`,
-        scored: false,
-      });
-      continue;
-    }
+  // Independent per-page judge calls, run through a BOUNDED concurrency pool so
+  // a sample of N doesn't serially block ~N × (1-2s) while never fanning out
+  // an unbounded burst at the provider. Results are collected in sample order,
+  // so the aggregate score is deterministic regardless of completion order.
+  const concurrency = options.concurrency ?? 4;
+  const scoredPages = await mapWithConcurrency(sample, concurrency, (item) =>
+    scorePage(db, workspacePath, item, client, completionOpts, maxSourceChars),
+  );
 
-    const blocksResult = readSourceBlocks(workspacePath, item, maxSourceChars);
-    if (!blocksResult.ok) {
-      pages.push({
-        compilationId: item.compilationId,
-        outputPath: item.outputPath,
-        score: 0,
-        supported: 0,
-        total: 0,
-        judgeTokens: 0,
-        note: blocksResult.error.message,
-        scored: false,
-      });
-      continue;
-    }
-
-    const userPrompt = buildUserPrompt(item.outputPath, pageContent, blocksResult.value);
-    const completionOpts: { model?: string; maxTokens: number } = { maxTokens };
-    const modelOverride = options.model ?? spec.model;
-    if (modelOverride !== undefined) completionOpts.model = modelOverride;
-    const completion = await client.createCompletion(SYSTEM_PROMPT, userPrompt, completionOpts);
-    if (!completion.ok) {
-      pages.push({
-        compilationId: item.compilationId,
-        outputPath: item.outputPath,
-        score: 0,
-        supported: 0,
-        total: 0,
-        judgeTokens: 0,
-        note: `judge error: ${completion.error.message}`,
-        scored: false,
-      });
-      continue;
-    }
-
-    judgeModel = completion.value.model;
-    const judgeTokens = completion.value.inputTokens + completion.value.outputTokens;
-
-    const parsed = parseJudgeResponse(completion.value.content);
-    if (!parsed.ok) {
-      // Still record the token cost — the tokens were spent even on a bad parse.
-      recordFaithfulnessTokens(db, item.compilationId, judgeTokens);
-      pages.push({
-        compilationId: item.compilationId,
-        outputPath: item.outputPath,
-        score: 0,
-        supported: 0,
-        total: 0,
-        judgeTokens,
-        note: `unparseable judge output: ${parsed.error.message}`,
-        scored: false,
-      });
-      continue;
-    }
-
-    const total = parsed.value.claims.length;
-    const supported = parsed.value.claims.filter((c) => c.supported).length;
-    // A page with zero assessable claims is vacuously grounded (score 1) — it
-    // makes no unsupported claim. Mark it scored so it counts, but note it.
-    const pageScore = total === 0 ? 1 : supported / total;
-
-    // The ONE durable write: record judge token cost on the compilation row.
-    const rec = recordFaithfulnessTokens(db, item.compilationId, judgeTokens);
-    if (!rec.ok) {
-      // Recording failed (e.g. row vanished mid-run) — report but don't crash.
-      pages.push({
-        compilationId: item.compilationId,
-        outputPath: item.outputPath,
-        score: pageScore,
-        supported,
-        total,
-        judgeTokens,
-        note: `scored but token meter not recorded: ${rec.error.message}`,
-        scored: true,
-      });
-      continue;
-    }
-
-    pages.push({
-      compilationId: item.compilationId,
-      outputPath: item.outputPath,
-      score: pageScore,
-      supported,
-      total,
-      judgeTokens,
-      note: total === 0 ? 'no assessable claims (vacuously grounded)' : parsed.value.summary,
-      scored: true,
-    });
-  }
+  const pages: FaithfulnessPageScore[] = scoredPages.map((s) => s.page);
+  const judgeModel =
+    scoredPages.find((s) => s.judgeModel !== undefined)?.judgeModel ??
+    options.model ??
+    spec.model ??
+    'unknown';
 
   const scored = pages.filter((p) => p.scored);
   const meanScore =
     scored.length === 0 ? 0 : scored.reduce((acc, p) => acc + p.score, 0) / scored.length;
   const totalJudgeTokens = pages.reduce((acc, p) => acc + p.judgeTokens, 0);
-  // Cost model: DeepSeek-priced (input+output lumped at the output rate is a
-  // slight over-estimate; we split 50/50 as a stable heuristic for the report).
-  const estimatedJudgeCostUsd = calculateCost(
-    Math.round(totalJudgeTokens / 2),
-    Math.round(totalJudgeTokens / 2),
-    judgeModel,
-  );
+  // Cost model: price the EXACT input/output token split reported by the judge
+  // (input and output tokens have different per-million rates — for a
+  // groundedness judge the input prompt, which carries the raw source text, far
+  // outweighs the JSON output, so a 50/50 heuristic misprices it).
+  const totalInputTokens = scoredPages.reduce((acc, s) => acc + s.inputTokens, 0);
+  const totalOutputTokens = scoredPages.reduce((acc, s) => acc + s.outputTokens, 0);
+  const estimatedJudgeCostUsd = calculateCost(totalInputTokens, totalOutputTokens, judgeModel);
 
   const report: FaithfulnessReport = {
     pages,

@@ -232,8 +232,17 @@ export function sampleCompilationsForFaithfulness(
     : candidates;
 
   // Resolve provenance and keep only traceable pages.
+  //
+  // In the UNSEEDED path the base ordering is already the final selection order
+  // (newest-first, `compiled_at DESC, id ASC`) and we return the first
+  // `sampleSize` eligible pages — so we can stop resolving provenance the moment
+  // we have that many, avoiding an N+1 `getCompilationSources` query over every
+  // candidate in a large corpus. In the SEEDED path the shuffle reorders the
+  // whole eligible set, so we must resolve ALL eligible pages first for the
+  // sample to be correct + reproducible.
   const eligible: FaithfulnessSampleItem[] = [];
   for (const c of filtered) {
+    if (seed === undefined && eligible.length >= sampleSize) break;
     const sourcesResult = getCompilationSources(db, c.id);
     if (!sourcesResult.ok) return err(sourcesResult.error);
     const sources = sourcesResult.value;

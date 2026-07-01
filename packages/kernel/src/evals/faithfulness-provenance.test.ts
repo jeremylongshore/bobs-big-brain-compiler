@@ -204,4 +204,54 @@ describe('sampleCompilationsForFaithfulness', () => {
     if (!res.ok) return;
     expect(res.value).toHaveLength(0);
   });
+
+  it('samples-before-provenance in the unseeded path (only the newest N traceable pages)', () => {
+    // Ten traceable compilations, newest last by timestamp. With sampleSize 3
+    // and no seed, only the three NEWEST (c10, c9, c8) should be returned — and
+    // provenance for the older, unsampled pages must not affect the result.
+    for (let i = 1; i <= 10; i += 1) {
+      const day = String(i).padStart(2, '0');
+      insertSource(`s${i}`, `raw/${i}.md`);
+      insertCompilation(
+        `c${i}`,
+        `s${i}`,
+        'summary',
+        `wiki/sources/${i}.md`,
+        `2026-02-${day}T00:00:00.000Z`,
+      );
+    }
+
+    const res = sampleCompilationsForFaithfulness(env.db, { sampleSize: 3 });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // Newest-first, capped at the fixed count: c10, c9, c8.
+    expect(res.value.map((i) => i.compilationId)).toEqual(['c10', 'c9', 'c8']);
+    // Each still carries its resolved provenance (early-break did not skip it).
+    expect(res.value.every((i) => i.sources.length === 1)).toBe(true);
+  });
+
+  it('unseeded early-break skips over untraceable pages until N traceable are found', () => {
+    // Newest two pages are UNTRACEABLE; the sampler must keep walking past them
+    // to collect the fixed count from the older traceable pages — the early
+    // break triggers on eligible count, not candidates scanned.
+    insertCompilation('u2', null, 'topic', 'wiki/topics/u2.md', '2026-02-09T00:00:00.000Z');
+    insertCompilation('u1', null, 'topic', 'wiki/topics/u1.md', '2026-02-08T00:00:00.000Z');
+    for (let i = 1; i <= 3; i += 1) {
+      const day = String(i).padStart(2, '0');
+      insertSource(`s${i}`, `raw/${i}.md`);
+      insertCompilation(
+        `c${i}`,
+        `s${i}`,
+        'summary',
+        `wiki/sources/${i}.md`,
+        `2026-02-0${day}T00:00:00.000Z`,
+      );
+    }
+
+    const res = sampleCompilationsForFaithfulness(env.db, { sampleSize: 2 });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // u2/u1 dropped as untraceable; newest-first traceable → c3, c2.
+    expect(res.value.map((i) => i.compilationId)).toEqual(['c3', 'c2']);
+  });
 });
