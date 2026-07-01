@@ -155,7 +155,20 @@ export {
   type EvalResult,
   type EvalSpec,
   type EvalType,
+  type FaithfulnessEvalSpec,
   type RetrievalEvalSpec,
   type RunEvalOptions,
   type SmokeEvalSpec,
 } from './evals/index.js';
+
+// Faithfulness provenance-sampling (e06.8) — deterministic, pure-kernel.
+export {
+  getCompilationSources,
+  sampleCompilationsForFaithfulness,
+  type FaithfulnessSampleItem,
+  type FaithfulnessSampleOptions,
+  type FaithfulnessSource,
+} from './evals/faithfulness-provenance.js';
+
+// Faithfulness token-meter recorder (e06.8) — the eval's ONLY durable write.
+export { recordFaithfulnessTokens } from './evals/faithfulness-tokens.js';

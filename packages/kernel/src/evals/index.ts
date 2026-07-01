@@ -8,6 +8,7 @@ export type {
   EvalResult,
   EvalSpec,
   EvalType,
+  FaithfulnessEvalSpec,
   FunctionalQualityEvalSpec,
   RetrievalEvalSpec,
   SmokeEvalSpec,

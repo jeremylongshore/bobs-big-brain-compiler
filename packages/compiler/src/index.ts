@@ -156,3 +156,9 @@ export {
   type ExportAnkiResult,
 } from './recall/export.js';
 export { runCompilationEval, type CompilationEvalOptions } from './evals/compilation.js';
+export {
+  runFaithfulnessEval,
+  type FaithfulnessEvalOptions,
+  type FaithfulnessPageScore,
+  type FaithfulnessReport,
+} from './evals/faithfulness.js';

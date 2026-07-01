@@ -24,6 +24,7 @@ const VALID_TYPES: ReadonlySet<EvalType> = new Set([
   'compilation',
   'citation',
   'functional-quality',
+  'faithfulness',
 ]);
 
 const VALID_VERIFICATION_MODES = new Set(['strong', 'weak']);
@@ -227,6 +228,36 @@ function validateSpec(raw: unknown, sourcePath: string): Result<EvalSpec, Error>
         );
       }
       seenIds.add(cid);
+    }
+  } else if (type === 'faithfulness') {
+    const sampleSize = obj['sample_size'];
+    if (
+      sampleSize !== undefined &&
+      (typeof sampleSize !== 'number' || !Number.isInteger(sampleSize) || sampleSize < 1)
+    ) {
+      // A FIXED integer count (N pages), never a percentage — enforced at load.
+      return err(
+        new Error(`${sourcePath}: faithfulness 'sample_size' must be a positive integer (N pages)`),
+      );
+    }
+    const subdirs = obj['wiki_subdirs'];
+    if (subdirs !== undefined) {
+      if (!Array.isArray(subdirs)) {
+        return err(new Error(`${sourcePath}: faithfulness 'wiki_subdirs' must be a string array`));
+      }
+      for (let i = 0; i < subdirs.length; i += 1) {
+        if (typeof subdirs[i] !== 'string' || (subdirs[i] as string).trim() === '') {
+          return err(new Error(`${sourcePath}: wiki_subdirs[${i}] must be a non-empty string`));
+        }
+      }
+    }
+    const seed = obj['seed'];
+    if (seed !== undefined && (typeof seed !== 'number' || !Number.isInteger(seed))) {
+      return err(new Error(`${sourcePath}: faithfulness 'seed' must be an integer`));
+    }
+    const model = obj['model'];
+    if (model !== undefined && (typeof model !== 'string' || model.trim() === '')) {
+      return err(new Error(`${sourcePath}: faithfulness 'model' must be a non-empty string`));
     }
   }
 

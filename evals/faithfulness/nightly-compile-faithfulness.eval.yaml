@@ -1,0 +1,39 @@
+# Sampled compile-faithfulness (groundedness) eval — e06.8.
+#
+# The receipt attests INTEGRITY (hash-chain), not TRUTH. ICO's six Claude
+# compile passes are trusted, not evaluated: a hallucinated synthesis that
+# clears the structural CI guards (Zod schema, concept-count, word-count) still
+# gets a clean receipt. This eval is the missing groundedness check — it traces
+# a FIXED sample of compiled pages back to their brain/raw source(s) via the
+# existing provenance (compilations.source_id + the compilation_sources
+# junction) and asks an LLM-as-judge whether the page's claims are SUPPORTED by
+# the cited raw text.
+#
+# Run with: ico eval run --spec evals/faithfulness/nightly-compile-faithfulness.eval.yaml
+#
+# PROVIDER: the judge runs on the live provider (DeepSeek in prod, resolved by
+# ICO_PROVIDER / the workspace config). Its token cost is recorded in
+# compilations.faithfulness_tokens_used — a SIBLING meter to the compile's own
+# tokens_used — so the cost is visible and comparable (cost parity).
+#
+# BOUNDARY: the judge writes NO knowledge back into the semantic tables. It is
+# diagnostic — a score + report, gated behind this explicit invocation, never
+# on the hot compile path. Until this produces numbers, make NO public claim
+# about synthesis faithfulness — integrity/provenance claims only.
+id: faithfulness-nightly-compile-001
+name: Sampled compile-faithfulness — nightly
+description: |
+  Groundedness of a fixed sample of compiled pages against their raw sources.
+  Diagnostic only; the score is evidence, not a public claim.
+type: faithfulness
+# FIXED per-run sample size — N pages, NOT a percentage. Bounds judge cost so
+# it stays predictable and comparable to the compile cost.
+sample_size: 10
+# Restrict to single-/cross-source summary pages (the compile passes with
+# traceable provenance). Omit to score every traceable page.
+wiki_subdirs:
+  - sources
+# Reproducible sample selection across runs.
+seed: 1
+# Pass when mean groundedness over the scored pages >= 0.8.
+threshold: 0.8
