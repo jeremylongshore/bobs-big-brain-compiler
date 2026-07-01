@@ -56,9 +56,10 @@ import {
   extractConcepts,
   getUncompiledSources,
   identifyGaps,
+  summarizeSource,
   synthesizeTopics,
 } from '@ico/compiler';
-import { initDatabase, loadConfig } from '@ico/kernel';
+import { closeDatabase, initDatabase, loadConfig } from '@ico/kernel';
 
 import { resolveWorkspace } from '../lib/workspace-resolver.js';
 import { register } from './compile.js';
@@ -136,14 +137,22 @@ async function runCompile(args: string[]): Promise<RunResult> {
   program.name('ico').option('--workspace <path>', 'Workspace directory').exitOverride();
   register(program);
 
+  // A pass failure now sets process.exitCode (after closing the DB) and returns
+  // normally, rather than throwing/exiting mid-run. Snapshot + reset it so we
+  // read only THIS run's value and don't leak it across tests.
+  const priorExitCode = process.exitCode;
+  process.exitCode = undefined;
+
   try {
     await program.parseAsync(['node', 'ico', 'compile', ...args]);
+    if (process.exitCode !== undefined) exitCode = Number(process.exitCode);
   } catch (e) {
     if (e instanceof ExitError) exitCode = e.code;
     else if (e && typeof e === 'object' && 'exitCode' in e)
       exitCode = (e as { exitCode: number }).exitCode;
     else throw e;
   } finally {
+    process.exitCode = priorExitCode;
     writeOut.mockRestore();
     writeErr.mockRestore();
   }
@@ -310,5 +319,61 @@ describe('ico compile all', () => {
     expect(vi.mocked(detectContradictions)).toHaveBeenCalled();
     expect(vi.mocked(identifyGaps)).toHaveBeenCalled();
     expect(r.stdout).toContain('All compilation passes complete');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DB cleanup on failure (Gemini review, PR #154 — HIGH)
+//
+// A pass failure must NOT strand the SQLite connection open. Passes now throw a
+// CompilePassError instead of calling process.exit, so the action handler's
+// `finally { closeDatabase(db) }` runs on every exit path. These tests assert
+// closeDatabase is called AND the intended exit code survives the throw.
+// ---------------------------------------------------------------------------
+
+describe('ico compile — DB is always closed', () => {
+  it('closes the DB after a successful compile', async () => {
+    const r = await runCompile(['gaps']);
+    expect(r.exitCode).toBeNull();
+    expect(vi.mocked(closeDatabase)).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the DB when a pass FAILS (no process.exit leak)', async () => {
+    vi.mocked(identifyGaps).mockResolvedValue(errResult('gap boom') as never);
+    const r = await runCompile(['gaps']);
+    // Exit code survives the throw…
+    expect(r.exitCode).toBe(1);
+    // …AND the DB was closed before exit — the bug Gemini flagged.
+    expect(vi.mocked(closeDatabase)).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the DB on an auth failure and preserves exit code 2', async () => {
+    // One source that fails auth → runSummarize throws CompilePassError(2).
+    vi.mocked(getUncompiledSources).mockReturnValue({
+      ok: true,
+      value: [{ id: 's1', path: 'raw/a.md' } as never],
+    });
+    mkdirSync(join(wsRoot, 'raw'), { recursive: true });
+    writeFileSync(join(wsRoot, 'raw', 'a.md'), 'body', 'utf-8');
+    vi.mocked(summarizeSource).mockResolvedValue({
+      ok: false,
+      error: new Error('Claude API authentication_error (HTTP 401): Invalid API key'),
+    } as never);
+
+    const r = await runCompile(['sources']);
+    expect(r.exitCode).toBe(2);
+    expect(vi.mocked(closeDatabase)).toHaveBeenCalledTimes(1);
+    expect(r.stderr).toMatch(/authentication failed/i);
+  });
+
+  it('closes the DB across the full `all` sequence even when a mid-pipeline pass fails', async () => {
+    // Synthesize (pass 3 of 6) fails → the sequence aborts, but the DB still closes.
+    vi.mocked(synthesizeTopics).mockResolvedValue(errResult('synth boom') as never);
+    const r = await runCompile(['all']);
+    expect(r.exitCode).toBe(1);
+    expect(vi.mocked(closeDatabase)).toHaveBeenCalledTimes(1);
+    // Passes after the failure never run (aborted by the throw).
+    expect(vi.mocked(detectContradictions)).not.toHaveBeenCalled();
+    expect(vi.mocked(identifyGaps)).not.toHaveBeenCalled();
   });
 });
