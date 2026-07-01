@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.21.0] - 2026-07-01
+
+- feat(compile): governed freshness via incremental compile + DeepSeek cost gate (e06.5 / R12) (#154) (af3a7eb)
+
 ## [v1.20.0] - 2026-07-01
 
 - feat(evals): sampled compile-faithfulness (groundedness) eval (#153) (f428ab5)
