@@ -9,13 +9,13 @@ introduced by the pull request and verify each against surrounding source. The r
 
 ## Review objective
 
-intentional-cognition-os (ICO) is the **compile engine** of Bob's Big Brain — the *probabilistic*
+intentional-cognition-os (ICO) is the **compile engine** of Bob's Big Brain — the _probabilistic_
 half. A deterministic kernel (SQLite + JSONL) owns durable state; a Claude-backed compiler runs six
 passes (summarize / extract / synthesize / contradict / gap / link) over a raw corpus, derives wiki
 pages, and emits a **spool of MemoryCandidates** that the downstream govern engine (INTKB) governs.
 Review for: the compile/govern boundary holding, honest output-quality and status claims, spool and
 manifest integrity, provenance from the first byte, audit honesty, and disclosure safety. ICO is not
-the control plane — it never owns durable *governed* state.
+the control plane — it never owns durable _governed_ state.
 
 ## Authority and truth hierarchy
 
@@ -42,7 +42,7 @@ Flag silent boundary changes, a second source of truth, or a proposal presented 
 important constraint in the repo.
 
 - ICO writes only its allowed surfaces: `wiki/` derivations, the spool of MemoryCandidates, and its
-  own append-only trace/audit. It must **never** write durable *governed* state directly — governance
+  own append-only trace/audit. It must **never** write durable _governed_ state directly — governance
   is INTKB's job downstream.
 - `raw/` (Layer 1) stays raw and append-only. Flag any compiler pass that writes outside its allowed
   surface, mutates raw sources, or lets model output reach the wiki without validation.
@@ -91,18 +91,18 @@ The spool is ICO's hand-off to INTKB; its identifiers and atomicity are load-bea
 
 The compile-trace chains are **per-file hash chains** (`prev_hash = SHA-256(prev_line)`): they are
 **tamper-EVIDENT** (edits/reordering are detectable), **not** tamper-proof. A local writer with write
-access can edit an event *and* re-hash forward, and verification passes again. Keep every claim honest.
+access can edit an event _and_ re-hash forward, and verification passes again. Keep every claim honest.
 
 **Forbidden words** — never introduce these anywhere in code or docs about the audit trail:
 `tamper-proof`, `immutable`, `non-repudiation` (for local mode), `blockchain`.
 
 - Flag any of the forbidden words on sight.
 - Flag bare `append-only` / `immutable` claims about the audit trail that are not qualified — say
-  *append-only by protocol* or *hash-chain-evident*, or negate the over-claim.
+  _append-only by protocol_ or _hash-chain-evident_, or negate the over-claim.
 - Trace/audit files are append-only by protocol; the `audit-chain-intact` smoke eval walks the chain.
   Flag hand-edits to trace JSONL and any regression of the FD-based append in
   `kernel/src/audit/writeTrace.ts` (must stay `openSync(O_CREAT|O_APPEND|O_WRONLY) → fstatSync →
-  writeSync`; regressing to `existsSync → statSync → appendFileSync` re-fires CodeQL `js/file-system-race`).
+writeSync`; regressing to `existsSync → statSync → appendFileSync` re-fires CodeQL `js/file-system-race`).
 
 ## Disclosure and secret safety
 
@@ -126,7 +126,7 @@ Judge completion and readiness against the standards docs and the actual diff, n
 
 - Documentation, merged code, fixtures, synthetic proofs, and green CI are **not** deployment, live
   cross-repo integration, production readiness, or phase completion.
-- A **mocked-model unit test** (`ClaudeClient` via `vi.fn()`) is **not** proof of compile *output*
+- A **mocked-model unit test** (`ClaudeClient` via `vi.fn()`) is **not** proof of compile _output_
   quality — only a real dogfood run with a reported citation-verify rate is.
 - Local embedded proof is **not** remote durability, nor the governed INTKB outcome downstream.
 - A notification sent, or an exit-zero, is not an independently verified outcome.
