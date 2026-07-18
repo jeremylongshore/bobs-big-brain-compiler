@@ -23,7 +23,17 @@ import { z } from 'zod';
 // Enum mirrors (must match qmd-team-intent-kb/packages/schema/src/enums.ts)
 // ---------------------------------------------------------------------------
 
-export const SpoolMemorySourceSchema = z.enum(['claude_session', 'manual', 'import', 'mcp']);
+// `bulk_import` (5bm.8) marks a whole-machine / large digestion — stamped by a
+// `--bulk` emit (with low trust) so a whole-machine mount is distinguishable from
+// a deliberate `import` and INTKB's source-trust policy can gate it. Kept in
+// lock-step with INTKB's MemorySource (see the contract snapshot).
+export const SpoolMemorySourceSchema = z.enum([
+  'claude_session',
+  'manual',
+  'import',
+  'mcp',
+  'bulk_import',
+]);
 export type SpoolMemorySource = z.infer<typeof SpoolMemorySourceSchema>;
 
 export const SpoolTrustLevelSchema = z.enum(['high', 'medium', 'low', 'untrusted']);

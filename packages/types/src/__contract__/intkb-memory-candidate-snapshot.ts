@@ -48,7 +48,7 @@ const Tag = z.string().regex(/^[a-z0-9][a-z0-9-]*$/);
 // From qmd-team-intent-kb/packages/schema/src/enums.ts
 // ---------------------------------------------------------------------------
 
-const MemorySource = z.enum(['claude_session', 'manual', 'import', 'mcp']);
+const MemorySource = z.enum(['claude_session', 'manual', 'import', 'mcp', 'bulk_import']);
 const TrustLevel = z.enum(['high', 'medium', 'low', 'untrusted']);
 const MemoryCategory = z.enum([
   'decision',

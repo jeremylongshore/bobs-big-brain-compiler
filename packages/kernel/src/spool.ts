@@ -82,6 +82,13 @@ export interface SpoolEmitOptions {
   /** Which compiled artifacts to emit. */
   scope: SpoolEmitScope;
   /**
+   * When true, this is a whole-machine / large digestion (`ico spool emit --bulk`):
+   * every candidate is stamped `source: 'bulk_import'` + `trustLevel: 'untrusted'`
+   * so INTKB's source-trust policy can gate the flood (5bm.8). Default false — a
+   * normal compile stays `source: 'import'`, `trustLevel: 'medium'`.
+   */
+  bulkImport?: boolean;
+  /**
    * Tenant identifier emitted on every candidate. REQUIRED — there is no
    * default. The CLI layer enforces this (refuses to emit if absent from
    * workspace config). Per CISO seat in 035-AT-DECR §2.5 + agent BLOCK fix #2.
@@ -332,6 +339,7 @@ function buildCandidate(
   category: SpoolMemoryCategory,
   tenantId: string,
   workspaceId: string,
+  bulkImport: boolean,
 ): SpoolMemoryCandidate {
   const titleRaw = page.frontmatter['title'];
   const title =
@@ -351,11 +359,14 @@ function buildCandidate(
     schemaVersion: '1',
     id: candidateId,
     status: 'inbox',
-    source: 'import',
+    // A --bulk (whole-machine / large-digestion) emit stamps a distinct source +
+    // low trust so INTKB's source-trust policy can gate the flood (5bm.8);
+    // otherwise a normal compile stays source:'import', trust:'medium'.
+    source: bulkImport ? 'bulk_import' : 'import',
     content: page.body,
     title: finalTitle,
     category,
-    trustLevel: 'medium',
+    trustLevel: bulkImport ? 'untrusted' : 'medium',
     author: ICO_AUTHOR,
     tenantId,
     metadata: {
@@ -610,7 +621,14 @@ export function emitSpool(
       });
       continue;
     }
-    const candidate = buildCandidate(page, pageType, mapped.category, opts.tenantId, workspaceId);
+    const candidate = buildCandidate(
+      page,
+      pageType,
+      mapped.category,
+      opts.tenantId,
+      workspaceId,
+      opts.bulkImport ?? false,
+    );
     const parsed = SpoolMemoryCandidateSchema.safeParse(candidate);
     if (!parsed.success) {
       skipped.push({
@@ -770,7 +788,14 @@ export function dryRunSpool(
       });
       continue;
     }
-    const cand = buildCandidate(page, pageType, mapped.category, opts.tenantId, workspaceId);
+    const cand = buildCandidate(
+      page,
+      pageType,
+      mapped.category,
+      opts.tenantId,
+      workspaceId,
+      opts.bulkImport ?? false,
+    );
     wouldEmit.push({
       id: cand.id,
       title: cand.title,

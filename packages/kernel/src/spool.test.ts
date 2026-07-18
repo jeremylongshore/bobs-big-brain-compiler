@@ -98,6 +98,37 @@ describe('emitSpool', () => {
     expect(r2.ok).toBe(false);
   });
 
+  it('stamps source=bulk_import + trust=untrusted on a --bulk emit (5bm.8)', () => {
+    seedWikiPage('source-summary', 'sources', 'a.md', 'A', 'A body about queue backpressure.');
+    seedWikiPage('concept', 'concepts', 'b.md', 'B', 'A concept body about retries.');
+
+    // Default emit stays import/medium.
+    const normal = emitSpool(db, workspacePath, { scope: 'wiki', tenantId: 'ico-test' });
+    expect(normal.ok).toBe(true);
+    if (!normal.ok) return;
+    for (const line of readFileSync(normal.value.spoolFile, 'utf-8').trim().split('\n')) {
+      const c = SpoolMemoryCandidateSchema.parse(JSON.parse(line));
+      expect(c.source).toBe('import');
+      expect(c.trustLevel).toBe('medium');
+    }
+
+    // --bulk emit stamps the distinct low-trust source so INTKB's policy can gate it.
+    const bulk = emitSpool(db, workspacePath, {
+      scope: 'wiki',
+      tenantId: 'ico-test',
+      bulkImport: true,
+    });
+    expect(bulk.ok).toBe(true);
+    if (!bulk.ok) return;
+    const bulkLines = readFileSync(bulk.value.spoolFile, 'utf-8').trim().split('\n');
+    expect(bulkLines.length).toBe(2);
+    for (const line of bulkLines) {
+      const c = SpoolMemoryCandidateSchema.parse(JSON.parse(line));
+      expect(c.source).toBe('bulk_import');
+      expect(c.trustLevel).toBe('untrusted');
+    }
+  });
+
   it('emits one candidate per compiled wiki page and writes manifest sidecar', () => {
     seedWikiPage(
       'source-summary',
