@@ -16,7 +16,7 @@ A local-first knowledge OS. Point `ico` at a folder of PDFs, markdown notes, and
 [![CI](https://github.com/jeremylongshore/intentional-cognition-os/actions/workflows/ci.yml/badge.svg)](https://github.com/jeremylongshore/intentional-cognition-os/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/jeremylongshore/intentional-cognition-os)](https://github.com/jeremylongshore/intentional-cognition-os/releases)
 
-> **Part of the [Compile-Then-Govern](https://github.com/intent-solutions-io/governed-second-brain) stack** — ICO is the **compile** layer. It pairs with [qmd-team-intent-kb](https://github.com/jeremylongshore/qmd-team-intent-kb) (govern) and [qmd](https://github.com/tobi/qmd) (retrieve) to turn raw corpus into governed, citation-backed memory. → [Ecosystem overview](https://github.com/intent-solutions-io/governed-second-brain)
+> **Part of the [Compile-Then-Govern](https://github.com/intent-solutions-io/bobs-big-brain-umbrella) stack (Bob's Big Brain)** — ICO is the **compile** layer. It pairs with [qmd-team-intent-kb](https://github.com/jeremylongshore/qmd-team-intent-kb) (govern) and [qmd](https://github.com/tobi/qmd) (retrieve) to turn raw corpus into governed, citation-backed memory. → [Ecosystem overview](https://github.com/intent-solutions-io/bobs-big-brain-umbrella)
 
 ---
 
@@ -30,7 +30,7 @@ You drop documents into a folder. `ico` reads them, compiles the content into a 
 - **Recall** what you ingested — generate flashcards with spaced repetition; export to Anki if you prefer.
 - **Audit** anything. Every API call, file write, and task transition is recorded in append-only JSONL with a SHA-256 hash chain. If a citation looks wrong, you can trace it back to the exact source and prompt.
 
-It is a cognition runtime, not a chat wrapper. The model proposes; a deterministic kernel owns durable state, traces, and control. **Your data lives in plain markdown + SQLite on your machine.** The Claude API is called only for the compilation/synthesis/reasoning steps — and only when you trigger them.
+It is a cognition runtime, not a chat wrapper. The model proposes; a deterministic kernel owns durable state, traces, and control. **Your data lives in plain markdown + SQLite on your machine.** The model API is called only for the compilation/synthesis/reasoning steps — and only when you trigger them. The backend is a pluggable provider registry: Claude by default, or any OpenAI- or Anthropic-wire provider (OpenAI, Groq, NVIDIA, DeepSeek) or a local server (Ollama, vLLM, LM Studio) via `ICO_PROVIDER` — so you can keep every call on-device if you want to.
 
 ---
 
