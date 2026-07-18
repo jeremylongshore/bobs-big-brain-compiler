@@ -46,6 +46,7 @@ interface SpoolEmitOptions {
   dryRun?: boolean;
   tenant?: string;
   workspace?: string;
+  bulk?: boolean;
 }
 
 interface GlobalOptions {
@@ -321,6 +322,9 @@ export function runSpoolEmit(options: SpoolEmitOptions, command: Command): void 
     const { wouldEmit, skipped } = dry.value;
     process.stdout.write(bold(`Dry-run summary (no files written):\n`));
     process.stdout.write(formatInfo(`scope:    ${scope}\n`));
+    if (options.bulk === true) {
+      process.stdout.write(formatInfo(`mode:     bulk (source=bulk_import, trust=untrusted)\n`));
+    }
     process.stdout.write(formatInfo(`tenantId: ${tenant.tenantId}\n`));
     process.stdout.write(formatInfo(`outDir:   ${outDirAbs}\n`));
     process.stdout.write(
@@ -372,6 +376,7 @@ export function runSpoolEmit(options: SpoolEmitOptions, command: Command): void 
       scope,
       tenantId: tenant.tenantId,
       outDir: outDirAbs,
+      bulkImport: options.bulk ?? false,
     });
     if (!result.ok) {
       const errInstance = result.error;
@@ -426,6 +431,12 @@ export function register(program: Command): void {
       'wiki',
     )
     .option('--tenant <id>', 'Tenant identifier (overrides spool.tenantId in config)')
+    .option(
+      '--bulk',
+      'Mark this as a whole-machine / large digestion: every candidate is stamped ' +
+        "source 'bulk_import' + trust 'untrusted' so INTKB's policy can gate the flood",
+      false,
+    )
     .option('--dry-run', 'Print what would be emitted, structure only; no writes', false)
     .option('-w, --workspace <path>', 'Workspace path (defaults to ICO_WORKSPACE or cwd)')
     .action((options: SpoolEmitOptions, command: Command) => {
