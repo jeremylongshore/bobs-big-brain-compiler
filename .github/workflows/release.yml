@@ -28,7 +28,9 @@ permissions:
 
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: true
+  # Queue releases, never cancel one mid-flight: a cancelled release can leave
+  # a pushed tag without its commit on main (the orphan-tag failure mode).
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -349,10 +351,26 @@ jobs:
       - name: Create tag and push
         if: steps.check.outputs.needed == 'true' && github.event.inputs.dry_run != 'true'
         run: |
+          set -euo pipefail
           NEXT="${{ steps.version.outputs.next }}"
+
+          # Re-sync onto whatever landed on main while this run was working, so
+          # the release commit fast-forwards. Without this, a concurrent merge
+          # makes the branch push non-fast-forward. The release commit is only
+          # version-bump + changelog, so replaying it forward is safe; a genuine
+          # conflict aborts the release cleanly (no tag created).
+          git fetch origin main
+          git rebase origin/main
+
+          # Tag AFTER the rebase so the tag points at the replayed release commit.
           git tag -a "$NEXT" -m "Release $NEXT"
-          git push origin HEAD "$NEXT"
-          echo "Pushed tag $NEXT"
+
+          # --atomic: the branch update and the tag succeed or fail TOGETHER.
+          # This is the fix for the orphan-tag race — previously a rejected
+          # branch push (main advanced) still pushed the tag, leaving a tag whose
+          # commit was never on main and had no GitHub release.
+          git push --atomic origin HEAD:main "$NEXT"
+          echo "Pushed release commit + tag $NEXT atomically"
 
       - name: Create GitHub Release
         if: steps.check.outputs.needed == 'true' && github.event.inputs.dry_run != 'true'
