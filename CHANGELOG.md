@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [v1.22.0] - 2026-07-18
+
+### Changed
+
+- **Releases are now PR-gated.** The auto-release workflow used to push a `chore(release)` commit directly to `main`, which the branch-protection required-check gate (CodeQL) now correctly declines — leaving orphan tags. The `push: [main]` auto-trigger is removed; releases go through a version-bump PR (which passes CodeQL like any change) + a tag, matching the rest of the stack. The `workflow_dispatch` path is retained. (see `.github/workflows/release.yml`)
+
 ### Added
 
 - `ico spool emit --bulk` stamps every emitted candidate `source: bulk_import` + `trustLevel: untrusted`, so a whole-machine digestion is distinguishable from a curated import and INTKB's `source_trust` policy can flag it for review (default emit stays `import`/`medium`). (#168)

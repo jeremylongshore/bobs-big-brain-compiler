@@ -18,8 +18,13 @@ on:
         required: false
         default: false
         type: boolean
-  push:
-    branches: [main]
+  # NOTE: the `push: [main]` auto-trigger was removed (v1.22.0). It pushed a
+  # `chore(release)` commit directly to `main`, which the branch-protection
+  # required check (CodeQL) declines — that produced orphan tags. Releases now
+  # go through a version-bump PR (CodeQL runs on it) + a tag, so this workflow's
+  # bump/commit/push-to-main path is no longer exercised automatically. Kept on
+  # `workflow_dispatch` only; a durable re-enable needs either a release-please
+  # PR flow or a protection-bypass token.
 
 permissions:
   contents: write
