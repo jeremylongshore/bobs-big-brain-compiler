@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- The GitHub repository was renamed from `intentional-cognition-os` to `bobs-big-brain-compiler` on 2026-07-19 (public product name: **Bob's Big Brain Compiler**). GitHub 301-redirects the old URLs. The npm package name `intentional-cognition-os`, the `@ico/*` scope, and the bead prefixes are unchanged.
+
 ## [v1.22.0] - 2026-07-18
 
 ### Changed
@@ -651,5 +655,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dependabot configuration
 - EditorConfig and gitattributes
 
-[Unreleased]: https://github.com/jeremylongshore/intentional-cognition-os/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/jeremylongshore/intentional-cognition-os/releases/tag/v0.1.0
+[Unreleased]: https://github.com/jeremylongshore/bobs-big-brain-compiler/compare/v1.22.0...HEAD
+[0.1.0]: https://github.com/jeremylongshore/bobs-big-brain-compiler/releases/tag/v0.1.0

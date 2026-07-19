@@ -43,7 +43,7 @@ jobs:
       - name: Checkout INTKB (curator-cli + exporter-cli)
         uses: actions/checkout@v6
         with:
-          repository: jeremylongshore/qmd-team-intent-kb
+          repository: jeremylongshore/bobs-big-brain-registrar
           path: intkb
 
       - name: Set up Node.js

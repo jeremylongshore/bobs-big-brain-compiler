@@ -15,8 +15,8 @@ Thank you for your interest in contributing to **intentional-cognition-os**! Thi
 
 ```bash
 # Clone the repository
-git clone https://github.com/jeremylongshore/intentional-cognition-os.git
-cd intentional-cognition-os
+git clone https://github.com/jeremylongshore/bobs-big-brain-compiler.git
+cd bobs-big-brain-compiler
 
 # Install dependencies
 pnpm install
@@ -32,14 +32,14 @@ pnpm lint
 
 ### Reporting Bugs
 
-1. Search [existing issues](https://github.com/jeremylongshore/intentional-cognition-os/issues) first
-2. Open a [bug report](https://github.com/jeremylongshore/intentional-cognition-os/issues/new?template=bug_report.md)
+1. Search [existing issues](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues) first
+2. Open a [bug report](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/new?template=bug_report.md)
 3. Include reproduction steps, expected vs actual behavior, and environment details
 
 ### Suggesting Enhancements
 
-1. Check [existing feature requests](https://github.com/jeremylongshore/intentional-cognition-os/issues?q=label%3Aenhancement)
-2. Open a [feature request](https://github.com/jeremylongshore/intentional-cognition-os/issues/new?template=feature_request.md)
+1. Check [existing feature requests](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues?q=label%3Aenhancement)
+2. Open a [feature request](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/new?template=feature_request.md)
 
 ### Pull Requests
 
@@ -167,8 +167,8 @@ Adding a new event type? Update `000-docs/011-AT-TRSC-trace-schema.md` first, th
 
 ## Community
 
-- **Questions**: [GitHub Discussions](https://github.com/jeremylongshore/intentional-cognition-os/discussions)
-- **Bugs**: [Issue Tracker](https://github.com/jeremylongshore/intentional-cognition-os/issues)
+- **Questions**: [GitHub Discussions](https://github.com/jeremylongshore/bobs-big-brain-compiler/discussions)
+- **Bugs**: [Issue Tracker](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues)
 - **Email**: jeremy@jeremylongshore.com
 
 ## License

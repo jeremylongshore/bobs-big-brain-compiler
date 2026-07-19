@@ -3,9 +3,9 @@
 ## Getting Help
 
 - **Documentation**: Check the [README](README.md) and [000-docs/](000-docs/) directory
-- **Bug Reports**: [Open an issue](https://github.com/jeremylongshore/intentional-cognition-os/issues/new?template=bug_report.md)
-- **Feature Requests**: [Open an issue](https://github.com/jeremylongshore/intentional-cognition-os/issues/new?template=feature_request.md)
-- **Discussions**: [GitHub Discussions](https://github.com/jeremylongshore/intentional-cognition-os/discussions)
+- **Bug Reports**: [Open an issue](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/new?template=bug_report.md)
+- **Feature Requests**: [Open an issue](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/new?template=feature_request.md)
+- **Discussions**: [GitHub Discussions](https://github.com/jeremylongshore/bobs-big-brain-compiler/discussions)
 - **Security Issues**: See [SECURITY.md](SECURITY.md) — do NOT open public issues
 
 ## Response Times
@@ -19,7 +19,7 @@
 
 ## Before Opening an Issue
 
-1. Search [existing issues](https://github.com/jeremylongshore/intentional-cognition-os/issues) first
+1. Search [existing issues](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues) first
 2. Check the [documentation](000-docs/)
 3. Include version info and reproduction steps
 

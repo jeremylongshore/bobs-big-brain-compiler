@@ -1,22 +1,24 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
-    <img alt="Intentional Cognition OS — compile knowledge for the machine, distill understanding for the human." src="assets/banner-light.svg" width="860">
+    <img alt="Bob's Big Brain Compiler — compile knowledge for the machine, distill understanding for the human." src="assets/banner-light.svg" width="860">
   </picture>
 </p>
 
-# intentional-cognition-os v1.21.0
+# Bob's Big Brain Compiler
 
-Compile knowledge for the machine. Distill understanding for the human.
+> Formerly `intentional-cognition-os` — the npm package keeps that name.
+
+Bob's Big Brain Compiler reads your documents, notes, and web clips and turns them into an organized, searchable knowledge base — every answer backed by a citation to the source.
 
 A local-first knowledge OS. Point `ico` at a folder of PDFs, markdown notes, and web clips. It compiles them into a queryable wiki you can read, runs grounded Q&A with inline citations, spins up multi-agent research tasks for hard questions, generates spaced-repetition flashcards from what landed, and writes every step to an append-only audit trail. Single CLI. Your data never leaves disk except for the Claude API calls you opt into.
 
 [![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
 [![npm](https://img.shields.io/npm/v/intentional-cognition-os.svg)](https://www.npmjs.com/package/intentional-cognition-os)
-[![CI](https://github.com/jeremylongshore/intentional-cognition-os/actions/workflows/ci.yml/badge.svg)](https://github.com/jeremylongshore/intentional-cognition-os/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/jeremylongshore/intentional-cognition-os)](https://github.com/jeremylongshore/intentional-cognition-os/releases)
+[![CI](https://github.com/jeremylongshore/bobs-big-brain-compiler/actions/workflows/ci.yml/badge.svg)](https://github.com/jeremylongshore/bobs-big-brain-compiler/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/jeremylongshore/bobs-big-brain-compiler)](https://github.com/jeremylongshore/bobs-big-brain-compiler/releases)
 
-> **Part of the [Compile-Then-Govern](https://github.com/intent-solutions-io/bobs-big-brain-umbrella) stack (Bob's Big Brain)** — ICO is the **compile** layer. It pairs with [qmd-team-intent-kb](https://github.com/jeremylongshore/qmd-team-intent-kb) (govern) and [qmd](https://github.com/tobi/qmd) (retrieve) to turn raw corpus into governed, citation-backed memory. → [Ecosystem overview](https://github.com/intent-solutions-io/bobs-big-brain-umbrella)
+> **Part of the [Bob's Big Brain](https://github.com/intent-solutions-io/bobs-big-brain-umbrella) stack** — this is the **compile** layer. It pairs with [Bob's Big Brain Registrar](https://github.com/jeremylongshore/bobs-big-brain-registrar) (govern) and [qmd](https://github.com/tobi/qmd) (retrieve) to turn raw corpus into governed, citation-backed memory. → [Ecosystem overview](https://github.com/intent-solutions-io/bobs-big-brain-umbrella)
 
 ---
 
@@ -37,6 +39,7 @@ It is a cognition runtime, not a chat wrapper. The model proposes; a determinist
 ## Install
 
 ```bash
+# the npm name predates the repo rename — intentional
 npm install -g intentional-cognition-os
 ico --version          # → 1.21.0
 export ANTHROPIC_API_KEY=sk-ant-...
@@ -47,8 +50,8 @@ Requires **Node 22+** and an [Anthropic API key](https://console.anthropic.com/)
 From source:
 
 ```bash
-git clone https://github.com/jeremylongshore/intentional-cognition-os.git
-cd intentional-cognition-os && pnpm install && pnpm build
+git clone https://github.com/jeremylongshore/bobs-big-brain-compiler.git
+cd bobs-big-brain-compiler && pnpm install && pnpm build
 node packages/cli/dist/index.js --version
 ```
 

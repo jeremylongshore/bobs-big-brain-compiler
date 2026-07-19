@@ -8,10 +8,10 @@
     "email": "jeremy@intentsolutions.io",
     "url": "https://intentsolutions.io"
   },
-  "homepage": "https://github.com/jeremylongshore/intentional-cognition-os",
+  "homepage": "https://github.com/jeremylongshore/bobs-big-brain-compiler",
   "repository": {
     "type": "git",
-    "url": "https://github.com/jeremylongshore/intentional-cognition-os.git",
+    "url": "https://github.com/jeremylongshore/bobs-big-brain-compiler.git",
     "directory": "plugin"
   },
   "license": "Apache-2.0",

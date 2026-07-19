@@ -41,7 +41,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/jeremylongshore/intentional-cognition-os.git"
+    "url": "https://github.com/jeremylongshore/bobs-big-brain-compiler.git"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

@@ -4,8 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**intentional-cognition-os** — Local-first knowledge operating system that ingests raw corpus, compiles semantic knowledge, creates episodic task workspaces, generates durable artifacts, and improves both machine reasoning and human understanding over time.
+**bobs-big-brain-compiler** (public product name: **Bob's Big Brain Compiler**) — Local-first knowledge operating system that ingests raw corpus, compiles semantic knowledge, creates episodic task workspaces, generates durable artifacts, and improves both machine reasoning and human understanding over time.
 
+- **Renamed 2026-07-19**: the GitHub repo `jeremylongshore/intentional-cognition-os` → `jeremylongshore/bobs-big-brain-compiler` (old URLs 301-redirect). The npm package name `intentional-cognition-os`, the `@ico/*` scope, the `ico` CLI binary, and the bead prefix `intentional-cognition-os-*` are all unchanged.
 - **Runtime**: TypeScript, Node.js 22+, pnpm 10.x
 - **CLI**: `ico`
 - **License**: Apache-2.0
