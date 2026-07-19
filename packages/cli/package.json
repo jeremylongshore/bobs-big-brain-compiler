@@ -64,13 +64,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/jeremylongshore/intentional-cognition-os.git",
+    "url": "https://github.com/jeremylongshore/bobs-big-brain-compiler.git",
     "directory": "packages/cli"
   },
   "bugs": {
-    "url": "https://github.com/jeremylongshore/intentional-cognition-os/issues"
+    "url": "https://github.com/jeremylongshore/bobs-big-brain-compiler/issues"
   },
-  "homepage": "https://github.com/jeremylongshore/intentional-cognition-os#readme",
+  "homepage": "https://github.com/jeremylongshore/bobs-big-brain-compiler#readme",
   "license": "Apache-2.0",
   "author": "Jeremy Longshore <jeremy@intentsolutions.io> (https://intentsolutions.io)"
 }

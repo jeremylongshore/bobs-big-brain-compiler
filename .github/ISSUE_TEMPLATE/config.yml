@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security Vulnerability
-    url: https://github.com/jeremylongshore/intentional-cognition-os/blob/main/SECURITY.md
+    url: https://github.com/jeremylongshore/bobs-big-brain-compiler/blob/main/SECURITY.md
     about: Please report security vulnerabilities privately — see SECURITY.md
   - name: Questions & Discussion
-    url: https://github.com/jeremylongshore/intentional-cognition-os/discussions
+    url: https://github.com/jeremylongshore/bobs-big-brain-compiler/discussions
     about: Use GitHub Discussions for questions and general conversation
