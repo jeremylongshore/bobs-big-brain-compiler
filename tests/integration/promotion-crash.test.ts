@@ -124,7 +124,12 @@ describe('promotion crash windows — receipts precede visibility (G1)', () => {
     expect(dbResult.ok).toBe(true);
     if (!dbResult.ok) throw dbResult.error;
     try {
-      const r = reconcileWorkspace(dbResult.value, workspacePath, { tmpMaxAgeMs: 0 });
+      // Future-shifted clock avoids the mtime-rounding flake a bare
+      // tmpMaxAgeMs: 0 has when a tmp was written a moment ago.
+      const r = reconcileWorkspace(dbResult.value, workspacePath, {
+        tmpMaxAgeMs: 0,
+        now: Date.now() + 60_000,
+      });
       expect(r.ok).toBe(true);
       if (!r.ok) return;
       // Nothing visible needed quarantining — the corpus never contained an

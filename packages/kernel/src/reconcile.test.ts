@@ -148,8 +148,11 @@ describe('reconcileWorkspace — stale tmp sweep', () => {
     const tmpRel = 'wiki/topics/crashed.md.tmp';
     writeFileSync(join(workspacePath, tmpRel), 'half-written', 'utf-8');
 
-    // tmpMaxAgeMs: 0 → any tmp is stale.
-    const r = reconcileWorkspace(db, workspacePath, { tmpMaxAgeMs: 0 });
+    // tmpMaxAgeMs: 0 + a clock pushed into the future → any tmp is stale.
+    // (A bare tmpMaxAgeMs: 0 with the real clock is flaky: filesystem mtime
+    // rounding can put a just-written file's mtime a fraction of a
+    // millisecond AHEAD of Date.now(), making `now - mtime` negative.)
+    const r = reconcileWorkspace(db, workspacePath, { tmpMaxAgeMs: 0, now: Date.now() + 60_000 });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.value.tmpSwept).toHaveLength(1);
@@ -174,7 +177,7 @@ describe('reconcileWorkspace — stale tmp sweep', () => {
     const tmpRel = 'outputs/reports/report.md.tmp';
     writeFileSync(join(workspacePath, tmpRel), 'half-written report', 'utf-8');
 
-    const r = reconcileWorkspace(db, workspacePath, { tmpMaxAgeMs: 0 });
+    const r = reconcileWorkspace(db, workspacePath, { tmpMaxAgeMs: 0, now: Date.now() + 60_000 });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.value.tmpSwept).toHaveLength(1);
