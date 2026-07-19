@@ -1,0 +1,104 @@
+# Auto-cadence releases via release-please — the single release mechanism.
+#
+# How it works (protected-main-safe, no bypass token):
+#   1. On every push to main, release-please reads the conventional commits since
+#      the last release and maintains a "release PR" that bumps the version
+#      (root + all workspace package.json, kernel/src/version.ts) and updates the
+#      CHANGELOG. The bump reaches main as a normal PR — it passes CodeQL like any
+#      change, so it never fights branch protection.
+#   2. When you merge that release PR, release-please creates the `vX.Y.Z` tag and
+#      the GitHub release, and sets release_created — which gates the npm publish
+#      below. Tag + release are made via the API, so no push to protected main.
+#
+# This replaces the old release.yml (which pushed a chore(release) commit straight
+# to protected main — declined by the CodeQL required check, orphaning tags) and
+# the interim publish.yml (its tag-triggered npm publish is folded in here).
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-please-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: Release Please
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # --- Publish only when a release was just created (release PR merged) ---
+      - name: Checkout the released commit
+        if: ${{ steps.release.outputs.release_created }}
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        if: ${{ steps.release.outputs.release_created }}
+        uses: pnpm/action-setup@v5
+
+      - name: Set up Node.js
+        if: ${{ steps.release.outputs.release_created }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        if: ${{ steps.release.outputs.release_created }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace packages
+        if: ${{ steps.release.outputs.release_created }}
+        run: pnpm build
+
+      - name: Publish to npm (idempotent)
+        if: ${{ steps.release.outputs.release_created }}
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -e
+          VERSION_NUM="${{ steps.release.outputs.version }}"
+
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::warning::NPM_TOKEN secret not configured — skipping npm publish."
+            exit 0
+          fi
+
+          # Don't republish a version already on npm (e.g. re-run) — npm 403s on
+          # republish. Treat as success.
+          PUBLISHED=$(npm view intentional-cognition-os@"$VERSION_NUM" version 2>/dev/null || true)
+          if [ "$PUBLISHED" = "$VERSION_NUM" ]; then
+            echo "::notice::intentional-cognition-os@$VERSION_NUM already on npm — skipping."
+            exit 0
+          fi
+
+          echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > ~/.npmrc
+          pnpm --filter intentional-cognition-os publish \
+            --no-git-checks \
+            --access public \
+            --tag latest
+
+          # Poll for registry propagation (occasionally >60s) rather than a fixed
+          # sleep, so a slow-but-successful publish isn't a false failure.
+          for i in $(seq 1 24); do
+            SEEN=$(npm view intentional-cognition-os@"$VERSION_NUM" version 2>/dev/null || true)
+            if [ "$SEEN" = "$VERSION_NUM" ]; then
+              echo "::notice::intentional-cognition-os@$VERSION_NUM is live on npm."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::warning::Published but not yet visible via npm view after 120s (propagation lag)."
