@@ -9,7 +9,15 @@
  */
 
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
 import type { Database } from 'better-sqlite3';
@@ -18,6 +26,7 @@ import matter from 'gray-matter';
 import { err, ok, type Result } from '@ico/types';
 
 import { appendAuditLog } from './audit-log.js';
+import { crashPoint } from './crash-hook.js';
 import { writeTrace } from './traces.js';
 
 // ---------------------------------------------------------------------------
@@ -342,27 +351,51 @@ export function promoteArtifact(
     return err(new PromotionError('COPY_FAILED', `Cannot create target directory: ${targetDir}`));
   }
 
+  // -------------------------------------------------------------------------
+  // Receipts-precede-visibility ordering (G1):
+  //   1. Write the promoted content to a same-directory `.tmp` path.
+  //   2. Write ALL receipts (promotions row, trace, audit JSONL, log.md).
+  //   3. Rename the tmp into the visible wiki path.
+  //
+  // Crash-window analysis:
+  //   - Crash after (1): an orphan `.tmp` file exists. Harmless — nothing
+  //     visible, no receipt. `reconcileWorkspace` sweeps stale tmp files.
+  //   - Crash after (2), before (3): a receipt exists for a wiki page that
+  //     never appeared. This is the direction we deliberately choose: a
+  //     receipt-without-file is auditable (the promotions row + trace say
+  //     exactly what was attempted) and re-derivable (re-run the promotion —
+  //     the source in outputs/ is untouched). The opposite direction — a
+  //     file-without-receipt — would launder unreceipted content into the
+  //     wiki, where emitSpool and downstream governance would treat it as
+  //     receipted knowledge. That is the failure mode this ordering removes.
+  // -------------------------------------------------------------------------
+
   // Build promoted content in memory (single write — no copy + re-read cycle).
   // The source file was already parsed into `parsedFrontmatter` during the
-  // eligibility check, so we inject the promotion fields and write once.
+  // eligibility check, so we inject the promotion fields and write once —
+  // to the tmp path, NOT the visible target.
+  const tmpTarget = `${absoluteTarget}.tmp`;
   try {
     parsedFrontmatter.data['promoted_from'] = relativeSource;
     parsedFrontmatter.data['promoted_at'] = promotedAt;
     parsedFrontmatter.data['promoted_by'] = 'user';
 
     const updatedContent = matter.stringify(parsedFrontmatter.content, parsedFrontmatter.data);
-    writeFileSync(absoluteTarget, updatedContent, 'utf-8');
+    writeFileSync(tmpTarget, updatedContent, 'utf-8');
   } catch {
     return err(
       new PromotionError('COPY_FAILED', `Failed to write promoted file to ${targetRelative}`),
     );
   }
 
+  crashPoint('promotion:after-tmp'); // test-only fault injection (see crash-hook.ts)
+
   // Also preserve the original (copy-not-move invariant). The source was
   // already read but never modified — it stays on disk untouched.
 
-  // Write the DB record, trace, audit file, and log.md. Any failure after
-  // the file write triggers rollback (delete the target AND the DB row).
+  // Write the DB record, trace, audit file, and log.md — BEFORE the artifact
+  // becomes visible. Any failure here triggers rollback (delete the tmp file
+  // AND the DB row); nothing was ever visible, so the wiki stays consistent.
   try {
     // 4b. Insert into the promotions table.
     db.prepare<[string, string, string, string, string, string, string | null], void>(
@@ -424,12 +457,13 @@ export function promoteArtifact(
       throw logResult.error;
     }
   } catch (e) {
-    // Rollback: delete the copied file AND the DB row so the wiki remains
-    // consistent. The DB row may or may not exist depending on which step
-    // failed, so both cleanup operations are best-effort.
+    // Rollback: delete the tmp file AND the DB row so the wiki remains
+    // consistent. Nothing was renamed into the visible wiki path, so there
+    // is no visible artifact to clean up. The DB row may or may not exist
+    // depending on which step failed, so both cleanups are best-effort.
     try {
-      if (existsSync(absoluteTarget)) {
-        unlinkSync(absoluteTarget);
+      if (existsSync(tmpTarget)) {
+        unlinkSync(tmpTarget);
       }
     } catch {
       // Best-effort rollback — swallow secondary errors.
@@ -445,6 +479,33 @@ export function promoteArtifact(
       new PromotionError(
         'AUDIT_WRITE_FAILED',
         `Promotion audit phase failed (rolled back): ${underlying.message}`,
+      ),
+    );
+  }
+
+  crashPoint('promotion:after-receipts'); // test-only fault injection (see crash-hook.ts)
+
+  // Make the artifact visible LAST. If this rename fails, the receipts
+  // already written stand as an auditable record of the attempted promotion
+  // (receipt-without-file — the safe crash direction documented above); the
+  // trace is append-only and cannot be rolled back, so we do not try. The
+  // tmp file is removed best-effort and the operation reports failure; a
+  // retry re-promotes cleanly (the target path is still vacant and the
+  // promotions table has no uniqueness constraint on target_path).
+  try {
+    renameSync(tmpTarget, absoluteTarget);
+  } catch {
+    try {
+      if (existsSync(tmpTarget)) {
+        unlinkSync(tmpTarget);
+      }
+    } catch {
+      // Best-effort cleanup — swallow secondary errors.
+    }
+    return err(
+      new PromotionError(
+        'COPY_FAILED',
+        `Failed to move promoted file into place at ${targetRelative} (receipts already written — see promotions row ${promotionId})`,
       ),
     );
   }

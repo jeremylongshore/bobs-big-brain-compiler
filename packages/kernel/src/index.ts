@@ -117,6 +117,17 @@ export { uuidV5, spoolCandidateName, deriveSpoolCandidateId } from './uuid.js';
 // Audit-chain verifier
 export { verifyAuditChain, type AuditChainBreak, type AuditVerifyResult } from './audit-verify.js';
 
+// Workspace reconciler — receipts-precede-visibility floor (quarantine, never delete)
+export {
+  reconcileWorkspace,
+  type ReconcileEntry,
+  type ReconcileOptions,
+  type ReconcileResult,
+} from './reconcile.js';
+
+// TEST-ONLY crash-window fault-injection hook (no-op unless ICO_CRASH_AFTER is set)
+export { crashPoint } from './crash-hook.js';
+
 // Disclosure guard — no-comp/no-PII choke at the brain boundary (ico ingest)
 export {
   scanForDisclosure,
