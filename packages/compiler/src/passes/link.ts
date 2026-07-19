@@ -206,9 +206,20 @@ export async function addBacklinks(
     }
   }
 
-  // 4. Update pages that have incoming backlinks.
+  // 4. Stage updates for pages that have incoming backlinks.
+  //
+  // Receipts-precede-visibility (G1): all updated content is written to
+  // `.tmp` paths first, the single `compile.link` trace (the receipt for
+  // this pass) is written next, and only then are the tmps renamed over the
+  // live pages. Link rewrites EXISTING receipted pages in place — it never
+  // creates a new visible path — so a crash mid-sequence leaves either
+  // orphan .tmp files (swept by `ico audit reconcile`) or a receipt whose
+  // renames partially landed (every affected path is still receipted by its
+  // creating pass; the un-renamed pages simply keep their previous, equally
+  // receipted content). No ordering can produce an unreceipted visible page.
   let pagesUpdated = 0;
   let totalBacklinks = 0;
+  const pendingRenames: Array<{ tmpPath: string; absPath: string }> = [];
 
   for (const page of allPages) {
     const referrers = backRefs.get(page.slug);
@@ -219,19 +230,19 @@ export async function addBacklinks(
     const cleanContent = stripBacklinksSection(page.content);
     const newContent = cleanContent + buildBacklinksSection(referrers);
 
-    // 5. Atomic write (in-place update — no new compilation artifact).
+    // 5. Write to tmp only (in-place update — no new compilation artifact).
     const tmpPath = `${page.absPath}.tmp`;
     try {
       writeFileSync(tmpPath, newContent, 'utf-8');
-      renameSync(tmpPath, page.absPath);
     } catch (e) {
       return err(e instanceof Error ? e : new Error(String(e)));
     }
+    pendingRenames.push({ tmpPath, absPath: page.absPath });
 
     pagesUpdated++;
   }
 
-  // 6. Write a single trace event for the whole pass.
+  // 6. Write a single trace event for the whole pass — BEFORE visibility.
   if (pagesUpdated > 0) {
     const traceResult = writeTrace(db, workspacePath, 'compile.link', {
       pagesUpdated,
@@ -239,6 +250,15 @@ export async function addBacklinks(
     });
     if (!traceResult.ok) {
       return err(traceResult.error);
+    }
+
+    // 7. Receipt is durable — make the updated pages visible.
+    for (const { tmpPath, absPath } of pendingRenames) {
+      try {
+        renameSync(tmpPath, absPath);
+      } catch (e) {
+        return err(e instanceof Error ? e : new Error(String(e)));
+      }
     }
   }
 

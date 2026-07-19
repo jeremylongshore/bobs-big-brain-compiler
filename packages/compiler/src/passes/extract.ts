@@ -282,13 +282,16 @@ export async function extractConcepts(
     const absoluteOutputPath = join(workspacePath, outputPath);
     const tmpPath = `${absoluteOutputPath}.tmp`;
 
-    // 5. Atomic write.
+    // 5. Write to a tmp path — receipts precede visibility (G1): the rename
+    //    into the visible wiki path happens only after the compilations row,
+    //    provenance, and trace are durable. A crash mid-sequence leaves an
+    //    orphan .tmp (swept by `ico audit reconcile`) or a receipt-without-
+    //    file (auditable, re-derivable) — never an unreceipted visible page.
     try {
       if (!existsSync(absoluteOutputDir)) {
         mkdirSync(absoluteOutputDir, { recursive: true });
       }
       writeFileSync(tmpPath, pageContent, 'utf-8');
-      renameSync(tmpPath, absoluteOutputPath);
     } catch (e) {
       return err(e instanceof Error ? e : new Error(String(e)));
     }
@@ -341,6 +344,13 @@ export async function extractConcepts(
     });
     if (!traceResult.ok) {
       return err(traceResult.error);
+    }
+
+    // 8b. Receipts are durable — make the page visible.
+    try {
+      renameSync(tmpPath, absoluteOutputPath);
+    } catch (e) {
+      return err(e instanceof Error ? e : new Error(String(e)));
     }
 
     // 9. Append audit log entry.
