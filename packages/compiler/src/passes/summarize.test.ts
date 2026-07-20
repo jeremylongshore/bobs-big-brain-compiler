@@ -26,6 +26,7 @@ import {
 import { ok } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
+import { CompileSkipError } from './output-filter.js';
 import { summarizeSource } from './summarize.js';
 
 // ---------------------------------------------------------------------------
@@ -387,5 +388,81 @@ describe('summarizeSource', () => {
 
     // Underscores and mixed case → lowercased with hyphens, no extension.
     expect(result.value.outputPath).toBe('wiki/sources/my-research-paper-2024.md');
+  });
+
+  // -------------------------------------------------------------------------
+  // Inline output validation (l13.1)
+  // -------------------------------------------------------------------------
+
+  it('skips an empty raw source before any Claude call, with a receipted trace', async () => {
+    const client = mockClient(MOCK_API_RESPONSE);
+    const result = await summarizeSource(
+      client,
+      env.db,
+      env.wsRoot,
+      SOURCE_ID,
+      '   \n  ', // empty after trim
+      SOURCE_PATH,
+      CONTENT_HASH,
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toBeInstanceOf(CompileSkipError);
+    expect((result.error as CompileSkipError).code).toBe('EMPTY_SOURCE');
+    // No Claude call was made and no file was written.
+    expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    expect(existsSync(join(env.wsRoot, 'wiki', 'sources', 'my-research-paper.md'))).toBe(false);
+    const traces = readTraces(env.db, { eventType: 'compile.validation.reject' });
+    expect(traces.ok).toBe(true);
+    if (traces.ok) expect(traces.value.length).toBe(1);
+  });
+
+  it('retries once then skips-with-trace when the model keeps refusing', async () => {
+    const client: ClaudeClient = {
+      createCompletion: vi.fn().mockResolvedValue(
+        ok({
+          content: 'I cannot summarize this document.',
+          inputTokens: 100,
+          outputTokens: 20,
+          model: 'claude-sonnet-4-6',
+          stopReason: 'end_turn',
+        }),
+      ),
+    };
+    const result = await summarizeSource(
+      client,
+      env.db,
+      env.wsRoot,
+      SOURCE_ID,
+      'Real source body.',
+      SOURCE_PATH,
+      CONTENT_HASH,
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toBeInstanceOf(CompileSkipError);
+    // Two attempts (initial + one retry).
+    expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
+    expect(existsSync(join(env.wsRoot, 'wiki', 'sources', 'my-research-paper.md'))).toBe(false);
+  });
+
+  it('stamps deterministic pass provenance (compiled_by, pass_version, real path/hash) on the page', async () => {
+    const client = mockClient(MOCK_API_RESPONSE);
+    const result = await summarizeSource(
+      client,
+      env.db,
+      env.wsRoot,
+      SOURCE_ID,
+      'Real source body.',
+      SOURCE_PATH,
+      CONTENT_HASH,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const written = readFileSync(join(env.wsRoot, result.value.outputPath), 'utf-8');
+    expect(written).toContain('compiled_by: compile.summarize');
+    expect(written).toContain('pass_version:');
+    expect(written).toContain(`content_hash: ${CONTENT_HASH}`);
+    expect(written).toContain(`source_path: ${SOURCE_PATH}`);
   });
 });

@@ -52,11 +52,18 @@ import {
   DEFAULT_BATCH_SIZE,
   extractFrontmatterField,
   mergePages,
+  parseFrontmatterList,
   renderBatchDigest,
   scaledMaxTokens,
   shouldRunReduce,
   wasTruncated,
 } from './batch-helper.js';
+import { checkModelOutput, stampPassProvenance } from './output-filter.js';
+import {
+  attributeSources,
+  recordCompilationSources,
+  resolveSummarySourceIds,
+} from './source-attribution.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -413,11 +420,38 @@ export async function detectContradictions(
     return err(e instanceof Error ? e : new Error(String(e)));
   }
 
+  // Deterministic input set for source attribution (l13.5).
+  const knownSourcesResult = resolveSummarySourceIds(db);
+  if (!knownSourcesResult.ok) {
+    return err(knownSourcesResult.error);
+  }
+  const knownSourceIds = knownSourcesResult.value;
+
   const results: ContradictResult[] = [];
+  let rejectedPages = 0;
 
   for (const page of mergedPages) {
     const compilationId = page.id;
-    const pageContent = page.content;
+
+    // Inline deterministic output validation (l13.1): skip-with-trace, never
+    // a visible file for a rejected output.
+    const outputCheck = checkModelOutput(page.content);
+    if (!outputCheck.ok) {
+      const rejectTrace = writeTrace(db, workspacePath, 'compile.validation.reject', {
+        pass: 'compile.contradict',
+        code: outputCheck.rejection.code,
+        title: page.title,
+        detail: outputCheck.rejection.detail,
+        excerpt: outputCheck.rejection.excerpt,
+      });
+      if (!rejectTrace.ok) {
+        return err(rejectTrace.error);
+      }
+      rejectedPages++;
+      continue;
+    }
+
+    const pageContent = stampPassProvenance(page.content, 'compile.contradict');
     const title = page.title;
     const slug = titleToSlug(title);
     const outputPath = join('wiki', 'contradictions', `${slug}.md`);
@@ -462,15 +496,38 @@ export async function detectContradictions(
       return err(e instanceof Error ? e : new Error(String(e)));
     }
 
-    // 6. Record provenance (batch operation — no single source_id).
-    const provenanceResult = recordProvenance(db, workspacePath, {
-      sourceId: 'batch',
-      outputPath,
-      outputType: 'contradiction',
-      operation: 'compile.contradict',
-    });
-    if (!provenanceResult.ok) {
-      return err(provenanceResult.error);
+    // 6. Deterministic source attribution (l13.5): the advisory ids are the
+    //    unioned source_ids list PLUS the schema's scalar source_a_id /
+    //    source_b_id — validated against the deterministic input set. The
+    //    accepted set lands in compilation_sources; provenance is recorded
+    //    per real source id, with the legacy single 'batch' record only for
+    //    pages whose advisory ids did not validate.
+    const advisoryIds = [
+      ...parseFrontmatterList(pageContent, 'source_ids'),
+      ...[
+        extractFrontmatterField(pageContent, 'source_a_id'),
+        extractFrontmatterField(pageContent, 'source_b_id'),
+      ].filter((id): id is string => id !== undefined),
+    ];
+    const attribution = attributeSources(advisoryIds, knownSourceIds);
+    if (attribution.attributed.length > 0) {
+      const junctionResult = recordCompilationSources(db, compilationId, attribution.attributed);
+      if (!junctionResult.ok) {
+        return err(junctionResult.error);
+      }
+    }
+    const provenanceSourceIds =
+      attribution.attributed.length > 0 ? attribution.attributed : ['batch'];
+    for (const provenanceSourceId of provenanceSourceIds) {
+      const provenanceResult = recordProvenance(db, workspacePath, {
+        sourceId: provenanceSourceId,
+        outputPath,
+        outputType: 'contradiction',
+        operation: 'compile.contradict',
+      });
+      if (!provenanceResult.ok) {
+        return err(provenanceResult.error);
+      }
     }
 
     // 7. Write trace event.
@@ -478,6 +535,9 @@ export async function detectContradictions(
       compilationId,
       outputPath,
       tokensUsed,
+      attributionMode: attribution.mode,
+      attributedSources: attribution.attributed.length,
+      advisoryDropped: attribution.advisoryDropped,
     });
     if (!traceResult.ok) {
       return err(traceResult.error);
@@ -508,6 +568,13 @@ export async function detectContradictions(
       inputTokens,
       outputTokens,
     });
+  }
+
+  if (rejectedPages > 0) {
+    process.stderr.write(
+      `[ico] contradict: ${rejectedPages} model-emitted page(s) failed deterministic validation ` +
+        `and were skipped with a compile.validation.reject trace.\n`,
+    );
   }
 
   return ok(results);

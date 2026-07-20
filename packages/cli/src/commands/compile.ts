@@ -32,6 +32,7 @@ import {
   addBacklinks,
   type ChangedFile,
   type ClaudeClient,
+  CompileSkipError,
   computeAffectedSet,
   createClaudeClient,
   detectContradictions,
@@ -52,6 +53,7 @@ import {
   withWriteLock,
 } from '@ico/kernel';
 
+import { anchorAfterCompile } from '../lib/anchor.js';
 import { formatError, formatInfo, formatSuccess, formatWarning } from '../lib/output.js';
 import { resolveWorkspace } from '../lib/workspace-resolver.js';
 
@@ -179,6 +181,7 @@ export async function runSummarize(ctx: CompileContext): Promise<void> {
   let totalTokens = 0;
   let compiled = 0;
   let failed = 0;
+  let skipped = 0;
 
   for (const source of sources) {
     const absPath = join(ctx.workspacePath, source.path);
@@ -212,6 +215,17 @@ export async function runSummarize(ctx: CompileContext): Promise<void> {
 
     if (!result.ok) {
       const errMsg = result.error.message;
+
+      // A validation skip (empty source / refusal / junk output) is NOT a
+      // failure: the write was skipped with a receipted trace event
+      // (compile.validation.reject) and the run should keep going. Counted
+      // separately so an all-skipped corpus is not misreported as an outage.
+      if (result.error instanceof CompileSkipError) {
+        process.stderr.write(formatWarning(`  Skipped (validation): ${errMsg}`) + '\n');
+        skipped++;
+        continue;
+      }
+
       process.stderr.write(formatWarning(`  Failed: ${source.path}: ${errMsg}`) + '\n');
       failed++;
 
@@ -251,7 +265,7 @@ export async function runSummarize(ctx: CompileContext): Promise<void> {
 
   process.stdout.write(
     formatSuccess(
-      `Summarize pass complete: ${compiled} compiled, ${failed} failed, ${totalTokens} tokens used.`,
+      `Summarize pass complete: ${compiled} compiled, ${skipped} skipped (validation), ${failed} failed, ${totalTokens} tokens used.`,
     ) + '\n',
   );
 }
@@ -713,6 +727,12 @@ export function register(program: Command): void {
               ...(debounceWindowSeconds !== undefined && { debounceWindowSeconds }),
             });
             if (exitCode !== 0) process.exitCode = exitCode;
+            // External chain-head anchor (l13.8): witness the trace events
+            // this run produced. No-op unless ICO_ANCHOR_FILE is configured;
+            // best-effort — never fails the compile.
+            if (exitCode === 0 && opts.dryRun !== true) {
+              anchorAfterCompile(workspacePath);
+            }
             return;
           }
 
@@ -740,6 +760,9 @@ export function register(program: Command): void {
 
             process.stdout.write('\n');
             process.stdout.write(formatSuccess('All compilation passes complete.') + '\n');
+            // External chain-head anchor (l13.8): witness the trace events this
+            // run produced. No-op unless ICO_ANCHOR_FILE is configured.
+            anchorAfterCompile(workspacePath);
             return;
           }
 
@@ -763,6 +786,10 @@ export function register(program: Command): void {
               await runGap(ctx);
               break;
           }
+          // A single generative pass also produces trace events worth
+          // anchoring; the deterministic link pass writes none but the no-op
+          // guard makes anchoring after it harmless (l13.8).
+          anchorAfterCompile(workspacePath);
         } catch (e) {
           // A pass failure now THROWS (CompilePassError) instead of calling
           // process.exit mid-run, so this catch runs, the `finally` below

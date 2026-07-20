@@ -22,6 +22,8 @@ import { appendAuditLog, type Database, recordProvenance, writeTrace } from '@ic
 import { err, ok, type Result } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
+import { validateCompiledContent } from '../validation.js';
+import { checkModelOutput, CompileSkipError, stampPassProvenance } from './output-filter.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -179,6 +181,25 @@ export async function summarizeSource(
   const model = options?.model ?? DEFAULT_MODEL;
   const maxTokens = options?.maxTokens ?? DEFAULT_MAX_TOKENS;
 
+  // 1b. Skip empty raw sources BEFORE spending a Claude call (l13.1): an
+  // empty/whitespace source can only produce an "Empty Source Document"
+  // junk page. Receipts-precede-visibility: the skip itself is receipted
+  // via a trace event, then surfaced as a typed CompileSkipError so the CLI
+  // counts it as skipped, not failed.
+  if (sourceContent.trim() === '') {
+    const skipTrace = writeTrace(db, workspacePath, 'compile.validation.reject', {
+      pass: 'compile.summarize',
+      code: 'EMPTY_SOURCE',
+      sourceId,
+      sourcePath,
+      detail: 'raw source is empty after trim — nothing to summarize',
+    });
+    if (!skipTrace.ok) {
+      return err(skipTrace.error);
+    }
+    return err(new CompileSkipError('EMPTY_SOURCE', `Skipped ${sourcePath}: raw source is empty`));
+  }
+
   // 2. Build prompts.
   const userPrompt = buildUserPrompt({
     sourceId,
@@ -189,17 +210,93 @@ export async function summarizeSource(
     rawSourceText: sourceContent,
   });
 
-  // 3. Call the Claude API.
-  const completionResult = await client.createCompletion(SYSTEM_PROMPT, userPrompt, {
-    model,
-    maxTokens,
-  });
+  // 3. Call the Claude API, validating the output INLINE before any write
+  // (l13.1). Validation is deterministic: the refusal/junk filter
+  // (checkModelOutput) plus the full frontmatter schema
+  // (validateCompiledContent). One retry with the validation errors appended
+  // to the prompt; a second failure skips-with-trace — a rejected output
+  // must leave a trace event, never a visible file.
+  let content = '';
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let responseModel = model;
+  let rejection: { code: string; detail: string; excerpt: string } | null = null;
 
-  if (!completionResult.ok) {
-    return err(completionResult.error);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const attemptPrompt =
+      rejection === null
+        ? userPrompt
+        : `${userPrompt}\n\nYour previous attempt was rejected by the deterministic validator: ${rejection.detail}. Produce the full source summary page again, fixing that problem. Begin with the --- frontmatter fence.`;
+
+    const completionResult = await client.createCompletion(SYSTEM_PROMPT, attemptPrompt, {
+      model,
+      maxTokens,
+    });
+    if (!completionResult.ok) {
+      return err(completionResult.error);
+    }
+    content = completionResult.value.content;
+    inputTokens += completionResult.value.inputTokens;
+    outputTokens += completionResult.value.outputTokens;
+    responseModel = completionResult.value.model;
+
+    const junkCheck = checkModelOutput(content);
+    if (!junkCheck.ok) {
+      rejection = junkCheck.rejection;
+      continue;
+    }
+    const schemaCheck = validateCompiledContent(content);
+    if (!schemaCheck.ok) {
+      rejection = {
+        code: 'NON_MARKDOWN_JUNK',
+        detail: schemaCheck.error.message,
+        excerpt: content.trim().slice(0, 120),
+      };
+      continue;
+    }
+    if (!schemaCheck.value.valid) {
+      rejection = {
+        code: 'SCHEMA_INVALID',
+        detail: schemaCheck.value.errors.join('; '),
+        excerpt: content.trim().slice(0, 120),
+      };
+      continue;
+    }
+    rejection = null;
+    break;
   }
 
-  const { content, inputTokens, outputTokens, model: responseModel } = completionResult.value;
+  if (rejection !== null) {
+    const rejectTrace = writeTrace(db, workspacePath, 'compile.validation.reject', {
+      pass: 'compile.summarize',
+      code: rejection.code,
+      sourceId,
+      sourcePath,
+      detail: rejection.detail,
+      excerpt: rejection.excerpt,
+      retried: true,
+    });
+    if (!rejectTrace.ok) {
+      return err(rejectTrace.error);
+    }
+    return err(
+      new CompileSkipError(
+        'NON_MARKDOWN_JUNK',
+        `Skipped ${sourcePath}: model output failed validation after retry (${rejection.code}: ${rejection.detail})`,
+      ),
+    );
+  }
+
+  // 3b. Stamp deterministic pass provenance (l13.5): the deterministic write
+  // path owns source_path / content_hash / compiled_by / pass_version —
+  // whatever the model emitted for those keys is overwritten with the values
+  // this function was CALLED with, so the page-side carry the spool emitter
+  // reads is never model-invented.
+  content = stampPassProvenance(content, 'compile.summarize', {
+    source_path: sourcePath,
+    content_hash: contentHash,
+  });
+
   const tokensUsed = inputTokens + outputTokens;
 
   // 4. Derive the output path.

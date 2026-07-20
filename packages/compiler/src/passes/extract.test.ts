@@ -475,4 +475,62 @@ describe('extractConcepts', () => {
       .all();
     expect(rows[0]!.count).toBe(1);
   });
+
+  // -------------------------------------------------------------------------
+  // 14. Inline output validation (l13.1): a refusal/junk model page is
+  //     skipped with a receipted compile.validation.reject trace — never a
+  //     visible file.
+  // -------------------------------------------------------------------------
+
+  it('skips a refusal-boilerplate model page with a receipted trace, writing no file', async () => {
+    const client = mockClient('I cannot help with this request.');
+    const result = await extractConcepts(client, env.db, env.wsRoot, [SUMMARY_PATH]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toHaveLength(0);
+
+    const traces = readTraces(env.db, { eventType: 'compile.validation.reject' });
+    expect(traces.ok).toBe(true);
+    if (traces.ok) expect(traces.value.length).toBeGreaterThanOrEqual(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // 15. Source attribution (l13.5): a model source_id that matches a real
+  //     summary compilation lands in compilation_sources; a ghost id does
+  //     not, and pass provenance is stamped.
+  // -------------------------------------------------------------------------
+
+  it('populates compilation_sources from validated advisory source_ids', async () => {
+    const SRC = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'; // the summary's source
+    // Insert the source first (compilations.source_id has a FK to sources.id),
+    // then the summary's deterministic compilations row so attribution has a
+    // ground-truth input set to intersect against.
+    env.db
+      .prepare(
+        `INSERT INTO sources (id, path, type, ingested_at, hash) VALUES (?, 'raw/x.md', 'markdown', '2026-06-01T00:00:00.000Z', 'h')`,
+      )
+      .run(SRC);
+    env.db
+      .prepare(
+        `INSERT INTO compilations (id, source_id, type, output_path, compiled_at, stale, model)
+         VALUES ('sum-1', ?, 'summary', ?, '2026-06-01T00:00:00.000Z', 0, 'deepseek-chat')`,
+      )
+      .run(SRC, SUMMARY_PATH);
+
+    const client = mockClient(conceptPage('Attributed Concept', [SRC, 'ghost-source-id']));
+    const result = await extractConcepts(client, env.db, env.wsRoot, [SUMMARY_PATH]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const junction = env.db
+      .prepare<[], { source_id: string }>(`SELECT source_id FROM compilation_sources`)
+      .all();
+    expect(junction.map((r) => r.source_id)).toContain(SRC);
+    expect(junction.map((r) => r.source_id)).not.toContain('ghost-source-id');
+
+    // Pass provenance stamped on the written page.
+    const written = readFileSync(join(env.wsRoot, result.value[0]!.outputPath), 'utf-8');
+    expect(written).toContain('compiled_by: compile.extract');
+    expect(written).toContain('pass_version:');
+  });
 });
