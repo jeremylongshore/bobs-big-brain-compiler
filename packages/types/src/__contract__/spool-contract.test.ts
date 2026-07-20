@@ -62,14 +62,86 @@ describe('spool boundary contract — ICO emission ↔ INTKB MemoryCandidate', (
     expect(IntkbMemoryCandidate.safeParse(wire).success).toBe(true);
   });
 
-  it('INTKB parser silently strips ICO-only schemaVersion field', () => {
+  it('INTKB parser PINS schemaVersion at the literal "1" (5bm.6 resync — no longer stripped)', () => {
     const candidate = buildSample();
     const wire: unknown = JSON.parse(JSON.stringify(candidate));
     const parsed = IntkbMemoryCandidate.safeParse(wire);
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      // schemaVersion is not part of INTKB's schema; should be stripped.
-      expect((parsed.data as Record<string, unknown>)['schemaVersion']).toBeUndefined();
+      // Since the 2026-07-19 resync INTKB carries schemaVersion natively,
+      // pinned to '1' — ICO's emitted value is preserved, not stripped.
+      expect((parsed.data as Record<string, unknown>)['schemaVersion']).toBe('1');
+    }
+    // The pinning is load-bearing: a future ICO v2 line FAILS safeParse
+    // instead of being silently ingested as v1 with new fields dropped. Pin
+    // the KIND of rejection too (review finding on #179): a registrar change
+    // softening the literal into a union must break THIS assertion, not just
+    // flip a boolean somewhere.
+    const v2wire = { ...(wire as Record<string, unknown>), schemaVersion: '2' };
+    const v2parsed = IntkbMemoryCandidate.safeParse(v2wire);
+    expect(v2parsed.success).toBe(false);
+    if (!v2parsed.success) {
+      expect(v2parsed.error.issues[0]).toMatchObject({ path: ['schemaVersion'] });
+    }
+  });
+
+  it('ICO emissions carry NO origin and still parse (unattested backward-compat, GSB Wave-2 H1)', () => {
+    // ICO's emitter does not mint origin attestations; INTKB's schema keeps
+    // `origin` OPTIONAL so every spool line governs as `unattested` rather
+    // than being orphaned by a hard-reject flag-day (registrar 046-AT-DECR).
+    const wire = JSON.parse(JSON.stringify(buildSample())) as Record<string, unknown>;
+    expect('origin' in wire).toBe(false);
+    const parsed = IntkbMemoryCandidate.safeParse(wire);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect((parsed.data as Record<string, unknown>)['origin']).toBeUndefined();
+    }
+  });
+
+  it('a well-formed origin attestation parses; malformed tokenHmac/channel shapes are refused', () => {
+    const base = JSON.parse(JSON.stringify(buildSample())) as Record<string, unknown>;
+    const attested = {
+      ...base,
+      origin: {
+        tokenHmac: 'ab'.repeat(32),
+        channel: 'local-mcp',
+        mintedAt: '2026-05-24T03:00:00.000Z',
+      },
+    };
+    expect(IntkbMemoryCandidate.safeParse(attested).success).toBe(true);
+    // Pin WHERE each refusal lands (review finding on #179) — the failure
+    // must be the specific field's grammar, not an incidental error elsewhere.
+    const badToken = { ...base, origin: { ...attested.origin, tokenHmac: 'ZZ'.repeat(32) } };
+    const badTokenParsed = IntkbMemoryCandidate.safeParse(badToken);
+    expect(badTokenParsed.success).toBe(false);
+    if (!badTokenParsed.success) {
+      expect(badTokenParsed.error.issues[0]).toMatchObject({ path: ['origin', 'tokenHmac'] });
+    }
+    const badChannel = { ...base, origin: { ...attested.origin, channel: 'Not A Tag' } };
+    const badChannelParsed = IntkbMemoryCandidate.safeParse(badChannel);
+    expect(badChannelParsed.success).toBe(false);
+    if (!badChannelParsed.success) {
+      expect(badChannelParsed.error.issues[0]).toMatchObject({ path: ['origin', 'channel'] });
+    }
+  });
+
+  it('origin does not participate in id derivation — the same wire id parses with and without it', () => {
+    // The spool id contract stays UUID-v5 over (workspaceId, relPath,
+    // bodySha256); attaching origin must not change the id INTKB sees.
+    const wire = JSON.parse(JSON.stringify(buildSample())) as Record<string, unknown>;
+    const withOrigin = {
+      ...wire,
+      origin: {
+        tokenHmac: 'cd'.repeat(32),
+        channel: 'local-mcp',
+        mintedAt: '2026-05-24T03:00:00.000Z',
+      },
+    };
+    const a = IntkbMemoryCandidate.safeParse(wire);
+    const b = IntkbMemoryCandidate.safeParse(withOrigin);
+    expect(a.success && b.success).toBe(true);
+    if (a.success && b.success) {
+      expect((a.data as { id: string }).id).toBe((b.data as { id: string }).id);
     }
   });
 
