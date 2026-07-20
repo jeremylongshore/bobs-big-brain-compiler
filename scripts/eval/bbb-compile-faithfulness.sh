@@ -2,6 +2,12 @@
 # bbb-compile-faithfulness.sh — scheduled compile-quality (faithfulness) eval
 # against the LIVE governed brain (bead intentional-cognition-os-l13.10).
 #
+# TIER SPLIT (deliberate, not a bug): THIS is the GATING floor-check tier — an
+# LLM-judge groundedness eval, weekly, whose regression below the COMMITTED
+# floor exits nonzero and alerts #cron-failures. The sibling NON-GATING tier is
+# scripts/distiller/eval-distiller-output.mjs (l13.9): a cheap, deterministic,
+# nightly, digest-only signal that never gates. Two tiers on purpose.
+#
 # WHAT IT DOES
 # Runs the sampled compile-faithfulness (groundedness) eval —
 # evals/faithfulness/nightly-compile-faithfulness.eval.yaml (sample 10, seed 1,

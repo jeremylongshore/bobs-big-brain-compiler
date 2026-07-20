@@ -32,6 +32,12 @@ export interface EvaluateOptions {
   minScore?: number;
 }
 
+export const CITATION_SCHEME: string;
+export const CITATION_SCHEME_VERSION: number;
+export function selectRecordForDate(
+  text: string,
+  date: string,
+): { record: Record<string, unknown> | null; matchCount: number };
 export function contentWords(text: string): string[];
 export function overlapRatio(title: string, sourceText: string): number;
 export function citationToRelPath(citation: unknown): string | null;

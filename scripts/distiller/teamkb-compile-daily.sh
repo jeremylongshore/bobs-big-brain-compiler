@@ -260,6 +260,13 @@ run_inbox_review() {
 # DISTILLER_EVAL_SUMMARY for the digest email. Diagnostic + loud, never gating:
 # a failing (or missing) eval cannot flip the compile STATUS. Every skip path
 # logs its reason (env-gated degrade, never a crash).
+#
+# TIER SPLIT (deliberate, not a bug): THIS distiller eval is the DIGEST-ONLY,
+# NON-GATING tier — cheap, deterministic, runs every night, informs the operator
+# email. The GATING tier is a SEPARATE, scheduled job: scripts/eval/
+# bbb-compile-faithfulness.sh (l13.10), an LLM-judge groundedness check against
+# a committed floor whose regression alerts #cron-failures. Two tiers on purpose:
+# a nightly no-cost signal here, a weekly floor-check ratchet there.
 DISTILLER_EVAL_SUMMARY=""
 run_distiller_eval() {
   if ! command -v node >/dev/null 2>&1; then

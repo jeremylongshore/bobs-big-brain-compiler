@@ -26,9 +26,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // The plain-JS harness ships a sibling .d.mts so these imports are fully typed.
 import {
+  CITATION_SCHEME,
+  CITATION_SCHEME_VERSION,
   citationToRelPath,
   evaluateRecord,
   overlapRatio,
+  selectRecordForDate,
 } from '../../scripts/distiller/eval-distiller-output.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -75,6 +78,50 @@ describe('citationToRelPath', () => {
     expect(citationToRelPath('qmd://kb-decisions/../secrets.md')).toBeNull();
     expect(citationToRelPath('qmd://kb-decisions/x.txt')).toBeNull();
     expect(citationToRelPath(undefined)).toBeNull();
+  });
+});
+
+describe('selectRecordForDate', () => {
+  it('iterates ALL lines and keeps only the LAST same-date record (last-wins)', () => {
+    const body = [
+      JSON.stringify({
+        date: '2026-07-18',
+        candidates: [{ title: 'first', disposition: 'promoted' }],
+      }),
+      JSON.stringify({
+        date: '2026-07-17',
+        candidates: [{ title: 'other-date', disposition: 'promoted' }],
+      }),
+      JSON.stringify({
+        date: '2026-07-18',
+        candidates: [{ title: 'SECOND-wins', disposition: 'promoted' }],
+      }),
+    ].join('\n');
+    const { record, matchCount } = selectRecordForDate(body, '2026-07-18');
+    expect(matchCount).toBe(2);
+    // The FINAL same-date record won, not the first, and not the other-date one.
+    expect((record?.candidates as Array<{ title: string }>)[0].title).toBe('SECOND-wins');
+  });
+
+  it('returns matchCount 1 for a single record and 0 when none match', () => {
+    const body = JSON.stringify({ date: '2026-07-18', candidates: [] });
+    expect(selectRecordForDate(body, '2026-07-18').matchCount).toBe(1);
+    const none = selectRecordForDate(body, '2099-01-01');
+    expect(none.matchCount).toBe(0);
+    expect(none.record).toBeNull();
+  });
+
+  it('skips corrupt lines without aborting the scan', () => {
+    const body = [
+      'not json at all {{{',
+      JSON.stringify({
+        date: '2026-07-18',
+        candidates: [{ title: 'kept', disposition: 'promoted' }],
+      }),
+    ].join('\n');
+    const { record, matchCount } = selectRecordForDate(body, '2026-07-18');
+    expect(matchCount).toBe(1);
+    expect((record?.candidates as Array<{ title: string }>)[0].title).toBe('kept');
   });
 });
 
@@ -171,6 +218,75 @@ describe('CLI', () => {
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('grounded 1/1');
     expect(r.stdout).toContain('PASS');
+    // The summary names the versioned citation contract so a reader can tell
+    // "model broke" from "harness broke" from the log alone.
+    expect(r.stdout).toContain(`citation format=${CITATION_SCHEME} v${CITATION_SCHEME_VERSION}`);
+  });
+
+  it('WARNs (but still scores the last) when a date has more than one record', () => {
+    writeFileSync(
+      join(kbExport, 'guides', 'lock.md'),
+      'the wrapper must check the webhook response itself\n',
+    );
+    writeDecisions([
+      {
+        date: '2026-07-18',
+        candidates: [
+          {
+            title: 'superseded earlier run',
+            disposition: 'promoted',
+            citation: 'qmd://kb-guides/lock.md',
+          },
+        ],
+      },
+      {
+        date: '2026-07-18',
+        candidates: [
+          {
+            title: 'the wrapper must check the webhook response itself',
+            disposition: 'promoted',
+            citation: 'qmd://kb-guides/lock.md',
+          },
+        ],
+      },
+    ]);
+    const r = runHarness([
+      '--decisions',
+      decisionsPath,
+      '--date',
+      '2026-07-18',
+      '--kb-export',
+      kbExport,
+    ]);
+    expect(r.stdout).toContain('WARN: 2 decisions records for 2026-07-18');
+    expect(r.stdout).toContain('grounded 1/1'); // the LAST record was scored
+    expect(r.status).toBe(0);
+  });
+
+  it('flags a whole-batch citation format drift as a contract break, not a quality regression', () => {
+    writeDecisions([
+      {
+        date: '2026-07-18',
+        candidates: [
+          {
+            title: 'valid title',
+            disposition: 'promoted',
+            citation: 'https://not-a-qmd-scheme/x.md',
+          },
+        ],
+      },
+    ]);
+    const r = runHarness([
+      '--decisions',
+      decisionsPath,
+      '--date',
+      '2026-07-18',
+      '--kb-export',
+      kbExport,
+    ]);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain('malformed-citation');
+    expect(r.stdout).toContain('CONTRACT drift');
   });
 
   it('exits 1 on a below-threshold night and discloses each failure', () => {

@@ -39,6 +39,26 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 // ---------------------------------------------------------------------------
+// Citation contract (versioned)
+// ---------------------------------------------------------------------------
+//
+// The shape of a governed-brain citation is a CONTRACT between the distiller
+// (which writes `qmd://…` citations into decisions.jsonl) and this harness
+// (which resolves them). It is versioned so a reader can tell three failure
+// modes apart FROM THE SUMMARY LINE ALONE:
+//   - the MODEL broke        → low overlap on a valid, resolvable citation
+//   - the HARNESS/contract    → malformed-citation across the board (format drift)
+//   - the DATA moved          → missing-source across the board
+// A format drift currently scores 0.0 and would otherwise read as a false
+// quality regression; printing `citation format=<scheme> vN` in the summary
+// makes "the harness broke" legible without opening the code. Bump
+// CITATION_SCHEME_VERSION whenever CITATION_RE changes.
+export const CITATION_SCHEME = 'qmd://<collection>/<name>.md';
+export const CITATION_SCHEME_VERSION = 1;
+/** The one regex that defines a well-formed citation. Single source of truth. */
+const CITATION_RE = /^qmd:\/\/([a-z0-9][a-z0-9-]*)\/([A-Za-z0-9][A-Za-z0-9._-]*\.md)$/;
+
+// ---------------------------------------------------------------------------
 // Scoring primitives (exported for the integration test)
 // ---------------------------------------------------------------------------
 
@@ -127,7 +147,7 @@ export function overlapRatio(title, sourceText) {
  */
 export function citationToRelPath(citation) {
   if (typeof citation !== 'string') return null;
-  const m = citation.match(/^qmd:\/\/([a-z0-9][a-z0-9-]*)\/([A-Za-z0-9][A-Za-z0-9._-]*\.md)$/);
+  const m = citation.match(CITATION_RE);
   if (m === null) return null;
   const collection = m[1].startsWith('kb-') ? m[1].slice(3) : m[1];
   const name = m[2];
@@ -192,6 +212,37 @@ export function evaluateRecord(record, kbExportDir, { minOverlap = 0.5, minScore
   };
 }
 
+/**
+ * Select the record for `date` from a decisions.jsonl body. The nightly
+ * wrapper writes exactly one record per date, but the journal is append-only
+ * and a re-run (or a manual replay) could append a SECOND same-date record.
+ * "Last-wins" is the right choice (the newest run supersedes), but doing it
+ * SILENTLY drops the earlier record's evidence — so we count matches and let
+ * the caller warn. Walks every non-empty, parseable line; a corrupt line
+ * elsewhere in the journal is skipped, never fatal.
+ *
+ * @returns {{ record: object|null, matchCount: number }} the final same-date
+ *   record (or null) and how many same-date records were seen.
+ */
+export function selectRecordForDate(text, date) {
+  let record = null;
+  let matchCount = 0;
+  for (const line of text.split('\n')) {
+    const t = line.trim();
+    if (t === '') continue;
+    try {
+      const r = JSON.parse(t);
+      if (r?.date === date) {
+        record = r; // last record for the date wins
+        matchCount += 1;
+      }
+    } catch {
+      // A corrupt line elsewhere in the journal must not kill tonight's eval.
+    }
+  }
+  return { record, matchCount };
+}
+
 // ---------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------
@@ -235,20 +286,17 @@ function main() {
     process.exit(0);
   }
 
-  let record = null;
-  for (const line of readFileSync(decisions, 'utf-8').split('\n')) {
-    const t = line.trim();
-    if (t === '') continue;
-    try {
-      const r = JSON.parse(t);
-      if (r?.date === date) record = r; // last record for the date wins
-    } catch {
-      // A corrupt line elsewhere in the journal must not kill tonight's eval.
-    }
-  }
+  const { record, matchCount } = selectRecordForDate(readFileSync(decisions, 'utf-8'), date);
   if (record === null) {
     process.stdout.write(`SKIP: no decisions record for ${date}\n`);
     process.exit(0);
+  }
+  if (matchCount > 1) {
+    // Last-wins is intentional (newest run supersedes) but not silent: an
+    // operator should know an earlier same-date record's evidence was dropped.
+    process.stdout.write(
+      `WARN: ${matchCount} decisions records for ${date} — scoring the LAST; earlier same-date records were superseded (last-wins).\n`,
+    );
   }
 
   const verdict = evaluateRecord(record, kbExport, { minOverlap, minScore });
@@ -267,8 +315,18 @@ function main() {
     process.exit(0);
   }
   const grounded = verdict.details.findings.filter((f) => f.score === 1).length;
+  // Surface how many candidates failed specifically on citation FORMAT — if
+  // that count equals `promoted`, the contract drifted (harness broke), not the
+  // model. The `citation format=` tag names the versioned scheme so a reader
+  // can distinguish "the model broke" / "the harness broke" / "the data moved"
+  // from this one line.
+  const malformed = verdict.details.findings.filter((f) => f.check === 'malformed-citation').length;
+  const formatNote =
+    malformed === verdict.details.promoted && verdict.details.promoted > 0
+      ? ` · ⚠ ALL citations malformed — likely CONTRACT drift, not a quality regression`
+      : '';
   process.stdout.write(
-    `grounded ${grounded}/${verdict.details.promoted} promoted candidates · score=${verdict.score.toFixed(2)} ${verdict.passed ? '>=' : '<'} ${minScore} (${verdict.passed ? 'PASS' : 'FAIL'}) · deterministic (citation+source+overlap>=${minOverlap})\n`,
+    `grounded ${grounded}/${verdict.details.promoted} promoted candidates · score=${verdict.score.toFixed(2)} ${verdict.passed ? '>=' : '<'} ${minScore} (${verdict.passed ? 'PASS' : 'FAIL'}) · deterministic (citation+source+overlap>=${minOverlap}) · citation format=${CITATION_SCHEME} v${CITATION_SCHEME_VERSION}${formatNote}\n`,
   );
   process.exit(verdict.passed ? 0 : 1);
 }
