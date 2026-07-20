@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.23.0](https://github.com/jeremylongshore/bobs-big-brain-compiler/compare/v1.22.0...v1.23.0) (2026-07-20)
+
+
+### Features
+
+* **compile:** gate model output, attribute sources, and extend audit verification (l13.1/.5/.7/.8) ([#181](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/181)) ([7927204](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/79272047ffaa7fb22483060b9080a8d0a0f5cf2a))
+* MiniMax-M3 distiller with groundedness eval + scheduled faithfulness floor (l13.9/l13.10) ([#180](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/180)) ([fb96c06](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/fb96c0669a1e12bf54b4051627637e23bf2d5c44))
+* receipts-precede-visibility floor (G1) + cross-day trace chaining (G3) ([#176](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/176)) ([a4b7922](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/a4b79225fa849a5880ce77b537a33cff65c8f683))
+
 ## [Unreleased]
 
 ### Changed
