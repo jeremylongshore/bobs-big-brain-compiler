@@ -1,0 +1,7 @@
+{
+  "_comment": "Committed compile-faithfulness floor (bead intentional-cognition-os-l13.10). MEASURED, never invented: seeded from the first real run of nightly-compile-faithfulness.eval.yaml against the live brain (~/.teamkb/brain). scripts/eval/bbb-compile-faithfulness.sh alerts (exit 1 → Slack #cron-failures) when a weekly run's mean groundedness falls BELOW this floor; raising it requires a new measured run. Details of the seeding run: grounded=97% over 10/10 scored (N=10, seed 1, wiki_subdirs=[sources]) · judge=MiniMax-M3 (Anthropic-compatible wire) · 23312 judge tokens (~$0.1307).",
+  "floor": 0.9714285714285713,
+  "measured_at": "2026-07-20T21:19:15Z",
+  "judge_model": "MiniMax-M3",
+  "spec": "evals/faithfulness/nightly-compile-faithfulness.eval.yaml"
+}

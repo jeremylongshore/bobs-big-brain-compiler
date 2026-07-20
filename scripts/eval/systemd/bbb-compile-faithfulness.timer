@@ -1,0 +1,12 @@
+[Unit]
+Description=Weekly Sun 05:45 compile-faithfulness eval (l13.10)
+# 05:45 Sunday: after the 03:30 nightly compile window, the 04:30
+# teamkb-backup.timer, and the 05:00 bbb-eval-governed retrieval anchor — the
+# judge reads a settled brain and never overlaps the other jobs' build steps.
+
+[Timer]
+OnCalendar=Sun *-*-* 05:45:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
