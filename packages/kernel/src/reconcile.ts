@@ -83,11 +83,21 @@ export interface ReconcileOptions {
 // ---------------------------------------------------------------------------
 
 /**
- * Workspace-relative wiki subdirectories that hold compiled pages. Must stay
- * in sync with the promotion targets (`TYPE_DIRECTORY_MAP` in promotion.ts)
- * and the spool's compiled-page discovery (`WIKI_DIRS` in spool.ts).
+ * Workspace-relative wiki subdirectories that hold compiled pages.
+ *
+ * ⚠️ THREE-PLACE LOCKSTEP — must stay in sync with:
+ *   1. `WIKI_DIRS` in `packages/kernel/src/spool.ts` (module-private, so it
+ *      cannot be imported here; a lockstep test in reconcile.test.ts pins a
+ *      literal copy and fails loudly on drift),
+ *   2. `TYPE_DIRECTORY_MAP` in `packages/kernel/src/promotion.ts` (every
+ *      promotion target directory must be receipt-gated here).
+ * A dir present in spool discovery but missing here would let unreceipted
+ * pages flow to the spool ungated; a promotion target missing here would
+ * quarantine-exempt promoted pages.
+ *
+ * Exported for the lockstep test only — not part of the kernel barrel.
  */
-const GATED_WIKI_DIRS = [
+export const GATED_WIKI_DIRS = [
   'wiki/sources',
   'wiki/concepts',
   'wiki/entities',

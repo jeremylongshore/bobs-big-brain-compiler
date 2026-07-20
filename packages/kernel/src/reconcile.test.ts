@@ -19,7 +19,8 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { reconcileWorkspace } from './reconcile.js';
+import { promoteArtifact } from './promotion.js';
+import { GATED_WIKI_DIRS, reconcileWorkspace } from './reconcile.js';
 import type { Database } from './state.js';
 import { closeDatabase, initDatabase } from './state.js';
 import { readTraces } from './traces.js';
@@ -182,6 +183,86 @@ describe('reconcileWorkspace — stale tmp sweep', () => {
     if (!r.ok) return;
     expect(r.value.tmpSwept).toHaveLength(1);
     expect(existsSync(join(workspacePath, 'quarantine', tmpRel))).toBe(true);
+  });
+});
+
+describe('reconcileWorkspace — round-trip with the REAL receipt writers', () => {
+  it('a page promoted via promoteArtifact (real writer path convention) is matched, not quarantined', () => {
+    // Fix for the path-normalization risk: the walker's join()-built relative
+    // paths must byte-match what the REAL writer stores. Plant the receipt
+    // via promoteArtifact itself — which computes target_path with
+    // join/relative exactly as production does — rather than hand-written
+    // strings that could mask a convention mismatch.
+    const artifactRel = join('outputs', 'reports', 'roundtrip.md');
+    mkdirSync(join(workspacePath, 'outputs', 'reports'), { recursive: true });
+    writeFileSync(
+      join(workspacePath, artifactRel),
+      '---\ntitle: Round Trip\n---\n\nbody\n',
+      'utf-8',
+    );
+
+    const promoted = promoteArtifact(db, workspacePath, {
+      sourcePath: artifactRel,
+      targetType: 'topic',
+      confirm: true,
+    });
+    expect(promoted.ok).toBe(true);
+    if (!promoted.ok) return;
+    const targetRel = promoted.value.targetPath; // as stored in promotions.target_path
+    expect(existsSync(join(workspacePath, targetRel))).toBe(true);
+
+    const r = reconcileWorkspace(db, workspacePath);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // The promoted page was scanned AND matched against its receipt row.
+    expect(r.value.scanned).toBeGreaterThanOrEqual(1);
+    expect(r.value.quarantined).toEqual([]);
+    expect(existsSync(join(workspacePath, targetRel))).toBe(true);
+  });
+});
+
+describe('GATED_WIKI_DIRS — three-place lockstep', () => {
+  it('covers every compiled-page dir that spool.ts discovers (literal pin — see comment)', () => {
+    // ⚠️ LOCKSTEP PIN: `WIKI_DIRS` in packages/kernel/src/spool.ts is
+    // module-private (and that file is owned by another in-flight branch),
+    // so it cannot be imported. This literal is a byte copy of it. If this
+    // test fails, spool.ts's WIKI_DIRS and reconcile.ts's GATED_WIKI_DIRS
+    // have drifted — update GATED_WIKI_DIRS (and this pin) so every dir the
+    // spool ingests stays receipt-gated.
+    const SPOOL_WIKI_DIRS_LITERAL_COPY = [
+      'sources',
+      'concepts',
+      'topics',
+      'entities',
+      'contradictions',
+      'open-questions',
+    ] as const;
+
+    for (const dir of SPOOL_WIKI_DIRS_LITERAL_COPY) {
+      expect(GATED_WIKI_DIRS).toContain(`wiki/${dir}`);
+    }
+  });
+
+  it('covers every promotion target directory (TYPE_DIRECTORY_MAP in promotion.ts)', () => {
+    // Derived through the REAL writer: promote one artifact per type and
+    // assert its stored target directory is receipt-gated. This pins the
+    // promotion.ts TYPE_DIRECTORY_MAP ↔ GATED_WIKI_DIRS lockstep without a
+    // second hand-copied literal.
+    mkdirSync(join(workspacePath, 'outputs', 'reports'), { recursive: true });
+    const types = ['topic', 'concept', 'entity', 'reference'] as const;
+    for (const t of types) {
+      const rel = join('outputs', 'reports', `lockstep-${t}.md`);
+      writeFileSync(join(workspacePath, rel), `---\ntitle: Lockstep ${t}\n---\nx\n`, 'utf-8');
+      const promoted = promoteArtifact(db, workspacePath, {
+        sourcePath: rel,
+        targetType: t,
+        confirm: true,
+      });
+      expect(promoted.ok).toBe(true);
+      if (!promoted.ok) continue;
+      const targetDir = promoted.value.targetPath.split('/').slice(0, -1).join('/');
+      expect(GATED_WIKI_DIRS).toContain(targetDir);
+    }
   });
 });
 

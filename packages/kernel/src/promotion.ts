@@ -99,7 +99,15 @@ export interface PromotionResult {
 /** All valid promotion target types. */
 export const VALID_PROMOTION_TYPES = ['topic', 'concept', 'entity', 'reference'] as const;
 
-/** Maps each PromotionType to its wiki subdirectory (workspace-relative). */
+/**
+ * Maps each PromotionType to its wiki subdirectory (workspace-relative).
+ *
+ * ⚠️ KEEP IN SYNC with `GATED_WIKI_DIRS` in `./reconcile.ts` (every target
+ * directory here must be receipt-gated there, or promoted pages would be
+ * exempt from the receipts-precede-visibility floor) and with `WIKI_DIRS`
+ * in `./spool.ts` (spool discovery). The lockstep test in reconcile.test.ts
+ * pins all three.
+ */
 const TYPE_DIRECTORY_MAP: Record<PromotionType, string> = {
   topic: 'wiki/topics',
   concept: 'wiki/concepts',
