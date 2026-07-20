@@ -6,7 +6,31 @@ export {
   type IngestPipelineOptions,
   type IngestPipelineResult,
 } from './ingest-pipeline.js';
-export { validateCompiledPage, validateFrontmatter, type ValidationResult } from './validation.js';
+export {
+  validateCompiledContent,
+  validateCompiledPage,
+  validateFrontmatter,
+  type ValidationResult,
+} from './validation.js';
+export {
+  checkModelOutput,
+  COMPILE_PASS_VERSION,
+  CompileSkipError,
+  DEFAULT_MIN_BODY_CHARS,
+  isRetryableRejection,
+  type OutputCheckResult,
+  type OutputRejectCode,
+  type OutputRejection,
+  type PassOutcome,
+  stampPassProvenance,
+} from './passes/output-filter.js';
+export {
+  type AttributionMode,
+  attributeSources,
+  recordCompilationSources,
+  resolveSummarySourceIds,
+  type SourceAttribution,
+} from './passes/source-attribution.js';
 export {
   detectStalePages,
   markStale,

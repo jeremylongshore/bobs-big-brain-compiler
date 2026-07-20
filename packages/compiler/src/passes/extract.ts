@@ -33,9 +33,16 @@ import {
   chunkArray,
   DEFAULT_BATCH_SIZE,
   mergePages,
+  parseFrontmatterList,
   scaledMaxTokens,
   wasTruncated,
 } from './batch-helper.js';
+import { checkModelOutput, type PassOutcome, stampPassProvenance } from './output-filter.js';
+import {
+  attributeSources,
+  recordCompilationSources,
+  resolveSummarySourceIds,
+} from './source-attribution.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -187,7 +194,7 @@ export async function extractConcepts(
   workspacePath: string,
   summaryPaths: string[],
   options?: ExtractOptions,
-): Promise<Result<ExtractResult[], Error>> {
+): Promise<Result<PassOutcome<ExtractResult>, Error>> {
   // 1. Generate compilation metadata.
   const compiledAt = new Date().toISOString();
   const model = options?.model ?? DEFAULT_MODEL;
@@ -207,7 +214,7 @@ export async function extractConcepts(
   }
 
   if (summaryChunks.length === 0) {
-    return ok([]);
+    return ok({ pages: [], skipped: 0 });
   }
 
   // 3. Chunk into batches and call the API per batch, collecting raw pages.
@@ -261,18 +268,48 @@ export async function extractConcepts(
   const tokensUsed = inputTokens + outputTokens;
 
   if (rawPages.length === 0) {
-    return ok([]);
+    return ok({ pages: [], skipped: 0 });
   }
 
   // 4. Dedupe/merge by normalized title, unioning source_ids and assigning a
   //    stable UUIDv5 id so re-runs are idempotent.
   const mergedPages = mergePages(rawPages, { listField: 'source_ids' });
 
+  // Deterministic input set for source attribution (l13.5): the raw-source
+  // ids behind the summaries this pass actually read, resolved from the
+  // compilations table — never from model output.
+  const knownSourcesResult = resolveSummarySourceIds(db, summaryPaths);
+  if (!knownSourcesResult.ok) {
+    return err(knownSourcesResult.error);
+  }
+  const knownSourceIds = knownSourcesResult.value;
+
   const results: ExtractResult[] = [];
+  let rejectedPages = 0;
 
   for (const page of mergedPages) {
     const compilationId = page.id;
-    const pageContent = page.content;
+
+    // Inline deterministic output validation (l13.1): refusal boilerplate,
+    // empty/short bodies, and non-page junk are skipped-with-trace — the
+    // rejection leaves a receipt, never a visible file.
+    const outputCheck = checkModelOutput(page.content);
+    if (!outputCheck.ok) {
+      const rejectTrace = writeTrace(db, workspacePath, 'compile.validation.reject', {
+        pass: 'compile.extract',
+        code: outputCheck.rejection.code,
+        title: page.title,
+        detail: outputCheck.rejection.detail,
+        excerpt: outputCheck.rejection.excerpt,
+      });
+      if (!rejectTrace.ok) {
+        return err(rejectTrace.error);
+      }
+      rejectedPages++;
+      continue;
+    }
+
+    const pageContent = stampPassProvenance(page.content, 'compile.extract');
     const pageType = inferPageType(pageContent);
     const title = page.title;
     const slug = titleToSlug(title);
@@ -324,15 +361,36 @@ export async function extractConcepts(
       return err(e instanceof Error ? e : new Error(String(e)));
     }
 
-    // 7. Record provenance (batch operation — no single source_id).
-    const provenanceResult = recordProvenance(db, workspacePath, {
-      sourceId: 'batch',
-      outputPath,
-      outputType: compilationType,
-      operation: 'compile.extract',
-    });
-    if (!provenanceResult.ok) {
-      return err(provenanceResult.error);
+    // 7. Deterministic source attribution (l13.5): accept only the
+    //    model-emitted source_ids that were provably in this pass's input
+    //    set; persist them in the compilation_sources junction so the
+    //    staleness diff + faithfulness eval can walk page → raw. An empty
+    //    intersection records nothing (incremental.ts already sweeps
+    //    conservatively for junction-less cross-source pages), and the
+    //    provenance record then keeps the legacy 'batch' sourceId.
+    const advisoryIds = parseFrontmatterList(pageContent, 'source_ids');
+    const attribution = attributeSources(advisoryIds, knownSourceIds);
+    if (attribution.attributed.length > 0) {
+      const junctionResult = recordCompilationSources(db, compilationId, attribution.attributed);
+      if (!junctionResult.ok) {
+        return err(junctionResult.error);
+      }
+    }
+
+    // 7b. Record provenance — per attributed real source id when the
+    //     advisory ids validated, else a single legacy 'batch' record.
+    const provenanceSourceIds =
+      attribution.attributed.length > 0 ? attribution.attributed : ['batch'];
+    for (const provenanceSourceId of provenanceSourceIds) {
+      const provenanceResult = recordProvenance(db, workspacePath, {
+        sourceId: provenanceSourceId,
+        outputPath,
+        outputType: compilationType,
+        operation: 'compile.extract',
+      });
+      if (!provenanceResult.ok) {
+        return err(provenanceResult.error);
+      }
     }
 
     // 8. Write trace event.
@@ -341,6 +399,9 @@ export async function extractConcepts(
       pageType,
       outputPath,
       tokensUsed,
+      attributionMode: attribution.mode,
+      attributedSources: attribution.attributed.length,
+      advisoryDropped: attribution.advisoryDropped,
     });
     if (!traceResult.ok) {
       return err(traceResult.error);
@@ -374,5 +435,12 @@ export async function extractConcepts(
     });
   }
 
-  return ok(results);
+  if (rejectedPages > 0) {
+    process.stderr.write(
+      `[ico] extract: ${rejectedPages} model-emitted page(s) failed deterministic validation ` +
+        `and were skipped with a compile.validation.reject trace.\n`,
+    );
+  }
+
+  return ok({ pages: results, skipped: rejectedPages });
 }

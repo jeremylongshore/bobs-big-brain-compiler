@@ -30,6 +30,34 @@ vi.mock('@ico/kernel', async () => {
   return {
     ...actual,
     verifyAuditChain: vi.fn(),
+    // Extended surfaces (l13.7) default to clean so the chain-only exit-code
+    // tests below isolate the chain contribution. The kernel verifier itself
+    // is covered by packages/kernel/src/audit-surfaces.test.ts.
+    verifyAuditSurfaces: vi.fn(() => ({
+      ok: true,
+      value: {
+        indexedTraceFiles: 0,
+        indexedEvents: 0,
+        unindexedTraceFiles: 0,
+        unindexedEvents: 0,
+        provenanceFiles: 0,
+        provenanceRecords: 0,
+        provenanceTraceEvents: 0,
+        unreceiptedProvenance: 0,
+        spoolFilesChecked: 0,
+        spoolManifestsChecked: 0,
+        logMd: { present: false, lines: 0, convenienceOnly: true },
+        breaks: [],
+      },
+    })),
+    verifyIcoAnchors: vi.fn(() => ({
+      ok: true,
+      value: { anchorCount: 0, anchorBreaks: [], ok: true },
+    })),
+    appendIcoAnchor: vi.fn(() => ({
+      ok: true,
+      value: { record: {}, appended: false },
+    })),
     reconcileWorkspace: vi.fn(),
     initDatabase: vi.fn(() => ({ ok: true, value: {} as never })),
     closeDatabase: vi.fn(),
@@ -44,10 +72,24 @@ vi.mock('../lib/workspace-resolver.js', () => ({
 // Imports after mocks
 // ---------------------------------------------------------------------------
 
-import { closeDatabase, initDatabase, reconcileWorkspace, verifyAuditChain } from '@ico/kernel';
+import {
+  appendIcoAnchor,
+  closeDatabase,
+  initDatabase,
+  reconcileWorkspace,
+  verifyAuditChain,
+  verifyAuditSurfaces,
+  verifyIcoAnchors,
+} from '@ico/kernel';
 
 import { resolveWorkspace } from '../lib/workspace-resolver.js';
-import { runAuditReconcile, runAuditVerify } from './audit.js';
+import { runAuditAnchor, runAuditReconcile, runAuditVerify } from './audit.js';
+
+// Silence the anchor-lib git commit path in the anchor-command tests.
+vi.mock('../lib/anchor.js', async () => {
+  const actual = await vi.importActual<typeof import('../lib/anchor.js')>('../lib/anchor.js');
+  return { ...actual, commitAnchorFile: vi.fn(() => ({ committed: false, detail: 'test' })) };
+});
 
 // ---------------------------------------------------------------------------
 // Per-test scaffolding
@@ -235,7 +277,7 @@ describe('runAuditVerify — tampered chain', () => {
     runAuditVerify({}, fakeCommand());
     expect(process.exitCode).toBe(2);
     const err = stderrText();
-    expect(err).toMatch(/2 chain break\(s\) detected/);
+    expect(err).toMatch(/2 break\(s\) detected/);
     expect(err).toMatch(/2026-05-23\.jsonl line 1/);
     expect(err).toMatch(/2026-05-24\.jsonl line 4/);
     expect(err).toMatch(/GARBAGE_LINE/);
@@ -495,5 +537,194 @@ describe('runAuditReconcile', () => {
     });
     runAuditReconcile({ tmpMaxAgeMs: '0' }, fakeCommand());
     expect(reconcileWorkspace).toHaveBeenCalledWith(expect.anything(), tmpWs, { tmpMaxAgeMs: 0 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Extended surfaces + anchors aggregation (l13.7 / l13.8)
+// ---------------------------------------------------------------------------
+
+describe('runAuditVerify — extended surfaces', () => {
+  function cleanChain(): void {
+    vi.mocked(verifyAuditChain).mockReturnValue({
+      ok: true,
+      value: {
+        filesScanned: 1,
+        totalEvents: 3,
+        cleanFiles: 1,
+        breaks: [],
+        linkedBoundaries: 0,
+        legacyBoundaries: 0,
+      },
+    });
+  }
+
+  it('exits 2 when a surface break exists even though the chain is clean', () => {
+    cleanChain();
+    vi.mocked(verifyAuditSurfaces).mockReturnValueOnce({
+      ok: true,
+      value: {
+        indexedTraceFiles: 1,
+        indexedEvents: 3,
+        unindexedTraceFiles: 0,
+        unindexedEvents: 0,
+        provenanceFiles: 0,
+        provenanceRecords: 0,
+        provenanceTraceEvents: 0,
+        unreceiptedProvenance: 0,
+        spoolFilesChecked: 0,
+        spoolManifestsChecked: 0,
+        logMd: { present: false, lines: 0, convenienceOnly: true },
+        breaks: [
+          {
+            surface: 'trace-index',
+            code: 'TRACE_FILE_MISSING',
+            file: '2026-05-24.jsonl',
+            detail: 'gone from disk',
+          },
+        ],
+      },
+    });
+    runAuditVerify({}, fakeCommand());
+    expect(process.exitCode).toBe(2);
+    expect(stderrText()).toMatch(/TRACE_FILE_MISSING/);
+  });
+
+  it('--chain-only skips the DB surfaces + anchors and stays exit 0', () => {
+    cleanChain();
+    runAuditVerify({ chainOnly: true }, fakeCommand());
+    expect(process.exitCode).toBe(0);
+    expect(vi.mocked(verifyAuditSurfaces)).not.toHaveBeenCalled();
+    expect(vi.mocked(initDatabase)).not.toHaveBeenCalled();
+  });
+
+  it('includes surfaces + anchors keys in the --json envelope', () => {
+    cleanChain();
+    runAuditVerify({ json: true }, fakeCommand());
+    const parsed = JSON.parse(stdoutText().trim()) as Record<string, unknown>;
+    expect(parsed).toHaveProperty('surfaces');
+    expect(parsed).toHaveProperty('anchors');
+    expect(parsed['ok']).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Anchor configuration states (HIGH #1) — the three distinct outcomes
+// ---------------------------------------------------------------------------
+
+describe('runAuditVerify — anchor configuration states', () => {
+  const OLD_ENV = process.env['ICO_ANCHOR_FILE'];
+  beforeEach(() => {
+    delete process.env['ICO_ANCHOR_FILE'];
+    vi.mocked(verifyAuditChain).mockReturnValue({
+      ok: true,
+      value: {
+        filesScanned: 1,
+        totalEvents: 3,
+        cleanFiles: 1,
+        breaks: [],
+        linkedBoundaries: 0,
+        legacyBoundaries: 0,
+      },
+    });
+  });
+  afterEach(() => {
+    if (OLD_ENV === undefined) delete process.env['ICO_ANCHOR_FILE'];
+    else process.env['ICO_ANCHOR_FILE'] = OLD_ENV;
+  });
+
+  it('UNCONFIGURED: clean chain stays exit 0 and prints the "set the var" hint', () => {
+    runAuditVerify({}, fakeCommand());
+    expect(process.exitCode).toBe(0);
+    expect(stdoutText()).toMatch(/No external anchor log configured/);
+    // The hint tells the operator to SET the var (they have not).
+    expect(stdoutText()).toMatch(/set ICO_ANCHOR_FILE/);
+  });
+
+  it('CONFIGURED-BUT-MISSING: exits non-zero with a DISTINCT message, not the "set it" hint', () => {
+    const missing = join(tmpWs, 'does-not-exist', 'ico-anchors.jsonl');
+    runAuditVerify({ anchorFile: missing }, fakeCommand());
+    // Non-zero so an unattended CI run cannot read a misconfigured anchor as clean.
+    expect(process.exitCode).toBe(2);
+    const err = stderrText();
+    expect(err).toMatch(/ANCHOR_NOT_FOUND/);
+    expect(err).toMatch(/configured but not found/);
+    expect(err).toContain(missing);
+    // It must NOT tell the operator to set what they already set, and must NOT
+    // silently pass as a clean chain.
+    expect(stdoutText()).not.toMatch(/set ICO_ANCHOR_FILE/);
+    expect(vi.mocked(verifyIcoAnchors)).not.toHaveBeenCalled();
+  });
+
+  it('CONFIGURED-BUT-MISSING via ICO_ANCHOR_FILE env also fails', () => {
+    process.env['ICO_ANCHOR_FILE'] = join(tmpWs, 'nope.jsonl');
+    runAuditVerify({}, fakeCommand());
+    expect(process.exitCode).toBe(2);
+    expect(stderrText()).toMatch(/ANCHOR_NOT_FOUND/);
+  });
+
+  it('CONFIGURED-BUT-MISSING surfaces in the --json envelope', () => {
+    runAuditVerify({ json: true, anchorFile: join(tmpWs, 'absent', 'a.jsonl') }, fakeCommand());
+    const parsed = JSON.parse(stdoutText().trim()) as Record<string, unknown>;
+    expect(parsed['ok']).toBe(false);
+    expect(parsed['anchorConfiguredButMissing']).toBe(true);
+    expect(process.exitCode).toBe(2);
+  });
+});
+
+describe('runAuditAnchor', () => {
+  const OLD_ENV = process.env['ICO_ANCHOR_FILE'];
+  afterEach(() => {
+    if (OLD_ENV === undefined) delete process.env['ICO_ANCHOR_FILE'];
+    else process.env['ICO_ANCHOR_FILE'] = OLD_ENV;
+  });
+
+  it('errors (exit 1) when no anchor file is configured', () => {
+    delete process.env['ICO_ANCHOR_FILE'];
+    runAuditAnchor({}, fakeCommand());
+    expect(process.exitCode).toBe(1);
+    expect(stderrText()).toMatch(/No anchor file configured/);
+  });
+
+  it('appends and reports success when a --anchor-file is given', () => {
+    vi.mocked(appendIcoAnchor).mockReturnValueOnce({
+      ok: true,
+      value: {
+        record: {
+          schemaVersion: 1,
+          anchoredAt: '2026-07-20T00:00:00.000Z',
+          workspaceId: 'ws',
+          totalEvents: 7,
+          chainHead: 'abcdef0123456789',
+          prevAnchorHash: null,
+          anchorHash: 'deadbeef',
+        },
+        appended: true,
+      },
+    });
+    runAuditAnchor({ anchorFile: join(tmpWs, 'ico-anchors.jsonl'), commit: false }, fakeCommand());
+    expect(process.exitCode).toBe(0);
+    expect(stdoutText()).toMatch(/Anchored 7 event/);
+  });
+
+  it('reports the no-op path when the head is unchanged', () => {
+    vi.mocked(appendIcoAnchor).mockReturnValueOnce({
+      ok: true,
+      value: {
+        record: {
+          schemaVersion: 1,
+          anchoredAt: '2026-07-20T00:00:00.000Z',
+          workspaceId: 'ws',
+          totalEvents: 7,
+          chainHead: 'abc',
+          prevAnchorHash: null,
+          anchorHash: 'x',
+        },
+        appended: false,
+      },
+    });
+    runAuditAnchor({ anchorFile: join(tmpWs, 'ico-anchors.jsonl') }, fakeCommand());
+    expect(process.exitCode).toBe(0);
+    expect(stdoutText()).toMatch(/unchanged/);
   });
 });

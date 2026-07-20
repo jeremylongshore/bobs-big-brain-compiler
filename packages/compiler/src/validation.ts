@@ -239,6 +239,40 @@ export function validateFrontmatter(
 }
 
 /**
+ * Validate raw compiled-page CONTENT (a string, not a file) against its
+ * frontmatter schema. This is the inline variant the compiler passes call
+ * after the model responds and BEFORE the atomic write — a page that fails
+ * here is skipped-with-trace instead of becoming visible (bead
+ * intentional-cognition-os-l13.1).
+ *
+ * Returns `err(Error)` when no `---`-delimited frontmatter block is present.
+ * Returns `ok(ValidationResult)` for all schema-level results, including
+ * failures — the caller inspects `result.value.valid` / `.errors`.
+ *
+ * @param raw - Full page content as a string.
+ */
+export function validateCompiledContent(raw: string): Result<ValidationResult, Error> {
+  const block = extractFrontmatterBlock(raw);
+  if (block === null) {
+    return err(new Error('No frontmatter block found in content'));
+  }
+
+  const frontmatter = parseFrontmatterBlock(block);
+  const rawType = frontmatter['type'];
+  const pageType = typeof rawType === 'string' ? rawType : '';
+
+  if (pageType === '') {
+    return ok({
+      valid: false,
+      pageType: '',
+      errors: ['Missing required field: type'],
+    });
+  }
+
+  return ok(validateFrontmatter(frontmatter, pageType));
+}
+
+/**
  * Validate a compiled page file against its frontmatter schema.
  *
  * Steps:

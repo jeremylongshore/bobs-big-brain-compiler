@@ -32,6 +32,7 @@ import {
   addBacklinks,
   type ChangedFile,
   type ClaudeClient,
+  CompileSkipError,
   computeAffectedSet,
   createClaudeClient,
   detectContradictions,
@@ -52,6 +53,7 @@ import {
   withWriteLock,
 } from '@ico/kernel';
 
+import { anchorAfterCompile } from '../lib/anchor.js';
 import { formatError, formatInfo, formatSuccess, formatWarning } from '../lib/output.js';
 import { resolveWorkspace } from '../lib/workspace-resolver.js';
 
@@ -179,6 +181,7 @@ export async function runSummarize(ctx: CompileContext): Promise<void> {
   let totalTokens = 0;
   let compiled = 0;
   let failed = 0;
+  let skipped = 0;
 
   for (const source of sources) {
     const absPath = join(ctx.workspacePath, source.path);
@@ -212,6 +215,17 @@ export async function runSummarize(ctx: CompileContext): Promise<void> {
 
     if (!result.ok) {
       const errMsg = result.error.message;
+
+      // A validation skip (empty source / refusal / junk output) is NOT a
+      // failure: the write was skipped with a receipted trace event
+      // (compile.validation.reject) and the run should keep going. Counted
+      // separately so an all-skipped corpus is not misreported as an outage.
+      if (result.error instanceof CompileSkipError) {
+        process.stderr.write(formatWarning(`  Skipped (validation): ${errMsg}`) + '\n');
+        skipped++;
+        continue;
+      }
+
       process.stderr.write(formatWarning(`  Failed: ${source.path}: ${errMsg}`) + '\n');
       failed++;
 
@@ -251,7 +265,7 @@ export async function runSummarize(ctx: CompileContext): Promise<void> {
 
   process.stdout.write(
     formatSuccess(
-      `Summarize pass complete: ${compiled} compiled, ${failed} failed, ${totalTokens} tokens used.`,
+      `Summarize pass complete: ${compiled} compiled, ${skipped} skipped (validation), ${failed} failed, ${totalTokens} tokens used.`,
     ) + '\n',
   );
 }
@@ -280,7 +294,9 @@ async function runExtract(ctx: CompileContext): Promise<void> {
   rebuildWikiIndex(ctx.workspacePath);
 
   process.stdout.write(
-    formatSuccess(`Extract pass complete: ${result.value.length} pages written.`) + '\n',
+    formatSuccess(
+      `Extract pass complete: ${result.value.pages.length} pages written, ${result.value.skipped} skipped (validation).`,
+    ) + '\n',
   );
 }
 
@@ -300,7 +316,9 @@ async function runSynthesize(ctx: CompileContext): Promise<void> {
   rebuildWikiIndex(ctx.workspacePath);
 
   process.stdout.write(
-    formatSuccess(`Synthesize pass complete: ${result.value.length} topic pages written.`) + '\n',
+    formatSuccess(
+      `Synthesize pass complete: ${result.value.pages.length} topic pages written, ${result.value.skipped} skipped (validation).`,
+    ) + '\n',
   );
 }
 
@@ -337,14 +355,17 @@ async function runContradict(ctx: CompileContext): Promise<void> {
 
   rebuildWikiIndex(ctx.workspacePath);
 
-  if (result.value.length === 0) {
+  const skippedNote =
+    result.value.skipped > 0 ? ` (${result.value.skipped} skipped — validation)` : '';
+  if (result.value.pages.length === 0) {
     process.stdout.write(
-      formatSuccess('Contradict pass complete: no contradictions found.') + '\n',
+      formatSuccess(`Contradict pass complete: no contradictions found${skippedNote}.`) + '\n',
     );
   } else {
     process.stdout.write(
-      formatSuccess(`Contradict pass complete: ${result.value.length} contradiction(s) recorded.`) +
-        '\n',
+      formatSuccess(
+        `Contradict pass complete: ${result.value.pages.length} contradiction(s) recorded${skippedNote}.`,
+      ) + '\n',
     );
   }
 }
@@ -364,11 +385,17 @@ async function runGap(ctx: CompileContext): Promise<void> {
 
   rebuildWikiIndex(ctx.workspacePath);
 
-  if (result.value.length === 0) {
-    process.stdout.write(formatSuccess('Gap pass complete: no gaps identified.') + '\n');
+  const skippedNote =
+    result.value.skipped > 0 ? ` (${result.value.skipped} skipped — validation)` : '';
+  if (result.value.pages.length === 0) {
+    process.stdout.write(
+      formatSuccess(`Gap pass complete: no gaps identified${skippedNote}.`) + '\n',
+    );
   } else {
     process.stdout.write(
-      formatSuccess(`Gap pass complete: ${result.value.length} open question(s) recorded.`) + '\n',
+      formatSuccess(
+        `Gap pass complete: ${result.value.pages.length} open question(s) recorded${skippedNote}.`,
+      ) + '\n',
     );
   }
 }
@@ -713,6 +740,12 @@ export function register(program: Command): void {
               ...(debounceWindowSeconds !== undefined && { debounceWindowSeconds }),
             });
             if (exitCode !== 0) process.exitCode = exitCode;
+            // External chain-head anchor (l13.8): witness the trace events
+            // this run produced. No-op unless ICO_ANCHOR_FILE is configured;
+            // best-effort — never fails the compile.
+            if (exitCode === 0 && opts.dryRun !== true) {
+              anchorAfterCompile(workspacePath);
+            }
             return;
           }
 
@@ -740,6 +773,9 @@ export function register(program: Command): void {
 
             process.stdout.write('\n');
             process.stdout.write(formatSuccess('All compilation passes complete.') + '\n');
+            // External chain-head anchor (l13.8): witness the trace events this
+            // run produced. No-op unless ICO_ANCHOR_FILE is configured.
+            anchorAfterCompile(workspacePath);
             return;
           }
 
@@ -762,6 +798,15 @@ export function register(program: Command): void {
             case 'gaps':
               await runGap(ctx);
               break;
+          }
+          // External chain-head anchor (l13.8): only the generative passes emit
+          // new trace events worth witnessing. The `links` pass is deterministic
+          // backlink rewriting over already-receipted pages — it produces no new
+          // compile-trace events, so anchoring after it would only add a no-op
+          // anchor churn cost (and, for the committing caller, an empty commit
+          // attempt). Skip it (LOW finding, PR #181).
+          if (target !== 'links') {
+            anchorAfterCompile(workspacePath);
           }
         } catch (e) {
           // A pass failure now THROWS (CompilePassError) instead of calling

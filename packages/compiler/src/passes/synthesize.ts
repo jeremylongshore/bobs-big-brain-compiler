@@ -49,9 +49,16 @@ import {
   chunkArray,
   DEFAULT_BATCH_SIZE,
   mergePages,
+  parseFrontmatterList,
   scaledMaxTokens,
   wasTruncated,
 } from './batch-helper.js';
+import { checkModelOutput, type PassOutcome, stampPassProvenance } from './output-filter.js';
+import {
+  attributeSources,
+  recordCompilationSources,
+  resolveSummarySourceIds,
+} from './source-attribution.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -202,7 +209,7 @@ export async function synthesizeTopics(
   db: Database,
   workspacePath: string,
   options?: SynthesizeOptions,
-): Promise<Result<SynthesizeResult[], Error>> {
+): Promise<Result<PassOutcome<SynthesizeResult>, Error>> {
   const compiledAt = new Date().toISOString();
   const model = options?.model ?? DEFAULT_MODEL;
   const batchSize = options?.batchSize ?? DEFAULT_BATCH_SIZE;
@@ -213,7 +220,7 @@ export async function synthesizeTopics(
   const concepts = readWikiDir(workspacePath, 'concepts');
 
   if (summaries.length === 0) {
-    return ok([]);
+    return ok({ pages: [], skipped: 0 });
   }
 
   // The concept pages are reference context shared across every batch; only the
@@ -270,7 +277,7 @@ export async function synthesizeTopics(
   const tokensUsed = inputTokens + outputTokens;
 
   if (rawPages.length === 0) {
-    return ok([]);
+    return ok({ pages: [], skipped: 0 });
   }
 
   // 3. Dedupe/merge by normalized title, unioning concept_ids and assigning a
@@ -288,11 +295,39 @@ export async function synthesizeTopics(
     return err(e instanceof Error ? e : new Error(String(e)));
   }
 
+  // Deterministic input set for source attribution (l13.5): every raw source
+  // with a summary compilation (this pass reads ALL summaries).
+  const knownSourcesResult = resolveSummarySourceIds(db);
+  if (!knownSourcesResult.ok) {
+    return err(knownSourcesResult.error);
+  }
+  const knownSourceIds = knownSourcesResult.value;
+
   const results: SynthesizeResult[] = [];
+  let rejectedPages = 0;
 
   for (const page of mergedPages) {
     const compilationId = page.id;
-    const pageContent = page.content;
+
+    // Inline deterministic output validation (l13.1): skip-with-trace, never
+    // a visible file for a rejected output.
+    const outputCheck = checkModelOutput(page.content);
+    if (!outputCheck.ok) {
+      const rejectTrace = writeTrace(db, workspacePath, 'compile.validation.reject', {
+        pass: 'compile.synthesize',
+        code: outputCheck.rejection.code,
+        title: page.title,
+        detail: outputCheck.rejection.detail,
+        excerpt: outputCheck.rejection.excerpt,
+      });
+      if (!rejectTrace.ok) {
+        return err(rejectTrace.error);
+      }
+      rejectedPages++;
+      continue;
+    }
+
+    const pageContent = stampPassProvenance(page.content, 'compile.synthesize');
     const title = page.title;
     const slug = titleToSlug(title);
     const outputPath = join('wiki', 'topics', `${slug}.md`);
@@ -328,15 +363,31 @@ export async function synthesizeTopics(
       return err(e instanceof Error ? e : new Error(String(e)));
     }
 
-    // 6. Record provenance (batch operation — no single source_id).
-    const provenanceResult = recordProvenance(db, workspacePath, {
-      sourceId: 'batch',
-      outputPath,
-      outputType: 'topic',
-      operation: 'compile.synthesize',
-    });
-    if (!provenanceResult.ok) {
-      return err(provenanceResult.error);
+    // 6. Deterministic source attribution (l13.5): validate the model's
+    //    advisory source_ids against the deterministic input set, persist the
+    //    accepted set in compilation_sources, and record provenance per real
+    //    source id — the legacy single 'batch' record remains only for pages
+    //    whose advisory ids did not validate.
+    const advisoryIds = parseFrontmatterList(pageContent, 'source_ids');
+    const attribution = attributeSources(advisoryIds, knownSourceIds);
+    if (attribution.attributed.length > 0) {
+      const junctionResult = recordCompilationSources(db, compilationId, attribution.attributed);
+      if (!junctionResult.ok) {
+        return err(junctionResult.error);
+      }
+    }
+    const provenanceSourceIds =
+      attribution.attributed.length > 0 ? attribution.attributed : ['batch'];
+    for (const provenanceSourceId of provenanceSourceIds) {
+      const provenanceResult = recordProvenance(db, workspacePath, {
+        sourceId: provenanceSourceId,
+        outputPath,
+        outputType: 'topic',
+        operation: 'compile.synthesize',
+      });
+      if (!provenanceResult.ok) {
+        return err(provenanceResult.error);
+      }
     }
 
     // 7. Write trace event.
@@ -344,6 +395,9 @@ export async function synthesizeTopics(
       compilationId,
       outputPath,
       tokensUsed,
+      attributionMode: attribution.mode,
+      attributedSources: attribution.attributed.length,
+      advisoryDropped: attribution.advisoryDropped,
     });
     if (!traceResult.ok) {
       return err(traceResult.error);
@@ -376,5 +430,12 @@ export async function synthesizeTopics(
     });
   }
 
-  return ok(results);
+  if (rejectedPages > 0) {
+    process.stderr.write(
+      `[ico] synthesize: ${rejectedPages} model-emitted page(s) failed deterministic validation ` +
+        `and were skipped with a compile.validation.reject trace.\n`,
+    );
+  }
+
+  return ok({ pages: results, skipped: rejectedPages });
 }

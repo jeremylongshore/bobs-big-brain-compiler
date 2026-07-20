@@ -183,7 +183,7 @@ describe('detectContradictions', () => {
       const result = await detectContradictions(client, emptyDb, wsResult.value.root);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.value).toHaveLength(0);
+      expect(result.value.pages).toHaveLength(0);
     } finally {
       closeDatabase(emptyDb);
       rmSync(emptyBase, { recursive: true, force: true });
@@ -200,9 +200,9 @@ describe('detectContradictions', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.length).toBeGreaterThanOrEqual(1);
+    expect(result.value.pages.length).toBeGreaterThanOrEqual(1);
 
-    const contradictionPath = join(env.wsRoot, result.value[0]!.outputPath);
+    const contradictionPath = join(env.wsRoot, result.value.pages[0]!.outputPath);
     expect(existsSync(contradictionPath)).toBe(true);
     expect(contradictionPath).toContain('wiki/contradictions');
   });
@@ -218,7 +218,7 @@ describe('detectContradictions', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const written = readFileSync(join(env.wsRoot, result.value[0]!.outputPath), 'utf-8');
+    const written = readFileSync(join(env.wsRoot, result.value.pages[0]!.outputPath), 'utf-8');
     expect(written).toContain('type: contradiction');
     expect(written).toContain('severity: high');
   });
@@ -233,7 +233,7 @@ describe('detectContradictions', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value).toHaveLength(0);
+    expect(result.value.pages).toHaveLength(0);
   });
 
   // -------------------------------------------------------------------------
@@ -281,9 +281,9 @@ describe('detectContradictions', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.value[0]!.inputTokens).toBe(600);
-    expect(result.value[0]!.outputTokens).toBe(250);
-    expect(result.value[0]!.tokensUsed).toBe(850);
+    expect(result.value.pages[0]!.inputTokens).toBe(600);
+    expect(result.value.pages[0]!.outputTokens).toBe(250);
+    expect(result.value.pages[0]!.tokensUsed).toBe(850);
   });
 
   // -------------------------------------------------------------------------
@@ -340,7 +340,7 @@ A secondary contradiction about evidence standards.
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.length).toBe(2);
+    expect(result.value.pages.length).toBe(2);
   });
 
   // -------------------------------------------------------------------------
@@ -407,8 +407,8 @@ A secondary contradiction about evidence standards.
     expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(5);
 
     // Far more than the single page a single-call run would yield.
-    expect(result.value.length).toBe(5);
-    expect(result.value.length).toBeGreaterThan(1);
+    expect(result.value.pages.length).toBe(5);
+    expect(result.value.pages.length).toBeGreaterThan(1);
   });
 
   // -------------------------------------------------------------------------
@@ -435,7 +435,7 @@ A secondary contradiction about evidence standards.
     if (!result.ok) return;
 
     expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
-    expect(result.value).toHaveLength(1);
+    expect(result.value.pages).toHaveLength(1);
   });
 
   // -------------------------------------------------------------------------
@@ -460,9 +460,9 @@ A secondary contradiction about evidence standards.
     if (!result.ok) return;
 
     expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
-    expect(result.value).toHaveLength(1);
+    expect(result.value.pages).toHaveLength(1);
 
-    const written = readFileSync(join(env.wsRoot, result.value[0]!.outputPath), 'utf-8');
+    const written = readFileSync(join(env.wsRoot, result.value.pages[0]!.outputPath), 'utf-8');
     expect(written).toContain('s-aaa');
     expect(written).toContain('s-bbb');
 
@@ -574,8 +574,8 @@ A secondary contradiction about evidence standards.
     if (!result.ok) return;
 
     // The only contradiction recorded came from the reduce step.
-    expect(result.value).toHaveLength(1);
-    const written = readFileSync(join(env.wsRoot, result.value[0]!.outputPath), 'utf-8');
+    expect(result.value.pages).toHaveLength(1);
+    const written = readFileSync(join(env.wsRoot, result.value.pages[0]!.outputPath), 'utf-8');
     expect(written).toContain('xb-0');
     expect(written).toContain('xb-3');
   });
@@ -613,7 +613,7 @@ A secondary contradiction about evidence standards.
     expect(calls).toHaveLength(1);
     expect(calls.filter((c) => isReduceCall(c[0])).length).toBe(0);
     // The reduce-only response never materialised.
-    expect(result.value).toHaveLength(0);
+    expect(result.value.pages).toHaveLength(0);
   });
 
   it('skips the reduce step entirely when crossBatch is false', async () => {
@@ -630,7 +630,7 @@ A secondary contradiction about evidence standards.
     const calls = (client.createCompletion as ReturnType<typeof vi.fn>).mock.calls;
     expect(calls.filter((c) => isReduceCall(c[0])).length).toBe(0);
     // No reduce call → the reduce-only conflict is never recorded.
-    expect(result.value).toHaveLength(0);
+    expect(result.value.pages).toHaveLength(0);
   });
 
   it('merges a reduce page into an intra-batch page of the same title (source_ids unioned)', async () => {
@@ -660,8 +660,8 @@ A secondary contradiction about evidence standards.
     if (!result.ok) return;
 
     // Same title across batch + reduce → one merged page, not two.
-    expect(result.value).toHaveLength(1);
-    const written = readFileSync(join(env.wsRoot, result.value[0]!.outputPath), 'utf-8');
+    expect(result.value.pages).toHaveLength(1);
+    const written = readFileSync(join(env.wsRoot, result.value.pages[0]!.outputPath), 'utf-8');
     expect(written).toContain('xb-0'); // from the intra-batch page
     expect(written).toContain('xb-3'); // from the reduce page
 
@@ -681,9 +681,9 @@ A secondary contradiction about evidence standards.
     if (!result.ok) return;
 
     // 3 calls total (2 batch + 1 reduce), each billed 300 in / 120 out.
-    expect(result.value[0]!.inputTokens).toBe(900);
-    expect(result.value[0]!.outputTokens).toBe(360);
-    expect(result.value[0]!.tokensUsed).toBe(1260);
+    expect(result.value.pages[0]!.inputTokens).toBe(900);
+    expect(result.value.pages[0]!.outputTokens).toBe(360);
+    expect(result.value.pages[0]!.tokensUsed).toBe(1260);
   });
 
   it('returns err when the reduce call fails', async () => {

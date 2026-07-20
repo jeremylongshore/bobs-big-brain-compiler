@@ -176,7 +176,7 @@ describe('identifyGaps', () => {
       const result = await identifyGaps(client, emptyDb, wsResult.value.root);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.value).toHaveLength(0);
+      expect(result.value.pages).toHaveLength(0);
     } finally {
       closeDatabase(emptyDb);
       rmSync(emptyBase, { recursive: true, force: true });
@@ -193,9 +193,9 @@ describe('identifyGaps', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.length).toBeGreaterThanOrEqual(1);
+    expect(result.value.pages.length).toBeGreaterThanOrEqual(1);
 
-    const gapPath = join(env.wsRoot, result.value[0]!.outputPath);
+    const gapPath = join(env.wsRoot, result.value.pages[0]!.outputPath);
     expect(existsSync(gapPath)).toBe(true);
     expect(gapPath).toContain('wiki/open-questions');
   });
@@ -211,7 +211,7 @@ describe('identifyGaps', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const written = readFileSync(join(env.wsRoot, result.value[0]!.outputPath), 'utf-8');
+    const written = readFileSync(join(env.wsRoot, result.value.pages[0]!.outputPath), 'utf-8');
     expect(written).toContain('type: open-question');
     expect(written).toContain('priority: high');
     expect(written).toContain('## The Gap');
@@ -227,7 +227,7 @@ describe('identifyGaps', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value).toHaveLength(0);
+    expect(result.value.pages).toHaveLength(0);
   });
 
   // -------------------------------------------------------------------------
@@ -275,9 +275,9 @@ describe('identifyGaps', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.value[0]!.inputTokens).toBe(700);
-    expect(result.value[0]!.outputTokens).toBe(280);
-    expect(result.value[0]!.tokensUsed).toBe(980);
+    expect(result.value.pages[0]!.inputTokens).toBe(700);
+    expect(result.value.pages[0]!.outputTokens).toBe(280);
+    expect(result.value.pages[0]!.tokensUsed).toBe(980);
   });
 
   // -------------------------------------------------------------------------
@@ -336,7 +336,7 @@ No evaluation methodology is described.
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.length).toBe(2);
+    expect(result.value.pages.length).toBe(2);
   });
 
   // -------------------------------------------------------------------------
@@ -427,8 +427,8 @@ No evaluation methodology is described.
     // 41 / 10 = 5 batch calls (last batch holds the remainder).
     expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(5);
 
-    expect(result.value.length).toBe(5);
-    expect(result.value.length).toBeGreaterThan(1);
+    expect(result.value.pages.length).toBe(5);
+    expect(result.value.pages.length).toBeGreaterThan(1);
   });
 
   // -------------------------------------------------------------------------
@@ -455,7 +455,7 @@ No evaluation methodology is described.
     if (!result.ok) return;
 
     expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
-    expect(result.value).toHaveLength(1);
+    expect(result.value.pages).toHaveLength(1);
   });
 
   // -------------------------------------------------------------------------
@@ -484,9 +484,9 @@ No evaluation methodology is described.
     if (!result.ok) return;
 
     expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
-    expect(result.value).toHaveLength(1);
+    expect(result.value.pages).toHaveLength(1);
 
-    const written = readFileSync(join(env.wsRoot, result.value[0]!.outputPath), 'utf-8');
+    const written = readFileSync(join(env.wsRoot, result.value.pages[0]!.outputPath), 'utf-8');
     expect(written).toContain('p-aaa');
     expect(written).toContain('p-bbb');
 

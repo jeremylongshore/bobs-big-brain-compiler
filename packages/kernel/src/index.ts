@@ -117,6 +117,26 @@ export { uuidV5, spoolCandidateName, deriveSpoolCandidateId } from './uuid.js';
 // Audit-chain verifier
 export { verifyAuditChain, type AuditChainBreak, type AuditVerifyResult } from './audit-verify.js';
 
+// Extended audit surfaces — trace-index / provenance-sidecar / spool-manifest
+// cross-checks + whole-file deletion detection (l13.7)
+export {
+  type AuditSurfaceBreak,
+  type AuditSurfacesResult,
+  verifyAuditSurfaces,
+} from './audit-surfaces.js';
+
+// External chain-head anchoring for the compile-trace chains (l13.8)
+export {
+  appendIcoAnchor,
+  type AppendIcoAnchorOptions,
+  computeIcoAnchorHash,
+  type IcoAnchorBreak,
+  type IcoAnchorRecord,
+  type IcoAnchorVerifyResult,
+  readIcoAnchors,
+  verifyIcoAnchors,
+} from './audit-anchor.js';
+
 // Workspace reconciler — receipts-precede-visibility floor (quarantine, never delete)
 export {
   reconcileWorkspace,

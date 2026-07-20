@@ -278,7 +278,7 @@ describe('runSummarize — preserved success / partial-success paths', () => {
     await runSummarize(makeCtx());
 
     // 1 compiled + 1 failed → partial success, no exit.
-    expect(stdoutText()).toMatch(/1 compiled, 1 failed/);
+    expect(stdoutText()).toMatch(/1 compiled, 0 skipped \(validation\), 1 failed/);
     expect(exitSpy).not.toHaveBeenCalled();
   });
 
