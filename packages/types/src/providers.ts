@@ -121,6 +121,20 @@ const BUILTIN_PROVIDERS: Readonly<Record<string, ProviderConfig>> = {
     keyEnv: ['DEEPSEEK_API_KEY'],
     label: 'DeepSeek (Anthropic-compatible)',
   },
+  // MiniMax over its OpenAI-compatible endpoint (global; mainland-China
+  // accounts use api.minimaxi.com — override via ICO_BASE_URL). MiniMax-M3 is
+  // the nightly-distiller model (bead l13.9); it also exposes an
+  // Anthropic-compatible endpoint at /anthropic (x-api-key auth), reachable
+  // here via ICO_BASE_URL + ICO_PROVIDER_WIRE=anthropic. Both wires verified
+  // live 2026-07-20 (HTTP 200, model=MiniMax-M3).
+  minimax: {
+    id: 'minimax',
+    wire: 'openai',
+    baseURL: 'https://api.minimax.io/v1',
+    defaultModel: 'MiniMax-M3',
+    keyEnv: ['MINIMAX_API_KEY'],
+    label: 'MiniMax',
+  },
   // A local OpenAI-compatible server (Ollama, vLLM, LM Studio, …). No key
   // required by default; override the model/base-url/key via env as needed.
   local: {
