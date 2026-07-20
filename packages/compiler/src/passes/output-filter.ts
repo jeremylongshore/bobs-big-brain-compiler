@@ -110,11 +110,24 @@ const REFUSAL_WINDOW_CHARS = 300;
  */
 export const DEFAULT_MIN_BODY_CHARS = 20;
 
-/** Strip a leading `---` … `---` frontmatter fence, returning the body. */
+/**
+ * Strip a leading `---` … `---` frontmatter fence, returning the body.
+ *
+ * Uses plain `indexOf` scanning rather than a regex: a `\s*\n … \n---`
+ * pattern backtracks polynomially on adversarial newline runs (CodeQL
+ * `js/polynomial-redos`), and this input is untrusted model output.
+ */
 function stripFrontmatter(trimmed: string): string {
   if (!trimmed.startsWith('---')) return trimmed;
-  const end = /^---\s*\n[\s\S]*?\n---\s*\n?/.exec(trimmed);
-  return end !== null ? trimmed.slice(end[0].length) : '';
+  // Find the first line break after the opening fence, then the closing
+  // `\n---` fence line. Linear scan, no backtracking.
+  const afterOpen = trimmed.indexOf('\n');
+  if (afterOpen === -1) return '';
+  const closeIdx = trimmed.indexOf('\n---', afterOpen);
+  if (closeIdx === -1) return '';
+  // Advance past the closing fence line to the start of the body.
+  const bodyStart = trimmed.indexOf('\n', closeIdx + 1);
+  return bodyStart === -1 ? '' : trimmed.slice(bodyStart + 1);
 }
 
 /** True when the content carries any recognisable page structure. */
