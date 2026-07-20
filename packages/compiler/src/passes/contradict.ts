@@ -58,7 +58,7 @@ import {
   shouldRunReduce,
   wasTruncated,
 } from './batch-helper.js';
-import { checkModelOutput, stampPassProvenance } from './output-filter.js';
+import { checkModelOutput, type PassOutcome, stampPassProvenance } from './output-filter.js';
 import {
   attributeSources,
   recordCompilationSources,
@@ -267,7 +267,7 @@ export async function detectContradictions(
   db: Database,
   workspacePath: string,
   options?: ContradictOptions,
-): Promise<Result<ContradictResult[], Error>> {
+): Promise<Result<PassOutcome<ContradictResult>, Error>> {
   const compiledAt = new Date().toISOString();
   const model = options?.model ?? DEFAULT_MODEL;
   const batchSize = options?.batchSize ?? DEFAULT_BATCH_SIZE;
@@ -277,7 +277,7 @@ export async function detectContradictions(
   const summaries = readWikiSubdir(workspacePath, 'sources');
 
   if (summaries.length === 0) {
-    return ok([]);
+    return ok({ pages: [], skipped: 0 });
   }
 
   // 2. Chunk the summaries and call the API per batch, collecting raw pages.
@@ -401,7 +401,7 @@ export async function detectContradictions(
   const tokensUsed = inputTokens + outputTokens;
 
   if (rawPages.length === 0) {
-    return ok([]);
+    return ok({ pages: [], skipped: 0 });
   }
 
   // 3. Dedupe/merge by normalized title, unioning source_ids and assigning a
@@ -577,5 +577,5 @@ export async function detectContradictions(
     );
   }
 
-  return ok(results);
+  return ok({ pages: results, skipped: rejectedPages });
 }

@@ -104,6 +104,12 @@ export function runAuditVerify(options: AuditVerifyOptions, command: Command): v
   let surfaces: AuditSurfacesResult | null = null;
   let anchors: IcoAnchorVerifyResult | null = null;
   let anchorFileUsed: string | null = null;
+  // Distinct from "not configured": an anchor file was named (env/flag) but is
+  // absent on disk. Silently skipping it would degrade rewrite detection to the
+  // in-file chain walk with NO signal — an unattended CI run could mistake a
+  // misconfigured anchor for a clean chain (HIGH finding, PR #181). Tracked
+  // separately so it forces a non-zero exit with a distinct message.
+  let anchorConfiguredButMissing = false;
   if (options.chainOnly !== true) {
     const dbResult = initDatabase(ws.value.dbPath);
     if (!dbResult.ok) {
@@ -143,7 +149,12 @@ export function runAuditVerify(options: AuditVerifyOptions, command: Command): v
     surfaces = surfacesResult.value;
 
     const anchorPath = resolveAnchorFile(options.anchorFile);
-    if (anchorPath !== undefined && existsSync(anchorPath)) {
+    if (anchorPath !== undefined && !existsSync(anchorPath)) {
+      // Configured-but-missing: record it and DO NOT verify. Handled below as a
+      // failure, never silently skipped.
+      anchorFileUsed = anchorPath;
+      anchorConfiguredButMissing = true;
+    } else if (anchorPath !== undefined) {
       anchorFileUsed = anchorPath;
       const anchorResult = verifyIcoAnchors(ws.value.root, anchorPath);
       if (!anchorResult.ok) {
@@ -171,15 +182,20 @@ export function runAuditVerify(options: AuditVerifyOptions, command: Command): v
   const surfaceBreaks = surfaces?.breaks.length ?? 0;
   const anchorBreaks = anchors?.anchorBreaks.length ?? 0;
   const totalBreaks = chainBreaks + surfaceBreaks + anchorBreaks;
+  // A configured-but-missing anchor is a failure even with zero breaks: the
+  // operator asked for external rewrite-detection and it did not happen.
+  const hasFailure = totalBreaks > 0 || anchorConfiguredButMissing;
 
   if (wantJson) {
     // Machine-readable envelope: orchestrators (e.g. scripts/demo-e2e.sh
     // stage 7) consume this and surface per-break detail without parsing
     // human-formatted stderr. Existing top-level chain fields are preserved;
     // `surfaces` / `anchors` extend the envelope (null when skipped).
+    // `anchorConfiguredButMissing` distinguishes "no anchor asked for" (fine)
+    // from "anchor asked for but absent" (a failure).
     process.stdout.write(
       JSON.stringify({
-        ok: totalBreaks === 0,
+        ok: !hasFailure,
         filesScanned: v.filesScanned,
         totalEvents: v.totalEvents,
         cleanFiles: v.cleanFiles,
@@ -188,12 +204,14 @@ export function runAuditVerify(options: AuditVerifyOptions, command: Command): v
         legacyBoundaries: v.legacyBoundaries,
         surfaces,
         anchors: anchors !== null ? { ...anchors, anchorFile: anchorFileUsed } : null,
+        anchorConfiguredButMissing,
+        anchorFile: anchorFileUsed,
       }) + '\n',
     );
-    process.exitCode = totalBreaks === 0 ? 0 : 2;
+    process.exitCode = hasFailure ? 2 : 0;
     return;
   }
-  if (totalBreaks === 0) {
+  if (!hasFailure) {
     process.stdout.write(formatSuccess(`audit chain OK\n`));
     process.stdout.write(formatInfo(`Files scanned: ${v.filesScanned}\n`));
     process.stdout.write(formatInfo(`Total events:  ${v.totalEvents}\n`));
@@ -237,6 +255,7 @@ export function runAuditVerify(options: AuditVerifyOptions, command: Command): v
         ),
       );
     }
+    // Anchor status has three distinct states (chain-only skips all):
     if (anchors !== null) {
       process.stdout.write(
         formatInfo(
@@ -244,6 +263,9 @@ export function runAuditVerify(options: AuditVerifyOptions, command: Command): v
         ),
       );
     } else if (options.chainOnly !== true) {
+      // Truly unconfigured — the only state that gets the "set the var" hint,
+      // and stays exit 0 (external anchoring is opt-in). The configured-but-
+      // missing state can NEVER reach here (hasFailure short-circuits above).
       process.stdout.write(
         formatWarning(
           `No external anchor log configured (set ICO_ANCHOR_FILE or pass --anchor-file) — rewrite detection is limited to in-file chains.\n`,
@@ -253,7 +275,20 @@ export function runAuditVerify(options: AuditVerifyOptions, command: Command): v
     process.exitCode = 0;
     return;
   }
-  process.stderr.write(formatError(`AUDIT_TAMPERED: ${totalBreaks} break(s) detected\n`));
+  // Failure branch — real breaks and/or a configured-but-missing anchor.
+  if (totalBreaks > 0) {
+    process.stderr.write(formatError(`AUDIT_TAMPERED: ${totalBreaks} break(s) detected\n`));
+  }
+  if (anchorConfiguredButMissing) {
+    // Distinct from AUDIT_TAMPERED and from the unconfigured hint: the operator
+    // configured an anchor file that is not on disk, so external rewrite
+    // detection did NOT run. Non-zero exit so CI cannot read this as clean.
+    process.stderr.write(
+      formatError(
+        `ANCHOR_NOT_FOUND: anchor file configured but not found at ${anchorFileUsed ?? ''} — NOT verifying external anchors. Point ICO_ANCHOR_FILE / --anchor-file at the witnessed anchor log, or run \`ico audit anchor\` to create it.\n`,
+      ),
+    );
+  }
   process.stderr.write(
     bold(`Files scanned: ${v.filesScanned}; total events: ${v.totalEvents}\n\n`),
   );

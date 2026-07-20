@@ -17,6 +17,27 @@
  * conservatively (full sweep), so an honest empty set fails toward freshness
  * rather than inventing lineage.
  *
+ * ── Provenance CARDINALITY CHANGE (l13.5) — read before touching readers ──
+ * Before l13.5 a cross-source pass wrote exactly ONE provenance record per
+ * output page, with the literal `sourceId: 'batch'`, and `compilation_sources`
+ * stayed empty. Now a cross-source page writes ONE provenance record PER
+ * attributed real source id (0..N) AND N `compilation_sources` junction rows.
+ * So per output_path the provenance sidecar can hold MANY records, not ≤1.
+ * All current readers already tolerate this — `getProvenance`/`getDerivations`
+ * return arrays, and `incremental.ts` + `evals/faithfulness-provenance.ts`
+ * read the junction as a one-to-many JOIN/COUNT. Any NEW reader that assumes
+ * "one provenance row per page" is wrong against post-l13.5 data.
+ *
+ * No SQL migration is needed (the `compilation_sources` table has existed
+ * since migration 001; this is a data-population change, not a schema change).
+ * There is NO backfill for pages compiled before l13.5 — their junction stays
+ * empty and their provenance keeps the legacy single `'batch'` record. That is
+ * intentional and self-healing: a page is re-attributed on its next compile
+ * (`recordCompilationSources` DELETEs then re-inserts for the compilation id),
+ * and until then `incremental.ts`'s empty-junction conservative sweep keeps
+ * the staleness diff correct. A one-shot backfill is unnecessary; if one is
+ * ever wanted it is a plain re-compile of the affected pages.
+ *
  * @module passes/source-attribution
  */
 

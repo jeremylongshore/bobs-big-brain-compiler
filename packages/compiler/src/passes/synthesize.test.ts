@@ -183,7 +183,7 @@ describe('synthesizeTopics', () => {
       const result = await synthesizeTopics(client, emptyDb, wsResult.value.root);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.value).toHaveLength(0);
+      expect(result.value.pages).toHaveLength(0);
     } finally {
       closeDatabase(emptyDb);
       rmSync(emptyBase, { recursive: true, force: true });
@@ -200,9 +200,9 @@ describe('synthesizeTopics', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.length).toBeGreaterThanOrEqual(1);
+    expect(result.value.pages.length).toBeGreaterThanOrEqual(1);
 
-    const topicPath = join(env.wsRoot, result.value[0]!.outputPath);
+    const topicPath = join(env.wsRoot, result.value.pages[0]!.outputPath);
     expect(existsSync(topicPath)).toBe(true);
     expect(topicPath).toContain('wiki/topics');
   });
@@ -218,7 +218,7 @@ describe('synthesizeTopics', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const written = readFileSync(join(env.wsRoot, result.value[0]!.outputPath), 'utf-8');
+    const written = readFileSync(join(env.wsRoot, result.value.pages[0]!.outputPath), 'utf-8');
     expect(written).toContain('type: topic');
     expect(written).toContain('Semantic Knowledge Graphs');
   });
@@ -268,9 +268,9 @@ describe('synthesizeTopics', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.value[0]!.inputTokens).toBe(900);
-    expect(result.value[0]!.outputTokens).toBe(350);
-    expect(result.value[0]!.tokensUsed).toBe(1250);
+    expect(result.value.pages[0]!.inputTokens).toBe(900);
+    expect(result.value.pages[0]!.outputTokens).toBe(350);
+    expect(result.value.pages[0]!.tokensUsed).toBe(1250);
   });
 
   // -------------------------------------------------------------------------
@@ -341,7 +341,7 @@ Evidence quality varies significantly across the reviewed sources.
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.length).toBe(2);
+    expect(result.value.pages.length).toBe(2);
   });
 
   // -------------------------------------------------------------------------
@@ -405,11 +405,11 @@ Evidence quality varies significantly across the reviewed sources.
     expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(7);
 
     // Far more than the single page a single-call run would yield.
-    expect(result.value.length).toBe(7);
-    expect(result.value.length).toBeGreaterThan(1);
+    expect(result.value.pages.length).toBe(7);
+    expect(result.value.pages.length).toBeGreaterThan(1);
 
     // Every page was actually written to disk.
-    for (const r of result.value) {
+    for (const r of result.value.pages) {
       expect(existsSync(join(env.wsRoot, r.outputPath))).toBe(true);
     }
   });
@@ -437,10 +437,10 @@ Evidence quality varies significantly across the reviewed sources.
     expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
 
     // But only ONE merged topic page results.
-    expect(result.value).toHaveLength(1);
+    expect(result.value.pages).toHaveLength(1);
 
     // The written page carries BOTH concept_ids.
-    const written = readFileSync(join(env.wsRoot, result.value[0]!.outputPath), 'utf-8');
+    const written = readFileSync(join(env.wsRoot, result.value.pages[0]!.outputPath), 'utf-8');
     expect(written).toContain('c-aaa');
     expect(written).toContain('c-bbb');
 

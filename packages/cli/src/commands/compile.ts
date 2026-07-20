@@ -294,7 +294,9 @@ async function runExtract(ctx: CompileContext): Promise<void> {
   rebuildWikiIndex(ctx.workspacePath);
 
   process.stdout.write(
-    formatSuccess(`Extract pass complete: ${result.value.length} pages written.`) + '\n',
+    formatSuccess(
+      `Extract pass complete: ${result.value.pages.length} pages written, ${result.value.skipped} skipped (validation).`,
+    ) + '\n',
   );
 }
 
@@ -314,7 +316,9 @@ async function runSynthesize(ctx: CompileContext): Promise<void> {
   rebuildWikiIndex(ctx.workspacePath);
 
   process.stdout.write(
-    formatSuccess(`Synthesize pass complete: ${result.value.length} topic pages written.`) + '\n',
+    formatSuccess(
+      `Synthesize pass complete: ${result.value.pages.length} topic pages written, ${result.value.skipped} skipped (validation).`,
+    ) + '\n',
   );
 }
 
@@ -351,14 +355,17 @@ async function runContradict(ctx: CompileContext): Promise<void> {
 
   rebuildWikiIndex(ctx.workspacePath);
 
-  if (result.value.length === 0) {
+  const skippedNote =
+    result.value.skipped > 0 ? ` (${result.value.skipped} skipped — validation)` : '';
+  if (result.value.pages.length === 0) {
     process.stdout.write(
-      formatSuccess('Contradict pass complete: no contradictions found.') + '\n',
+      formatSuccess(`Contradict pass complete: no contradictions found${skippedNote}.`) + '\n',
     );
   } else {
     process.stdout.write(
-      formatSuccess(`Contradict pass complete: ${result.value.length} contradiction(s) recorded.`) +
-        '\n',
+      formatSuccess(
+        `Contradict pass complete: ${result.value.pages.length} contradiction(s) recorded${skippedNote}.`,
+      ) + '\n',
     );
   }
 }
@@ -378,11 +385,17 @@ async function runGap(ctx: CompileContext): Promise<void> {
 
   rebuildWikiIndex(ctx.workspacePath);
 
-  if (result.value.length === 0) {
-    process.stdout.write(formatSuccess('Gap pass complete: no gaps identified.') + '\n');
+  const skippedNote =
+    result.value.skipped > 0 ? ` (${result.value.skipped} skipped — validation)` : '';
+  if (result.value.pages.length === 0) {
+    process.stdout.write(
+      formatSuccess(`Gap pass complete: no gaps identified${skippedNote}.`) + '\n',
+    );
   } else {
     process.stdout.write(
-      formatSuccess(`Gap pass complete: ${result.value.length} open question(s) recorded.`) + '\n',
+      formatSuccess(
+        `Gap pass complete: ${result.value.pages.length} open question(s) recorded${skippedNote}.`,
+      ) + '\n',
     );
   }
 }
@@ -786,10 +799,15 @@ export function register(program: Command): void {
               await runGap(ctx);
               break;
           }
-          // A single generative pass also produces trace events worth
-          // anchoring; the deterministic link pass writes none but the no-op
-          // guard makes anchoring after it harmless (l13.8).
-          anchorAfterCompile(workspacePath);
+          // External chain-head anchor (l13.8): only the generative passes emit
+          // new trace events worth witnessing. The `links` pass is deterministic
+          // backlink rewriting over already-receipted pages — it produces no new
+          // compile-trace events, so anchoring after it would only add a no-op
+          // anchor churn cost (and, for the committing caller, an empty commit
+          // attempt). Skip it (LOW finding, PR #181).
+          if (target !== 'links') {
+            anchorAfterCompile(workspacePath);
+          }
         } catch (e) {
           // A pass failure now THROWS (CompilePassError) instead of calling
           // process.exit mid-run, so this catch runs, the `finally` below

@@ -52,7 +52,7 @@ import {
   scaledMaxTokens,
   wasTruncated,
 } from './batch-helper.js';
-import { checkModelOutput, stampPassProvenance } from './output-filter.js';
+import { checkModelOutput, type PassOutcome, stampPassProvenance } from './output-filter.js';
 import {
   attributeSources,
   recordCompilationSources,
@@ -210,7 +210,7 @@ export async function identifyGaps(
   db: Database,
   workspacePath: string,
   options?: GapOptions,
-): Promise<Result<GapResult[], Error>> {
+): Promise<Result<PassOutcome<GapResult>, Error>> {
   const compiledAt = new Date().toISOString();
   const model = options?.model ?? DEFAULT_MODEL;
   const batchSize = options?.batchSize ?? DEFAULT_BATCH_SIZE;
@@ -226,7 +226,7 @@ export async function identifyGaps(
   }
 
   if (allChunks.length === 0) {
-    return ok([]);
+    return ok({ pages: [], skipped: 0 });
   }
 
   // 2. Chunk the compiled pages and call the API per batch, collecting raw pages.
@@ -283,7 +283,7 @@ export async function identifyGaps(
   const tokensUsed = inputTokens + outputTokens;
 
   if (rawPages.length === 0) {
-    return ok([]);
+    return ok({ pages: [], skipped: 0 });
   }
 
   // 3. Dedupe/merge by normalized title, unioning related_page_ids and assigning
@@ -454,5 +454,5 @@ export async function identifyGaps(
     );
   }
 
-  return ok(results);
+  return ok({ pages: results, skipped: rejectedPages });
 }

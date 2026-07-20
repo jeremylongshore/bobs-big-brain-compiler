@@ -65,7 +65,40 @@ export type OutputRejectCode =
   | 'EMPTY_OUTPUT'
   | 'REFUSAL_DETECTED'
   | 'BODY_TOO_SHORT'
-  | 'NON_MARKDOWN_JUNK';
+  | 'NON_MARKDOWN_JUNK'
+  // Emitted by the summarize path when the output passes the junk filter but
+  // fails the full frontmatter Zod schema (a missing/ill-typed field).
+  | 'SCHEMA_INVALID';
+
+/**
+ * Which rejection classes are worth a single re-prompt.
+ *
+ * A refusal, a schema-shape slip, or non-markdown junk can plausibly be fixed
+ * by re-prompting with the validation error appended — the model produced the
+ * wrong SHAPE, not "there is nothing to say". `EMPTY_OUTPUT` / `BODY_TOO_SHORT`
+ * are NOT retryable: they signal a genuinely thin source, so a retry only
+ * doubles the API budget for the same husk (MEDIUM cost finding on PR #181).
+ * Bounding retries to this set caps worst-case spend at one extra call and only
+ * when recovery is plausible.
+ */
+export function isRetryableRejection(code: OutputRejectCode): boolean {
+  return code === 'REFUSAL_DETECTED' || code === 'NON_MARKDOWN_JUNK' || code === 'SCHEMA_INVALID';
+}
+
+/**
+ * Outcome of a generative compiler pass, carrying BOTH the written pages and
+ * the count of model-emitted pages that failed deterministic validation and
+ * were skipped-with-trace. Surfacing `skipped` up to the CLI is what stops a
+ * run where most pages were rejected from printing "N compiled, 0 skipped" —
+ * the receipts-precede-visibility discipline has to be visible in the summary,
+ * not just in a stderr line (HIGH finding on PR #181).
+ */
+export interface PassOutcome<T> {
+  /** Pages successfully compiled and written to the wiki. */
+  pages: T[];
+  /** Model-emitted pages rejected by deterministic validation (skip-with-trace). */
+  skipped: number;
+}
 
 /** A single rejection finding, receipted via a `compile.validation.reject` trace. */
 export interface OutputRejection {
@@ -151,6 +184,18 @@ function hasStructuralSignal(trimmed: string): boolean {
  *  4. `BODY_TOO_SHORT` — the post-frontmatter body is under `minBodyChars`
  *     (default {@link DEFAULT_MIN_BODY_CHARS}) — the "Empty Source Document"
  *     shape from the 07-16 spool.
+ *
+ * VALIDATION-DEPTH SCOPE (l13.1, deliberate — LOW note on PR #181): this is a
+ * STRUCTURAL filter, not a full frontmatter-schema check. The single-page
+ * summarize pass ALSO runs the full Zod schema (`validateCompiledContent`)
+ * because it emits one clean, un-merged page per call. The four cross-source
+ * passes (extract/synthesize/contradict/gap) run ONLY this structural filter:
+ * their `mergePages` step legitimately reconstructs frontmatter across batches
+ * (unioning `source_ids`/`concept_ids`, stamping a stable id, repairing the
+ * fence), and the model routinely emits advisory ids that are not UUIDs — so
+ * enforcing the strict Zod schema there would drop legitimately-merged pages.
+ * Tightening cross-source validation beyond structure is a separate,
+ * eval-gated change, not a silent extension here.
  */
 export function checkModelOutput(
   content: string,
@@ -220,6 +265,12 @@ export function checkModelOutput(
  */
 export class CompileSkipError extends Error {
   constructor(
+    /**
+     * The REAL rejection reason — the specific `OutputRejectCode` that tripped
+     * (or `EMPTY_SOURCE` for the pre-API empty-source skip). Callers and the
+     * receipted trace get the actual cause, never a flattened placeholder
+     * (LOW finding on PR #181).
+     */
     public readonly code: OutputRejectCode | 'EMPTY_SOURCE',
     message: string,
   ) {

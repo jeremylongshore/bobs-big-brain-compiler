@@ -37,7 +37,7 @@ import {
   scaledMaxTokens,
   wasTruncated,
 } from './batch-helper.js';
-import { checkModelOutput, stampPassProvenance } from './output-filter.js';
+import { checkModelOutput, type PassOutcome, stampPassProvenance } from './output-filter.js';
 import {
   attributeSources,
   recordCompilationSources,
@@ -194,7 +194,7 @@ export async function extractConcepts(
   workspacePath: string,
   summaryPaths: string[],
   options?: ExtractOptions,
-): Promise<Result<ExtractResult[], Error>> {
+): Promise<Result<PassOutcome<ExtractResult>, Error>> {
   // 1. Generate compilation metadata.
   const compiledAt = new Date().toISOString();
   const model = options?.model ?? DEFAULT_MODEL;
@@ -214,7 +214,7 @@ export async function extractConcepts(
   }
 
   if (summaryChunks.length === 0) {
-    return ok([]);
+    return ok({ pages: [], skipped: 0 });
   }
 
   // 3. Chunk into batches and call the API per batch, collecting raw pages.
@@ -268,7 +268,7 @@ export async function extractConcepts(
   const tokensUsed = inputTokens + outputTokens;
 
   if (rawPages.length === 0) {
-    return ok([]);
+    return ok({ pages: [], skipped: 0 });
   }
 
   // 4. Dedupe/merge by normalized title, unioning source_ids and assigning a
@@ -442,5 +442,5 @@ export async function extractConcepts(
     );
   }
 
-  return ok(results);
+  return ok({ pages: results, skipped: rejectedPages });
 }

@@ -79,6 +79,7 @@ import {
   reconcileWorkspace,
   verifyAuditChain,
   verifyAuditSurfaces,
+  verifyIcoAnchors,
 } from '@ico/kernel';
 
 import { resolveWorkspace } from '../lib/workspace-resolver.js';
@@ -604,6 +605,70 @@ describe('runAuditVerify — extended surfaces', () => {
     expect(parsed).toHaveProperty('surfaces');
     expect(parsed).toHaveProperty('anchors');
     expect(parsed['ok']).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Anchor configuration states (HIGH #1) — the three distinct outcomes
+// ---------------------------------------------------------------------------
+
+describe('runAuditVerify — anchor configuration states', () => {
+  const OLD_ENV = process.env['ICO_ANCHOR_FILE'];
+  beforeEach(() => {
+    delete process.env['ICO_ANCHOR_FILE'];
+    vi.mocked(verifyAuditChain).mockReturnValue({
+      ok: true,
+      value: {
+        filesScanned: 1,
+        totalEvents: 3,
+        cleanFiles: 1,
+        breaks: [],
+        linkedBoundaries: 0,
+        legacyBoundaries: 0,
+      },
+    });
+  });
+  afterEach(() => {
+    if (OLD_ENV === undefined) delete process.env['ICO_ANCHOR_FILE'];
+    else process.env['ICO_ANCHOR_FILE'] = OLD_ENV;
+  });
+
+  it('UNCONFIGURED: clean chain stays exit 0 and prints the "set the var" hint', () => {
+    runAuditVerify({}, fakeCommand());
+    expect(process.exitCode).toBe(0);
+    expect(stdoutText()).toMatch(/No external anchor log configured/);
+    // The hint tells the operator to SET the var (they have not).
+    expect(stdoutText()).toMatch(/set ICO_ANCHOR_FILE/);
+  });
+
+  it('CONFIGURED-BUT-MISSING: exits non-zero with a DISTINCT message, not the "set it" hint', () => {
+    const missing = join(tmpWs, 'does-not-exist', 'ico-anchors.jsonl');
+    runAuditVerify({ anchorFile: missing }, fakeCommand());
+    // Non-zero so an unattended CI run cannot read a misconfigured anchor as clean.
+    expect(process.exitCode).toBe(2);
+    const err = stderrText();
+    expect(err).toMatch(/ANCHOR_NOT_FOUND/);
+    expect(err).toMatch(/configured but not found/);
+    expect(err).toContain(missing);
+    // It must NOT tell the operator to set what they already set, and must NOT
+    // silently pass as a clean chain.
+    expect(stdoutText()).not.toMatch(/set ICO_ANCHOR_FILE/);
+    expect(vi.mocked(verifyIcoAnchors)).not.toHaveBeenCalled();
+  });
+
+  it('CONFIGURED-BUT-MISSING via ICO_ANCHOR_FILE env also fails', () => {
+    process.env['ICO_ANCHOR_FILE'] = join(tmpWs, 'nope.jsonl');
+    runAuditVerify({}, fakeCommand());
+    expect(process.exitCode).toBe(2);
+    expect(stderrText()).toMatch(/ANCHOR_NOT_FOUND/);
+  });
+
+  it('CONFIGURED-BUT-MISSING surfaces in the --json envelope', () => {
+    runAuditVerify({ json: true, anchorFile: join(tmpWs, 'absent', 'a.jsonl') }, fakeCommand());
+    const parsed = JSON.parse(stdoutText().trim()) as Record<string, unknown>;
+    expect(parsed['ok']).toBe(false);
+    expect(parsed['anchorConfiguredButMissing']).toBe(true);
+    expect(process.exitCode).toBe(2);
   });
 });
 

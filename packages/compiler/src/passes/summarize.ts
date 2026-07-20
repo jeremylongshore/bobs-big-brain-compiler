@@ -23,7 +23,13 @@ import { err, ok, type Result } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
 import { validateCompiledContent } from '../validation.js';
-import { checkModelOutput, CompileSkipError, stampPassProvenance } from './output-filter.js';
+import {
+  checkModelOutput,
+  CompileSkipError,
+  isRetryableRejection,
+  type OutputRejectCode,
+  stampPassProvenance,
+} from './output-filter.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -213,20 +219,30 @@ export async function summarizeSource(
   // 3. Call the Claude API, validating the output INLINE before any write
   // (l13.1). Validation is deterministic: the refusal/junk filter
   // (checkModelOutput) plus the full frontmatter schema
-  // (validateCompiledContent). One retry with the validation errors appended
-  // to the prompt; a second failure skips-with-trace — a rejected output
-  // must leave a trace event, never a visible file.
+  // (validateCompiledContent). At most ONE retry, and only for a retryable
+  // rejection class (isRetryableRejection) — re-prompting a REFUSAL / junk /
+  // schema-shape slip can plausibly recover, but a thin-source EMPTY_OUTPUT /
+  // BODY_TOO_SHORT will not improve on a second call, so we do NOT double the
+  // API budget for it (MEDIUM cost finding, PR #181). A final failure
+  // skips-with-trace — a rejected output must leave a trace, never a file.
   let content = '';
   let inputTokens = 0;
   let outputTokens = 0;
   let responseModel = model;
-  let rejection: { code: string; detail: string; excerpt: string } | null = null;
+  let rejection: { code: OutputRejectCode; detail: string; excerpt: string } | null = null;
+  let retried = false;
 
   for (let attempt = 0; attempt < 2; attempt++) {
+    // Only re-prompt on attempt 2 when the prior rejection is retryable;
+    // otherwise the first attempt's rejection is final (no wasted call).
+    if (attempt > 0 && (rejection === null || !isRetryableRejection(rejection.code))) {
+      break;
+    }
     const attemptPrompt =
       rejection === null
         ? userPrompt
         : `${userPrompt}\n\nYour previous attempt was rejected by the deterministic validator: ${rejection.detail}. Produce the full source summary page again, fixing that problem. Begin with the --- frontmatter fence.`;
+    if (attempt > 0) retried = true;
 
     const completionResult = await client.createCompletion(SYSTEM_PROMPT, attemptPrompt, {
       model,
@@ -274,15 +290,16 @@ export async function summarizeSource(
       sourcePath,
       detail: rejection.detail,
       excerpt: rejection.excerpt,
-      retried: true,
+      retried,
     });
     if (!rejectTrace.ok) {
       return err(rejectTrace.error);
     }
+    // Carry the REAL rejection code, not a flattened placeholder (LOW, PR #181).
     return err(
       new CompileSkipError(
-        'NON_MARKDOWN_JUNK',
-        `Skipped ${sourcePath}: model output failed validation after retry (${rejection.code}: ${rejection.detail})`,
+        rejection.code,
+        `Skipped ${sourcePath}: model output failed validation${retried ? ' after retry' : ''} (${rejection.code}: ${rejection.detail})`,
       ),
     );
   }

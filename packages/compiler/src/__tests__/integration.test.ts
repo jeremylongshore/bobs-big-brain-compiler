@@ -715,10 +715,10 @@ describe('compiler integration', () => {
       ]);
       expect(extractResult.ok).toBe(true);
       if (!extractResult.ok) return;
-      expect(extractResult.value.length).toBeGreaterThan(0);
+      expect(extractResult.value.pages.length).toBeGreaterThan(0);
 
       // Validate each extracted page against its schema.
-      for (const extracted of extractResult.value) {
+      for (const extracted of extractResult.value.pages) {
         const absPath = resolve(env.wsRoot, extracted.outputPath);
         const vr = validateCompiledPage(absPath);
         expect(vr.ok, `validateCompiledPage err for ${extracted.outputPath}`).toBe(true);
@@ -768,7 +768,7 @@ describe('compiler integration', () => {
       ]);
       expect(extractResult.ok).toBe(true);
       if (!extractResult.ok) return;
-      expect(extractResult.value.length).toBeGreaterThan(0);
+      expect(extractResult.value.pages.length).toBeGreaterThan(0);
     });
 
     it('summary word count is within the 10-5000 word range', async () => {
@@ -1093,7 +1093,7 @@ describe('compiler integration', () => {
       if (!contradictResult.ok) return;
 
       // Sentinel response → empty results array, no files written.
-      expect(contradictResult.value).toHaveLength(0);
+      expect(contradictResult.value.pages).toHaveLength(0);
 
       const contradictionsDir = resolve(env.wsRoot, 'wiki', 'contradictions');
       const contraFiles = existsSync(contradictionsDir)

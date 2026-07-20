@@ -175,7 +175,7 @@ describe('extractConcepts', () => {
     const result = await extractConcepts(client, env.db, env.wsRoot, []);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value).toHaveLength(0);
+    expect(result.value.pages).toHaveLength(0);
   });
 
   // -------------------------------------------------------------------------
@@ -189,7 +189,7 @@ describe('extractConcepts', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const conceptFiles = result.value.filter((r) => r.pageType === 'concept');
+    const conceptFiles = result.value.pages.filter((r) => r.pageType === 'concept');
     expect(conceptFiles.length).toBeGreaterThanOrEqual(1);
 
     const conceptPath = join(env.wsRoot, conceptFiles[0]!.outputPath);
@@ -208,7 +208,7 @@ describe('extractConcepts', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const entityFiles = result.value.filter((r) => r.pageType === 'entity');
+    const entityFiles = result.value.pages.filter((r) => r.pageType === 'entity');
     expect(entityFiles.length).toBeGreaterThanOrEqual(1);
 
     const entityPath = join(env.wsRoot, entityFiles[0]!.outputPath);
@@ -227,7 +227,7 @@ describe('extractConcepts', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const conceptResult = result.value.find((r) => r.pageType === 'concept');
+    const conceptResult = result.value.pages.find((r) => r.pageType === 'concept');
     expect(conceptResult).toBeDefined();
     if (!conceptResult) return;
 
@@ -291,7 +291,7 @@ describe('extractConcepts', () => {
     if (!result.ok) return;
 
     // All results share the same token counts from the single API call.
-    for (const r of result.value) {
+    for (const r of result.value.pages) {
       expect(r.inputTokens).toBe(800);
       expect(r.outputTokens).toBe(300);
       expect(r.tokensUsed).toBe(1100);
@@ -392,11 +392,11 @@ describe('extractConcepts', () => {
     expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(6);
 
     // Far more than the single page a single-call run would yield.
-    expect(result.value.length).toBe(6);
-    expect(result.value.length).toBeGreaterThan(1);
+    expect(result.value.pages.length).toBe(6);
+    expect(result.value.pages.length).toBeGreaterThan(1);
 
     // Every page was actually written to disk.
-    for (const r of result.value) {
+    for (const r of result.value.pages) {
       expect(existsSync(join(env.wsRoot, r.outputPath))).toBe(true);
     }
   });
@@ -439,10 +439,10 @@ describe('extractConcepts', () => {
     expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
 
     // But only ONE merged concept page results.
-    expect(result.value).toHaveLength(1);
+    expect(result.value.pages).toHaveLength(1);
 
     // The written page carries BOTH source_ids.
-    const written = readFileSync(join(env.wsRoot, result.value[0]!.outputPath), 'utf-8');
+    const written = readFileSync(join(env.wsRoot, result.value.pages[0]!.outputPath), 'utf-8');
     expect(written).toContain('s-aaa');
     expect(written).toContain('s-bbb');
 
@@ -487,7 +487,7 @@ describe('extractConcepts', () => {
     const result = await extractConcepts(client, env.db, env.wsRoot, [SUMMARY_PATH]);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value).toHaveLength(0);
+    expect(result.value.pages).toHaveLength(0);
 
     const traces = readTraces(env.db, { eventType: 'compile.validation.reject' });
     expect(traces.ok).toBe(true);
@@ -529,7 +529,7 @@ describe('extractConcepts', () => {
     expect(junction.map((r) => r.source_id)).not.toContain('ghost-source-id');
 
     // Pass provenance stamped on the written page.
-    const written = readFileSync(join(env.wsRoot, result.value[0]!.outputPath), 'utf-8');
+    const written = readFileSync(join(env.wsRoot, result.value.pages[0]!.outputPath), 'utf-8');
     expect(written).toContain('compiled_by: compile.extract');
     expect(written).toContain('pass_version:');
   });

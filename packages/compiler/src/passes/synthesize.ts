@@ -53,7 +53,7 @@ import {
   scaledMaxTokens,
   wasTruncated,
 } from './batch-helper.js';
-import { checkModelOutput, stampPassProvenance } from './output-filter.js';
+import { checkModelOutput, type PassOutcome, stampPassProvenance } from './output-filter.js';
 import {
   attributeSources,
   recordCompilationSources,
@@ -209,7 +209,7 @@ export async function synthesizeTopics(
   db: Database,
   workspacePath: string,
   options?: SynthesizeOptions,
-): Promise<Result<SynthesizeResult[], Error>> {
+): Promise<Result<PassOutcome<SynthesizeResult>, Error>> {
   const compiledAt = new Date().toISOString();
   const model = options?.model ?? DEFAULT_MODEL;
   const batchSize = options?.batchSize ?? DEFAULT_BATCH_SIZE;
@@ -220,7 +220,7 @@ export async function synthesizeTopics(
   const concepts = readWikiDir(workspacePath, 'concepts');
 
   if (summaries.length === 0) {
-    return ok([]);
+    return ok({ pages: [], skipped: 0 });
   }
 
   // The concept pages are reference context shared across every batch; only the
@@ -277,7 +277,7 @@ export async function synthesizeTopics(
   const tokensUsed = inputTokens + outputTokens;
 
   if (rawPages.length === 0) {
-    return ok([]);
+    return ok({ pages: [], skipped: 0 });
   }
 
   // 3. Dedupe/merge by normalized title, unioning concept_ids and assigning a
@@ -437,5 +437,5 @@ export async function synthesizeTopics(
     );
   }
 
-  return ok(results);
+  return ok({ pages: results, skipped: rejectedPages });
 }

@@ -106,11 +106,11 @@ beforeEach(() => {
     model: 'claude-sonnet-4-6',
   } as never);
   vi.mocked(getUncompiledSources).mockReturnValue({ ok: true, value: [] });
-  vi.mocked(extractConcepts).mockResolvedValue(ok([]) as never);
-  vi.mocked(synthesizeTopics).mockResolvedValue(ok([]) as never);
+  vi.mocked(extractConcepts).mockResolvedValue(ok({ pages: [], skipped: 0 }) as never);
+  vi.mocked(synthesizeTopics).mockResolvedValue(ok({ pages: [], skipped: 0 }) as never);
   vi.mocked(addBacklinks).mockResolvedValue(ok({ pagesUpdated: 0, totalBacklinks: 0 }) as never);
-  vi.mocked(detectContradictions).mockResolvedValue(ok([]) as never);
-  vi.mocked(identifyGaps).mockResolvedValue(ok([]) as never);
+  vi.mocked(detectContradictions).mockResolvedValue(ok({ pages: [], skipped: 0 }) as never);
+  vi.mocked(identifyGaps).mockResolvedValue(ok({ pages: [], skipped: 0 }) as never);
 });
 
 afterEach(() => {
@@ -211,11 +211,40 @@ describe('ico compile — dispatcher', () => {
 
 describe('ico compile — pass runners', () => {
   it('concepts: success reports pages written', async () => {
-    vi.mocked(extractConcepts).mockResolvedValue(ok(['a.md', 'b.md']) as never);
+    vi.mocked(extractConcepts).mockResolvedValue(
+      ok({ pages: ['a.md', 'b.md'], skipped: 0 }) as never,
+    );
     const r = await runCompile(['concepts']);
     expect(r.exitCode).toBeNull();
     expect(vi.mocked(extractConcepts)).toHaveBeenCalled();
     expect(r.stdout).toContain('Extract pass complete: 2 pages written');
+  });
+
+  it('concepts: a rejected page propagates into the aggregate skip count (HIGH #2)', async () => {
+    // The pass wrote 1 page but rejected 3 model-emitted pages — the CLI must
+    // SURFACE the skip in the summary, not hide it behind "1 pages written".
+    vi.mocked(extractConcepts).mockResolvedValue(ok({ pages: ['a.md'], skipped: 3 }) as never);
+    const r = await runCompile(['concepts']);
+    expect(r.exitCode).toBeNull();
+    expect(r.stdout).toContain('Extract pass complete: 1 pages written, 3 skipped (validation)');
+  });
+
+  it('topics: rejected pages surface the skip note', async () => {
+    vi.mocked(synthesizeTopics).mockResolvedValue(ok({ pages: ['t.md'], skipped: 2 }) as never);
+    const r = await runCompile(['topics']);
+    expect(r.stdout).toContain('1 topic pages written, 2 skipped (validation)');
+  });
+
+  it('contradictions: rejected pages surface the skip note', async () => {
+    vi.mocked(detectContradictions).mockResolvedValue(ok({ pages: [{}], skipped: 4 }) as never);
+    const r = await runCompile(['contradictions']);
+    expect(r.stdout).toMatch(/4 skipped — validation/);
+  });
+
+  it('gaps: rejected pages surface the skip note even when zero pages were kept', async () => {
+    vi.mocked(identifyGaps).mockResolvedValue(ok({ pages: [], skipped: 5 }) as never);
+    const r = await runCompile(['gaps']);
+    expect(r.stdout).toMatch(/no gaps identified \(5 skipped — validation\)/);
   });
 
   it('concepts: a compiler error exits 1', async () => {
@@ -234,7 +263,7 @@ describe('ico compile — pass runners', () => {
   });
 
   it('topics: success reports topic pages written', async () => {
-    vi.mocked(synthesizeTopics).mockResolvedValue(ok(['t.md']) as never);
+    vi.mocked(synthesizeTopics).mockResolvedValue(ok({ pages: ['t.md'], skipped: 0 }) as never);
     const r = await runCompile(['topics']);
     expect(r.exitCode).toBeNull();
     expect(r.stdout).toContain('Synthesize pass complete: 1 topic pages written');
@@ -260,14 +289,14 @@ describe('ico compile — pass runners', () => {
   });
 
   it('contradictions: zero found reports the clean message', async () => {
-    vi.mocked(detectContradictions).mockResolvedValue(ok([]) as never);
+    vi.mocked(detectContradictions).mockResolvedValue(ok({ pages: [], skipped: 0 }) as never);
     const r = await runCompile(['contradictions']);
     expect(r.exitCode).toBeNull();
     expect(r.stdout).toContain('no contradictions found');
   });
 
   it('contradictions: some found reports the count', async () => {
-    vi.mocked(detectContradictions).mockResolvedValue(ok([{}, {}]) as never);
+    vi.mocked(detectContradictions).mockResolvedValue(ok({ pages: [{}, {}], skipped: 0 }) as never);
     const r = await runCompile(['contradictions']);
     expect(r.stdout).toContain('2 contradiction(s) recorded');
   });
@@ -279,14 +308,14 @@ describe('ico compile — pass runners', () => {
   });
 
   it('gaps: zero found reports the clean message', async () => {
-    vi.mocked(identifyGaps).mockResolvedValue(ok([]) as never);
+    vi.mocked(identifyGaps).mockResolvedValue(ok({ pages: [], skipped: 0 }) as never);
     const r = await runCompile(['gaps']);
     expect(r.exitCode).toBeNull();
     expect(r.stdout).toContain('no gaps identified');
   });
 
   it('gaps: some found reports the count', async () => {
-    vi.mocked(identifyGaps).mockResolvedValue(ok([{}, {}, {}]) as never);
+    vi.mocked(identifyGaps).mockResolvedValue(ok({ pages: [{}, {}, {}], skipped: 0 }) as never);
     const r = await runCompile(['gaps']);
     expect(r.stdout).toContain('3 open question(s) recorded');
   });

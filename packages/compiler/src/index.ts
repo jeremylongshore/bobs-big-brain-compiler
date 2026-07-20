@@ -17,9 +17,11 @@ export {
   COMPILE_PASS_VERSION,
   CompileSkipError,
   DEFAULT_MIN_BODY_CHARS,
+  isRetryableRejection,
   type OutputCheckResult,
   type OutputRejectCode,
   type OutputRejection,
+  type PassOutcome,
   stampPassProvenance,
 } from './passes/output-filter.js';
 export {
