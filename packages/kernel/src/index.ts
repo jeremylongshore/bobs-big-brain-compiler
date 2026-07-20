@@ -125,8 +125,9 @@ export {
   type ReconcileResult,
 } from './reconcile.js';
 
-// TEST-ONLY crash-window fault-injection hook (no-op unless ICO_CRASH_AFTER is set)
-export { crashPoint } from './crash-hook.js';
+// NOTE: the test-only crash hook (./crash-hook.js) is deliberately NOT
+// re-exported here — kernel writers import it directly so the fault
+// injector never becomes public API surface.
 
 // Disclosure guard — no-comp/no-PII choke at the brain boundary (ico ingest)
 export {

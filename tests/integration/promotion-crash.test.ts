@@ -86,14 +86,23 @@ describe('promotion crash windows — receipts precede visibility (G1)', () => {
    */
   function runWorker(
     crashPhase?: string,
+    opts?: { stripNodeEnv?: boolean },
   ): Promise<{ code: number | null; signal: NodeJS.Signals | null; stderr: string }> {
     return new Promise((resolvePromise, rejectPromise) => {
+      const env: NodeJS.ProcessEnv = {
+        ...process.env,
+        // The hook requires BOTH (defense in depth — see crash-hook.ts):
+        // a stray ICO_CRASH_AFTER without NODE_ENV=test must be inert.
+        ...(crashPhase !== undefined ? { ICO_CRASH_AFTER: crashPhase, NODE_ENV: 'test' } : {}),
+      };
+      if (opts?.stripNodeEnv === true) {
+        // Simulate a NON-test process that inherited a stray ICO_CRASH_AFTER
+        // (the vitest parent env carries NODE_ENV=test, so remove it).
+        delete env['NODE_ENV'];
+      }
       const child = spawn(process.execPath, [workerScript, workspacePath, dbPath], {
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: {
-          ...process.env,
-          ...(crashPhase !== undefined ? { ICO_CRASH_AFTER: crashPhase } : {}),
-        },
+        env,
       });
       let stderr = '';
       child.stderr?.on('data', (chunk: Buffer) => {
@@ -182,6 +191,18 @@ describe('promotion crash windows — receipts precede visibility (G1)', () => {
     const rerun = await runWorker();
     expect(rerun.code).toBe(0);
     expect(existsSync(join(workspacePath, VISIBLE_TARGET))).toBe(true);
+  }, 30_000);
+
+  it('crash hook is inert outside test builds: ICO_CRASH_AFTER without NODE_ENV=test warns and completes', async () => {
+    const { code, signal, stderr } = await runWorker('promotion:after-tmp', {
+      stripNodeEnv: true,
+    });
+    // No SIGKILL — the promotion ran to completion despite the stray env var.
+    expect(signal).toBeNull();
+    expect(code).toBe(0);
+    expect(stderr).toMatch(/crash hook ignored outside test/);
+    expect(existsSync(join(workspacePath, VISIBLE_TARGET))).toBe(true);
+    expect(promotionRowCount()).toBe(1);
   }, 30_000);
 
   it('demonstrates the OLD ordering failure: a visible-but-unreceipted page is caught by reconcile', () => {
