@@ -160,7 +160,12 @@ export function verifyAuditChain(workspacePath: string): Result<AuditVerifyResul
     const lines = content.split('\n').filter((l) => l.trim() !== '');
     if (lines.length === 0) {
       // An empty file contributes nothing to the chain; the boundary link
-      // carries across it (the writer never leaves empty day files).
+      // carries across it: `prevFileLastLine` deliberately keeps the last
+      // line of the last NON-EMPTY file. This mirrors the writer —
+      // `readLastLineOfPreviousDay` in traces.ts skips empty day files the
+      // same way — so a day following an empty file links to the last
+      // non-empty predecessor on both sides and is never misclassified as
+      // a legacy boundary or a break.
       cleanFiles++;
       continue;
     }

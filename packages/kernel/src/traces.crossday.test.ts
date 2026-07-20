@@ -163,6 +163,35 @@ describe('verifyAuditChain — cross-day boundaries', () => {
     expect(readFileSync(dayFilePath('2026-01-02'), 'utf-8')).toBe(before2);
   });
 
+  it('writer and verifier agree across an EMPTY middle day file (no legacy misclassification)', () => {
+    writeEventsOn('2026-07-01', 2);
+
+    // An empty day file appears between two real days (e.g. external
+    // tooling touched the path). The writer must skip it and link day 3 to
+    // day 1's last line; the verifier must carry the same anchor.
+    writeFileSync(dayFilePath('2026-07-02'), '', 'utf-8');
+
+    writeEventsOn('2026-07-03', 2);
+
+    // Writer side: day 3's first event links to day 1's last line — NOT
+    // null (which would misread the empty day 2 as genesis and downgrade
+    // the boundary to a carried legacy exception).
+    const day1Lines = readLines(dayFilePath('2026-07-01'));
+    const day3Lines = readLines(dayFilePath('2026-07-03'));
+    const boundary = JSON.parse(day3Lines[0]!) as { prev_hash: string | null };
+    expect(boundary.prev_hash).toBe(sha256Hex(day1Lines[day1Lines.length - 1]!));
+
+    // Verifier side: the same anchor — clean walk, one LINKED boundary,
+    // zero legacy boundaries, zero breaks.
+    const r = verifyAuditChain(workspacePath);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.breaks).toEqual([]);
+    expect(r.value.linkedBoundaries).toBe(1);
+    expect(r.value.legacyBoundaries).toBe(0);
+    expect(r.value.totalEvents).toBe(4);
+  });
+
   it('mixed corpus: legacy boundary followed by a linked boundary both verify clean', () => {
     // Legacy day pair (hand-built, unlinked boundary) ...
     const tracesDir = join(workspacePath, 'audit', 'traces');

@@ -89,12 +89,18 @@ const DAY_FILE_PATTERN = /^\d{4}-\d{2}-\d{2}\.jsonl$/;
 
 /**
  * Cross-day chain seeding (G3): returns the last non-empty line of the most
- * recent day file strictly BEFORE `todayStr`, or `null` when no earlier day
- * file exists (genesis).
+ * recent NON-EMPTY day file strictly BEFORE `todayStr`, or `null` when no
+ * earlier non-empty day file exists (genesis).
+ *
+ * Empty/whitespace-only day files are skipped — they contribute no line to
+ * hash, so the chain carries across them. This matches `verifyAuditChain`,
+ * which likewise keeps the boundary anchored on the last line of the last
+ * NON-EMPTY file when it walks past an empty one; the writer and verifier
+ * must agree or a boundary after an empty file would be misclassified.
  *
  * Day filenames are `YYYY-MM-DD.jsonl`, so lexicographic order equals
  * chronological order and a plain string compare + sort finds the
- * predecessor deterministically.
+ * predecessors deterministically.
  */
 function readLastLineOfPreviousDay(tracesDir: string, todayStr: string): string | null {
   let files: string[];
@@ -106,10 +112,12 @@ function readLastLineOfPreviousDay(tracesDir: string, todayStr: string): string 
 
   const earlier = files.filter((f) => DAY_FILE_PATTERN.test(f) && f < `${todayStr}.jsonl`).sort();
 
-  const previous = earlier[earlier.length - 1];
-  if (previous === undefined) return null;
-
-  return readLastLine(join(tracesDir, previous));
+  // Walk backwards until a file yields a non-empty last line.
+  for (let i = earlier.length - 1; i >= 0; i -= 1) {
+    const lastLine = readLastLine(join(tracesDir, earlier[i]!));
+    if (lastLine !== null) return lastLine;
+  }
+  return null;
 }
 
 /**
