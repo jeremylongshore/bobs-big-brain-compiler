@@ -25,8 +25,8 @@ with `spool.ts`'s `WIKI_DIRS` and `promotion.ts`'s `TYPE_DIRECTORY_MAP`) hold **
 that carries a receipt row** — a match in `compilations.output_path` ∪
 `promotions.target_path`. Enforcement is two-sided:
 
-- **Before visibility:** every compile pass and every promotion writes tmp → *all receipts
-  durable* (DB row, trace, audit JSONL, log) → rename-into-place. A page cannot become visible
+- **Before visibility:** every compile pass and every promotion writes tmp → _all receipts
+  durable_ (DB row, trace, audit JSONL, log) → rename-into-place. A page cannot become visible
   ahead of its receipt (the G1 floor, PR #176).
 - **After the fact:** `reconcileWorkspace` / `ico audit reconcile` walks the gated dirs and
   **quarantines** (moves to `quarantine/<original-relative-path>`, never deletes) any visible
@@ -52,7 +52,7 @@ carry no receipt row** — no DB table keys rendered artifacts by path — so `o
   receipt, because with no receipt schema for renders the gate would quarantine every
   legitimate deck.
 
-The knowledge that renders draw *from* is still governed: outputs remain gated at the L4→L2
+The knowledge that renders draw _from_ is still governed: outputs remain gated at the L4→L2
 boundary by the promotion engine — a render can only be built over already-receipted material.
 What is unreceipted is the rendered artifact itself.
 
@@ -69,12 +69,12 @@ When receipting lands, `outputs/` graduates to the same reconcile gate as `wiki/
 
 ## 3. What a contributor may write where
 
-| Directory | Direct writes (human or script) | Who may write |
-| --- | --- | --- |
-| `wiki/*` (the six gated dirs) | **Nothing. Ever.** | Only the receipted writers: the compile passes and the promotion engine, via tmp → receipts → rename |
-| `outputs/{reports,slides}` | Tolerated (scratch), but unreceipted and reconcile-invisible | The render layer; humans at their own risk |
-| `quarantine/` | Read/triage only — restore a file by re-deriving it through a receipted writer, not by moving it back | The reconciler moves things in; humans review |
-| `brain/raw/` (corpus) | Normal ingest surface | Ingest paths (out of scope here; see `005-AT-SPEC`) |
+| Directory                     | Direct writes (human or script)                                                                       | Who may write                                                                                        |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `wiki/*` (the six gated dirs) | **Nothing. Ever.**                                                                                    | Only the receipted writers: the compile passes and the promotion engine, via tmp → receipts → rename |
+| `outputs/{reports,slides}`    | Tolerated (scratch), but unreceipted and reconcile-invisible                                          | The render layer; humans at their own risk                                                           |
+| `quarantine/`                 | Read/triage only — restore a file by re-deriving it through a receipted writer, not by moving it back | The reconciler moves things in; humans review                                                        |
+| `brain/raw/` (corpus)         | Normal ingest surface                                                                                 | Ingest paths (out of scope here; see `005-AT-SPEC`)                                                  |
 
 A file hand-placed into a gated `wiki/` directory is not deleted and not silently accepted: it
 sits until the next reconcile (at latest, the next `ico spool emit`) and is then moved to

@@ -14,15 +14,15 @@ lock does and does not cover, and the crash and bypass story.
 ## 1. The lock that serializes writers
 
 **One advisory `flock(2)` exclusive lock on `${TEAMKB_HOME}/.write.lock`** (default
-`~/.teamkb/.write.lock`, overridable via `TEAMKB_LOCK`). Every holder contends for the *same
-kernel lock on the same path* — that identity is the whole mechanism:
+`~/.teamkb/.write.lock`, overridable via `TEAMKB_LOCK`). Every holder contends for the _same
+kernel lock on the same path_ — that identity is the whole mechanism:
 
-| Holder | How it takes the lock | Wait / contention behavior |
-| --- | --- | --- |
-| `~/bin/teamkb-backup.sh` (04:30 daily) | `/usr/bin/flock -w` on fd 9, held for the whole run | Bounded wait, then skip-graceful (exit 0 — a deferred backup is expected, not an incident) |
-| Plugin `brain_govern` (`bobs-big-brain-plugin/src/govern.ts` → `runGovernLocked`) | `fs-ext` native `flock(fd, 'exnb')` poll loop in `src/write-lock.ts` | 8 s bounded wait (100 ms poll), then `WriteLockBusyError` → clean "brain busy, retry" MCP result |
-| Plugin `brain_transition` (`src/local-server.ts`) | Same `acquireWriteLock` | Same 8 s bounded wait → busy result |
-| Compiler incremental compile (`ico compile`, `packages/cli/src/commands/compile.ts`) | Kernel `withWriteLock` (`packages/kernel/src/write-lock.ts`) — spawns `flock -w 10 -x <lock> cat`, releases by closing `cat`'s stdin | 10 s wait, then skip-graceful `ok({ ran: false })` → exit 4, retry next trigger |
+| Holder                                                                               | How it takes the lock                                                                                                                | Wait / contention behavior                                                                       |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `~/bin/teamkb-backup.sh` (04:30 daily)                                               | `/usr/bin/flock -w` on fd 9, held for the whole run                                                                                  | Bounded wait, then skip-graceful (exit 0 — a deferred backup is expected, not an incident)       |
+| Plugin `brain_govern` (`bobs-big-brain-plugin/src/govern.ts` → `runGovernLocked`)    | `fs-ext` native `flock(fd, 'exnb')` poll loop in `src/write-lock.ts`                                                                 | 8 s bounded wait (100 ms poll), then `WriteLockBusyError` → clean "brain busy, retry" MCP result |
+| Plugin `brain_transition` (`src/local-server.ts`)                                    | Same `acquireWriteLock`                                                                                                              | Same 8 s bounded wait → busy result                                                              |
+| Compiler incremental compile (`ico compile`, `packages/cli/src/commands/compile.ts`) | Kernel `withWriteLock` (`packages/kernel/src/write-lock.ts`) — spawns `flock -w 10 -x <lock> cat`, releases by closing `cat`'s stdin | 10 s wait, then skip-graceful `ok({ ran: false })` → exit 4, retry next trigger                  |
 
 Why three implementations of one lock: `/usr/bin/flock`, `fs-ext`'s native binding, and the
 kernel's `flock … cat` subprocess all issue the identical `flock(2)` syscall on the identical
@@ -36,7 +36,7 @@ Two writers **deliberately do not** join this lock:
   compile wrappers on its own `.compile.lock` and leaves `.write.lock` free. Holding
   `.write.lock` across the whole headless agent compile deadlocked AUTO-mode promotion
   (incident 2026-07-12..14: `brain_govern` needs the same lock the wrapper was sitting on; the
-  spool grew while `brain_after` never changed). The compile's *inner* durable writes still
+  spool grew while `brain_after` never changed). The compile's _inner_ durable writes still
   take `.write.lock` themselves via the paths above.
 - **The registrar edge-daemon** (`bobs-big-brain-registrar/apps/edge-daemon/src/lock.ts`) uses
   a PID-file lock, which only prevents a second daemon instance. It does **not** interoperate
@@ -78,7 +78,7 @@ Both stores open with the same pragmas, applied immediately after open:
   backend also runs WAL + `busy_timeout=5000`.
 
 WAL means readers never block the writer and see a consistent snapshot; `busy_timeout=5000`
-means a second *DB-level* writer waits up to 5 s at the SQLite door instead of failing
+means a second _DB-level_ writer waits up to 5 s at the SQLite door instead of failing
 instantly. That combination is what makes N spawned MCP server processes (one per Claude/Grok
 session, each opening the same DB) safe for single-statement writes — but SQLite serialization
 covers only the DB file. The flock exists because govern-shaped writes span **more than the
@@ -98,7 +98,7 @@ SIGKILLed holder's lock is reclaimed by the kernel the instant the process dies.
 lock-file cleanup step to forget.
 
 **A crash mid-write is covered by receipts-precede-visibility (PR #176).** Every compiled or
-promoted page is written tmp → *all receipts durable* → rename-into-place. A crash therefore
+promoted page is written tmp → _all receipts durable_ → rename-into-place. A crash therefore
 leaves either (a) an orphan `.tmp`, swept into `quarantine/` by the reconciler once stale
 (default > 1 h), or (b) a receipt for a page that never appeared — auditable and re-derivable
 by recompiling. It can no longer leave a visible page with no receipt; historical or hand-made
@@ -110,15 +110,15 @@ violations are caught after the fact by `ico audit reconcile` (§ 5).
 `teamkb.db` directly, a hand-`cp` into `wiki/`, an editor writing where only receipted writers
 should — is not stopped by anything in this document. The umbrella blueprint's G2 already
 counts ~14 registrar files that open the DB directly for writes with no substrate-level
-sole-writer enforcement. The invariant "many processes, one logical writer" is a *protocol all
-current writers follow*, not a wall.
+sole-writer enforcement. The invariant "many processes, one logical writer" is a _protocol all
+current writers follow_, not a wall.
 
 The detector for protocol violations is the **corpus-accounting guard**, not the lock:
 
 - Compiler side (shipped, PR #176): `reconcileWorkspace` / `ico audit reconcile` compares every
   visible page in the gated wiki dirs against `compilations.output_path ∪
-  promotions.target_path` and quarantines (never deletes) anything unaccounted for; `ico spool
-  emit` runs it as a default-on pre-emit gate.
+promotions.target_path` and quarantines (never deletes) anything unaccounted for; `ico spool
+emit` runs it as a default-on pre-emit gate.
 - Registrar side (planned, blueprint G2): a reconciliation job comparing `curated_memories`
   row-count/hash-set against what `audit_events` accounts for, flagging rows with no matching
   admission event.
