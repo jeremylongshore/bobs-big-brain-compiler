@@ -128,11 +128,10 @@ const PrePolicyFlags = z.object({
  */
 const MEMORY_CANDIDATE_SCHEMA_VERSION = '1' as const;
 
-/** H1 write-time provenance: tag-shaped, bounded capture-channel identifier. */
-const OriginChannel = z
-  .string()
-  .regex(/^[a-z0-9][a-z0-9-]*$/)
-  .max(64);
+/** H1 write-time provenance: tag-shaped, bounded capture-channel identifier.
+ *  Reuses the Tag grammar deliberately — a future change to the tag grammar
+ *  applies to both surfaces automatically (review finding on #179). */
+const OriginChannel = Tag.max(64);
 
 /**
  * H1 write-time provenance attestation — OPTIONAL on every candidate. HMAC
