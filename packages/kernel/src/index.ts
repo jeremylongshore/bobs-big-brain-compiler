@@ -117,6 +117,18 @@ export { uuidV5, spoolCandidateName, deriveSpoolCandidateId } from './uuid.js';
 // Audit-chain verifier
 export { verifyAuditChain, type AuditChainBreak, type AuditVerifyResult } from './audit-verify.js';
 
+// Workspace reconciler — receipts-precede-visibility floor (quarantine, never delete)
+export {
+  reconcileWorkspace,
+  type ReconcileEntry,
+  type ReconcileOptions,
+  type ReconcileResult,
+} from './reconcile.js';
+
+// NOTE: the test-only crash hook (./crash-hook.js) is deliberately NOT
+// re-exported here — kernel writers import it directly so the fault
+// injector never becomes public API surface.
+
 // Disclosure guard — no-comp/no-PII choke at the brain boundary (ico ingest)
 export {
   scanForDisclosure,

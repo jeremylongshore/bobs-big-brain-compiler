@@ -4,7 +4,9 @@
  * Writes append-only JSONL envelopes to `audit/traces/YYYY-MM-DD.jsonl` and
  * indexes each event in the `traces` SQLite table. The integrity chain is
  * maintained via `prev_hash` — the SHA-256 hex digest of the previous line's
- * raw bytes.
+ * raw bytes. The chain spans day boundaries: each day's first event links to
+ * the previous day's last event (see `readLastLineOfPreviousDay`), so a
+ * deleted day file breaks the chain detectably.
  *
  * All functions return `Result<T, Error>` — never throw.
  */
@@ -18,6 +20,7 @@ import {
   fstatSync,
   mkdirSync,
   openSync,
+  readdirSync,
   readFileSync,
   writeFileSync,
   writeSync,
@@ -81,6 +84,42 @@ function readLastLine(filePath: string): string | null {
   return lines[lines.length - 1] ?? null;
 }
 
+/** Matches per-day trace filenames: `YYYY-MM-DD.jsonl`. */
+const DAY_FILE_PATTERN = /^\d{4}-\d{2}-\d{2}\.jsonl$/;
+
+/**
+ * Cross-day chain seeding (G3): returns the last non-empty line of the most
+ * recent NON-EMPTY day file strictly BEFORE `todayStr`, or `null` when no
+ * earlier non-empty day file exists (genesis).
+ *
+ * Empty/whitespace-only day files are skipped — they contribute no line to
+ * hash, so the chain carries across them. This matches `verifyAuditChain`,
+ * which likewise keeps the boundary anchored on the last line of the last
+ * NON-EMPTY file when it walks past an empty one; the writer and verifier
+ * must agree or a boundary after an empty file would be misclassified.
+ *
+ * Day filenames are `YYYY-MM-DD.jsonl`, so lexicographic order equals
+ * chronological order and a plain string compare + sort finds the
+ * predecessors deterministically.
+ */
+function readLastLineOfPreviousDay(tracesDir: string, todayStr: string): string | null {
+  let files: string[];
+  try {
+    files = readdirSync(tracesDir);
+  } catch {
+    return null;
+  }
+
+  const earlier = files.filter((f) => DAY_FILE_PATTERN.test(f) && f < `${todayStr}.jsonl`).sort();
+
+  // Walk backwards until a file yields a non-empty last line.
+  for (let i = earlier.length - 1; i >= 0; i -= 1) {
+    const lastLine = readLastLine(join(tracesDir, earlier[i]!));
+    if (lastLine !== null) return lastLine;
+  }
+  return null;
+}
+
 /**
  * Appends a row to `audit/log.md`. Creates the file with headers if it does
  * not exist. Never throws — failures are silently swallowed because the audit
@@ -123,7 +162,9 @@ function appendToAuditLog(
  * Steps:
  *  1. Generates `event_id` (UUID v4) and `timestamp` (ISO 8601 UTC).
  *  2. Redacts secrets from `payload`.
- *  3. Computes `prev_hash` from the last line of today's JSONL file.
+ *  3. Computes `prev_hash` from the last line of today's JSONL file, or —
+ *     for the first event of a new day — from the last line of the most
+ *     recent earlier day file (cross-day chaining, G3). Genesis is null.
  *  4. Serialises the envelope to a single JSON line.
  *  5. Captures the current file size as `line_offset`, then appends the line.
  *  6. Inserts an index row into the `traces` SQLite table.
@@ -179,7 +220,21 @@ export function writeTrace(
     );
     const writeAndIndex = db.transaction((): TraceEnvelope => {
       const lastLine = readLastLine(absoluteFilePath);
-      const prev_hash = lastLine !== null ? sha256Hex(lastLine) : null;
+      // Cross-day chain seeding (G3): the FIRST event of a new day links to
+      // the LAST event of the previous day file, so deleting an entire
+      // mid-chain day file becomes detectable by a pure file-walk
+      // (`verifyAuditChain` asserts the boundary link). Genesis — no earlier
+      // day file at all — remains `prev_hash: null`. Day files written
+      // before this rule shipped start with null; the verifier carries those
+      // pre-existing unlinked boundaries as a documented exception rather
+      // than rewriting history (trace files are append-only by protocol).
+      let prev_hash: string | null;
+      if (lastLine !== null) {
+        prev_hash = sha256Hex(lastLine);
+      } else {
+        const previousDayLastLine = readLastLineOfPreviousDay(tracesDir, dateStr);
+        prev_hash = previousDayLastLine !== null ? sha256Hex(previousDayLastLine) : null;
+      }
 
       const envelope: TraceEnvelope = {
         timestamp,

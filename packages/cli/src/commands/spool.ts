@@ -29,6 +29,7 @@ import {
   dryRunSpool,
   emitSpool,
   initDatabase,
+  reconcileWorkspace,
   type SpoolEmitScope,
   SpoolError,
 } from '@ico/kernel';
@@ -47,6 +48,8 @@ interface SpoolEmitOptions {
   tenant?: string;
   workspace?: string;
   bulk?: boolean;
+  /** Commander maps `--no-reconcile` to `reconcile: false` (default true). */
+  reconcile?: boolean;
 }
 
 interface GlobalOptions {
@@ -372,6 +375,34 @@ export function runSpoolEmit(options: SpoolEmitOptions, command: Command): void 
   }
   const db = dbResult.value;
   try {
+    // Receipt gate (G1): reconcile BEFORE emitting. Any visible wiki page
+    // with no promotions/compilations receipt row is quarantined (moved,
+    // never deleted), so `emitSpool` — which reads compiled pages straight
+    // off wiki/ — can only ingest receipted knowledge. This shields the
+    // spool without changing the emitter itself. Disable with
+    // --no-reconcile for forensic runs where the corpus must not move.
+    if (options.reconcile !== false) {
+      const reconcile = reconcileWorkspace(db, workspacePath);
+      if (!reconcile.ok) {
+        process.stderr.write(
+          formatError(`Pre-emit reconcile failed: ${reconcile.error.message}\n`),
+        );
+        process.exit(1);
+      }
+      const moved = reconcile.value.quarantined.length + reconcile.value.tmpSwept.length;
+      if (moved > 0) {
+        process.stdout.write(
+          formatWarning(
+            `Pre-emit reconcile quarantined ${reconcile.value.quarantined.length} unreceipted page(s) ` +
+              `and swept ${reconcile.value.tmpSwept.length} stale tmp file(s) — see quarantine/ (nothing deleted).\n`,
+          ),
+        );
+        for (const q of reconcile.value.quarantined) {
+          process.stdout.write(`  ${dim(q.path)} → ${dim(q.quarantinedTo)}\n`);
+        }
+      }
+    }
+
     const result = emitSpool(db, workspacePath, {
       scope,
       tenantId: tenant.tenantId,
@@ -438,6 +469,10 @@ export function register(program: Command): void {
       false,
     )
     .option('--dry-run', 'Print what would be emitted, structure only; no writes', false)
+    .option(
+      '--no-reconcile',
+      'Skip the pre-emit receipt reconcile (forensic runs only — unreceipted pages then stay in place but would still be emitted)',
+    )
     .option('-w, --workspace <path>', 'Workspace path (defaults to ICO_WORKSPACE or cwd)')
     .action((options: SpoolEmitOptions, command: Command) => {
       runSpoolEmit(options, command);

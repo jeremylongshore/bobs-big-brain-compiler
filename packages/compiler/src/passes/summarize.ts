@@ -4,11 +4,12 @@
  * Orchestrates:
  *   1. Prompt construction from the frozen 017-AT-PRMP template.
  *   2. Claude API call via ClaudeClient.
- *   3. Atomic write of the response markdown to wiki/sources/<slug>.md.
+ *   3. Response markdown written to a `.tmp` path (not yet visible).
  *   4. Compilation record inserted into the `compilations` SQLite table.
  *   5. Provenance recording.
  *   6. Trace event written to the audit trail.
- *   7. Audit log appended.
+ *   7. Tmp renamed into wiki/sources/<slug>.md (receipts precede visibility).
+ *   8. Audit log appended.
  *
  * Never throws — all error paths return err(Error).
  */
@@ -144,10 +145,11 @@ function sourcePathToSlug(sourcePath: string): string {
  *  2.  Build the system and user prompts from the frozen 017-AT-PRMP templates.
  *  3.  Call the Claude API via `client.createCompletion`.
  *  4.  Derive the output path: `wiki/sources/<slug>.md`.
- *  5.  Write the response to disk atomically (write .tmp, then rename).
+ *  5.  Write the response to a `.tmp` path (not yet visible).
  *  6.  Insert a row into `compilations` via a prepared statement.
  *  7.  Record provenance via `recordProvenance`.
- *  8.  Write a `compile.summarize` trace event via `writeTrace`.
+ *  8.  Write a `compile.summarize` trace event, then rename the tmp into
+ *      place — receipts precede visibility.
  *  9.  Append to `audit/log.md` via `appendAuditLog`.
  * 10.  Return `ok(SummarizeResult)`.
  *
@@ -207,13 +209,20 @@ export async function summarizeSource(
   const absoluteOutputPath = join(workspacePath, outputPath);
   const tmpPath = `${absoluteOutputPath}.tmp`;
 
-  // 5. Atomic write: write to .tmp then rename into place.
+  // Receipts-precede-visibility (G1): write the content to `.tmp`, write all
+  // receipts (compilations row + provenance + trace), and only THEN rename
+  // into the visible wiki path. A crash mid-sequence leaves either an orphan
+  // `.tmp` (harmless — swept by `ico audit reconcile`) or a receipt for a
+  // page that never appeared (auditable + re-derivable by recompiling). It
+  // can never leave a visible wiki page with no receipt — that direction
+  // would launder unreceipted content into the spool.
+
+  // 5. Write the response to a tmp path (NOT yet visible).
   try {
     if (!existsSync(absoluteOutputDir)) {
       mkdirSync(absoluteOutputDir, { recursive: true });
     }
     writeFileSync(tmpPath, content, 'utf-8');
-    renameSync(tmpPath, absoluteOutputPath);
   } catch (e) {
     return err(e instanceof Error ? e : new Error(String(e)));
   }
@@ -248,6 +257,13 @@ export async function summarizeSource(
   });
   if (!traceResult.ok) {
     return err(traceResult.error);
+  }
+
+  // 8b. Receipts are durable — make the page visible.
+  try {
+    renameSync(tmpPath, absoluteOutputPath);
+  } catch (e) {
+    return err(e instanceof Error ? e : new Error(String(e)));
   }
 
   // 9. Append audit log entry.

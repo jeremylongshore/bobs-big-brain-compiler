@@ -29,6 +29,13 @@ vi.mock('@ico/kernel', async () => {
     closeDatabase: vi.fn(),
     emitSpool: vi.fn(),
     dryRunSpool: vi.fn(),
+    // Pre-emit receipt gate (G1): default to "corpus already consistent" so
+    // the emit-path tests exercise their own concern; the reconcile-specific
+    // describe block overrides this per-test.
+    reconcileWorkspace: vi.fn(() => ({
+      ok: true,
+      value: { scanned: 0, quarantined: [], tmpSwept: [] },
+    })),
     loadConfig: vi.fn(() => ({})),
     SpoolError: actual.SpoolError,
   };
@@ -48,6 +55,7 @@ import {
   emitSpool,
   initDatabase,
   loadConfig,
+  reconcileWorkspace,
   SpoolError,
 } from '@ico/kernel';
 
@@ -576,6 +584,77 @@ describe('runSpoolEmit — live emit success', () => {
     const out = stdoutText();
     expect(out).toMatch(/1 candidate\(s\) skipped/);
     expect(out).toMatch(/MISSING_TITLE/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Live-emit path: pre-emit receipt reconcile (G1)
+// ---------------------------------------------------------------------------
+
+describe('runSpoolEmit — pre-emit reconcile gate', () => {
+  function mockEmitOk(): void {
+    vi.mocked(emitSpool).mockReturnValue({
+      ok: true,
+      value: {
+        emittedCount: 1,
+        spoolFile: '/ws/spool/x.jsonl',
+        manifestFile: '/ws/spool/x.jsonl.manifest.json',
+        spoolFileBytes: 100,
+        spoolFileSha256: 'a'.repeat(64),
+        skipped: [],
+      },
+    });
+  }
+
+  it('runs reconcileWorkspace before emitSpool by default', () => {
+    mockEmitOk();
+    runSpoolEmit({ scope: 'wiki', tenant: 't' }, fakeCommand());
+    expect(reconcileWorkspace).toHaveBeenCalledTimes(1);
+    expect(emitSpool).toHaveBeenCalledTimes(1);
+    // Order matters: the gate must fire before the emitter reads wiki/.
+    const reconcileOrder = vi.mocked(reconcileWorkspace).mock.invocationCallOrder[0]!;
+    const emitOrder = vi.mocked(emitSpool).mock.invocationCallOrder[0]!;
+    expect(reconcileOrder).toBeLessThan(emitOrder);
+  });
+
+  it('skips the gate when --no-reconcile is passed (reconcile: false)', () => {
+    mockEmitOk();
+    runSpoolEmit({ scope: 'wiki', tenant: 't', reconcile: false }, fakeCommand());
+    expect(reconcileWorkspace).not.toHaveBeenCalled();
+    expect(emitSpool).toHaveBeenCalledTimes(1);
+  });
+
+  it('warns on stdout when the gate quarantined pages, then still emits', () => {
+    vi.mocked(reconcileWorkspace).mockReturnValueOnce({
+      ok: true,
+      value: {
+        scanned: 3,
+        quarantined: [
+          {
+            path: 'wiki/topics/orphan.md',
+            quarantinedTo: 'quarantine/wiki/topics/orphan.md',
+            reason: 'visible page has no matching compilations/promotions receipt row',
+          },
+        ],
+        tmpSwept: [],
+      },
+    });
+    mockEmitOk();
+    runSpoolEmit({ scope: 'wiki', tenant: 't' }, fakeCommand());
+    const out = stdoutText();
+    expect(out).toMatch(/quarantined 1 unreceipted page/);
+    expect(out).toMatch(/wiki\/topics\/orphan\.md/);
+    expect(emitSpool).toHaveBeenCalledTimes(1);
+  });
+
+  it('exits 1 and never emits when the reconcile itself fails', () => {
+    vi.mocked(reconcileWorkspace).mockReturnValueOnce({
+      ok: false,
+      error: new Error('db locked'),
+    });
+    expectExit(1, () => runSpoolEmit({ scope: 'wiki', tenant: 't' }, fakeCommand()));
+    expect(emitSpool).not.toHaveBeenCalled();
+    expect(closeDatabase).toHaveBeenCalledTimes(1);
   });
 });
 

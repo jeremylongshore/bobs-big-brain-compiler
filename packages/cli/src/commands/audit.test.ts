@@ -30,6 +30,9 @@ vi.mock('@ico/kernel', async () => {
   return {
     ...actual,
     verifyAuditChain: vi.fn(),
+    reconcileWorkspace: vi.fn(),
+    initDatabase: vi.fn(() => ({ ok: true, value: {} as never })),
+    closeDatabase: vi.fn(),
   };
 });
 
@@ -41,10 +44,10 @@ vi.mock('../lib/workspace-resolver.js', () => ({
 // Imports after mocks
 // ---------------------------------------------------------------------------
 
-import { verifyAuditChain } from '@ico/kernel';
+import { closeDatabase, initDatabase, reconcileWorkspace, verifyAuditChain } from '@ico/kernel';
 
 import { resolveWorkspace } from '../lib/workspace-resolver.js';
-import { runAuditVerify } from './audit.js';
+import { runAuditReconcile, runAuditVerify } from './audit.js';
 
 // ---------------------------------------------------------------------------
 // Per-test scaffolding
@@ -108,7 +111,14 @@ describe('runAuditVerify — clean chain', () => {
   it('exits 0 with "audit chain OK" stdout when no breaks detected', () => {
     vi.mocked(verifyAuditChain).mockReturnValue({
       ok: true,
-      value: { filesScanned: 3, totalEvents: 42, cleanFiles: 3, breaks: [] },
+      value: {
+        filesScanned: 3,
+        totalEvents: 42,
+        cleanFiles: 3,
+        breaks: [],
+        linkedBoundaries: 0,
+        legacyBoundaries: 0,
+      },
     });
     runAuditVerify({}, fakeCommand());
     expect(process.exitCode).toBe(0);
@@ -121,7 +131,14 @@ describe('runAuditVerify — clean chain', () => {
   it('exits 0 even on an empty workspace (zero files scanned)', () => {
     vi.mocked(verifyAuditChain).mockReturnValue({
       ok: true,
-      value: { filesScanned: 0, totalEvents: 0, cleanFiles: 0, breaks: [] },
+      value: {
+        filesScanned: 0,
+        totalEvents: 0,
+        cleanFiles: 0,
+        breaks: [],
+        linkedBoundaries: 0,
+        legacyBoundaries: 0,
+      },
     });
     runAuditVerify({}, fakeCommand());
     expect(process.exitCode).toBe(0);
@@ -141,6 +158,8 @@ describe('runAuditVerify — tampered chain', () => {
         filesScanned: 1,
         totalEvents: 5,
         cleanFiles: 0,
+        linkedBoundaries: 0,
+        legacyBoundaries: 0,
         breaks: [
           {
             file: '2026-05-24.jsonl',
@@ -163,6 +182,8 @@ describe('runAuditVerify — tampered chain', () => {
         filesScanned: 1,
         totalEvents: 5,
         cleanFiles: 0,
+        linkedBoundaries: 0,
+        legacyBoundaries: 0,
         breaks: [
           {
             file: '2026-05-24.jsonl',
@@ -191,6 +212,8 @@ describe('runAuditVerify — tampered chain', () => {
         filesScanned: 2,
         totalEvents: 10,
         cleanFiles: 0,
+        linkedBoundaries: 0,
+        legacyBoundaries: 0,
         breaks: [
           {
             file: '2026-05-23.jsonl',
@@ -226,6 +249,8 @@ describe('runAuditVerify — tampered chain', () => {
         filesScanned: 1,
         totalEvents: 1,
         cleanFiles: 0,
+        linkedBoundaries: 0,
+        legacyBoundaries: 0,
         breaks: [
           {
             file: '2026-05-24.jsonl',
@@ -251,7 +276,14 @@ describe('runAuditVerify — --json output', () => {
   it('emits a parseable JSON envelope on clean chain (exit 0)', () => {
     vi.mocked(verifyAuditChain).mockReturnValue({
       ok: true,
-      value: { filesScanned: 2, totalEvents: 7, cleanFiles: 2, breaks: [] },
+      value: {
+        filesScanned: 2,
+        totalEvents: 7,
+        cleanFiles: 2,
+        breaks: [],
+        linkedBoundaries: 0,
+        legacyBoundaries: 0,
+      },
     });
     runAuditVerify({ json: true }, fakeCommand());
     expect(process.exitCode).toBe(0);
@@ -280,6 +312,8 @@ describe('runAuditVerify — --json output', () => {
         filesScanned: 1,
         totalEvents: 5,
         cleanFiles: 0,
+        linkedBoundaries: 0,
+        legacyBoundaries: 0,
         breaks: [breakDetail],
       },
     });
@@ -296,7 +330,14 @@ describe('runAuditVerify — --json output', () => {
   it('accepts --json passed via the global commander options', () => {
     vi.mocked(verifyAuditChain).mockReturnValue({
       ok: true,
-      value: { filesScanned: 0, totalEvents: 0, cleanFiles: 0, breaks: [] },
+      value: {
+        filesScanned: 0,
+        totalEvents: 0,
+        cleanFiles: 0,
+        breaks: [],
+        linkedBoundaries: 0,
+        legacyBoundaries: 0,
+      },
     });
     runAuditVerify({}, fakeCommand({ json: true }));
     expect(process.exitCode).toBe(0);
@@ -359,5 +400,100 @@ describe('runAuditVerify — error paths', () => {
     expect(parsed['ok']).toBe(false);
     expect(parsed['error']).toMatch(/disk read failed/);
     expect(parsed['code']).toBe('VERIFY_FAILED');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runAuditReconcile — quarantine-by-move floor (G1)
+// ---------------------------------------------------------------------------
+
+describe('runAuditReconcile', () => {
+  it('exits 0 when the corpus is already consistent', () => {
+    vi.mocked(reconcileWorkspace).mockReturnValue({
+      ok: true,
+      value: { scanned: 4, quarantined: [], tmpSwept: [] },
+    });
+    runAuditReconcile({}, fakeCommand());
+    expect(process.exitCode).toBe(0);
+    expect(stdoutText()).toMatch(/corpus consistent/);
+    expect(stdoutText()).toMatch(/Pages scanned: 4/);
+    expect(initDatabase).toHaveBeenCalledTimes(1);
+    expect(closeDatabase).toHaveBeenCalledTimes(1);
+  });
+
+  it('exits 2 and names every moved file when pages were quarantined', () => {
+    vi.mocked(reconcileWorkspace).mockReturnValue({
+      ok: true,
+      value: {
+        scanned: 5,
+        quarantined: [
+          {
+            path: 'wiki/topics/orphan.md',
+            quarantinedTo: 'quarantine/wiki/topics/orphan.md',
+            reason: 'visible page has no matching compilations/promotions receipt row',
+          },
+        ],
+        tmpSwept: [
+          {
+            path: 'wiki/topics/crashed.md.tmp',
+            quarantinedTo: 'quarantine/wiki/topics/crashed.md.tmp',
+            reason: 'stale tmp file (older than 3600000ms) — crash orphan',
+          },
+        ],
+      },
+    });
+    runAuditReconcile({}, fakeCommand());
+    expect(process.exitCode).toBe(2);
+    const err = stderrText();
+    expect(err).toMatch(
+      /RECONCILED: 1 unreceipted page\(s\) quarantined, 1 stale tmp file\(s\) swept/,
+    );
+    expect(err).toMatch(/wiki\/topics\/orphan\.md/);
+    expect(err).toMatch(/wiki\/topics\/crashed\.md\.tmp/);
+    expect(err).toMatch(/Nothing was deleted/);
+  });
+
+  it('exits 1 when the kernel reconciler fails', () => {
+    vi.mocked(reconcileWorkspace).mockReturnValue({
+      ok: false,
+      error: new Error('rename blew up'),
+    });
+    runAuditReconcile({}, fakeCommand());
+    expect(process.exitCode).toBe(1);
+    expect(stderrText()).toMatch(/audit reconcile failed: rename blew up/);
+    expect(closeDatabase).toHaveBeenCalledTimes(1);
+  });
+
+  it('--json emits a machine-readable envelope with the moved entries', () => {
+    vi.mocked(reconcileWorkspace).mockReturnValue({
+      ok: true,
+      value: {
+        scanned: 2,
+        quarantined: [
+          {
+            path: 'wiki/topics/orphan.md',
+            quarantinedTo: 'quarantine/wiki/topics/orphan.md',
+            reason: 'visible page has no matching compilations/promotions receipt row',
+          },
+        ],
+        tmpSwept: [],
+      },
+    });
+    runAuditReconcile({ json: true }, fakeCommand());
+    expect(process.exitCode).toBe(2);
+    const parsed = JSON.parse(stdoutText().trim()) as Record<string, unknown>;
+    expect(parsed['ok']).toBe(false);
+    expect(parsed['scanned']).toBe(2);
+    expect(Array.isArray(parsed['quarantined'])).toBe(true);
+    expect(stderrText()).toBe('');
+  });
+
+  it('forwards --tmp-max-age-ms to the kernel reconciler', () => {
+    vi.mocked(reconcileWorkspace).mockReturnValue({
+      ok: true,
+      value: { scanned: 0, quarantined: [], tmpSwept: [] },
+    });
+    runAuditReconcile({ tmpMaxAgeMs: '0' }, fakeCommand());
+    expect(reconcileWorkspace).toHaveBeenCalledWith(expect.anything(), tmpWs, { tmpMaxAgeMs: 0 });
   });
 });
