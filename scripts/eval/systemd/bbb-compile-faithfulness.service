@@ -1,0 +1,11 @@
+[Unit]
+Description=Bob's Big Brain — weekly compile-faithfulness (groundedness) eval (l13.10)
+# Runs the sampled compile-faithfulness eval from the MAIN
+# bobs-big-brain-compiler checkout against the live brain workspace
+# (~/.teamkb/brain). Silent on success; Slack #cron-failures (via notify-lib
+# cron_fail in the ~/bin caller) on any nonzero exit. Pre-merge: the ~/bin
+# caller soaks quietly until the repo script + committed floor exist on main.
+
+[Service]
+Type=oneshot
+ExecStart=%h/bin/bbb-compile-faithfulness.sh

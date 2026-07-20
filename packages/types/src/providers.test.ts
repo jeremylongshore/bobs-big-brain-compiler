@@ -42,6 +42,14 @@ describe('resolveProvider', () => {
     expect(openai.keyEnv).toEqual(['OPENAI_API_KEY']);
   });
 
+  it('resolves MiniMax to its OpenAI-compatible endpoint with MiniMax-M3 as default', () => {
+    const mmx = resolveProvider({ ICO_PROVIDER: 'minimax' });
+    expect(mmx.wire).toBe('openai');
+    expect(mmx.baseURL).toBe('https://api.minimax.io/v1');
+    expect(mmx.keyEnv).toEqual(['MINIMAX_API_KEY']);
+    expect(mmx.defaultModel).toBe('MiniMax-M3');
+  });
+
   it('resolves DeepSeek over both its OpenAI and Anthropic endpoints', () => {
     const ds = resolveProvider({ ICO_PROVIDER: 'deepseek' });
     expect(ds.wire).toBe('openai');
