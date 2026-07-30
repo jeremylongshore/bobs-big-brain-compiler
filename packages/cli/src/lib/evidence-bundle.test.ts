@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { EvalBatchResult, EvalResult, EvalSpec } from '@ico/kernel';
 
@@ -182,5 +182,55 @@ describe('buildAndValidateEvidenceBundle', () => {
   it('validates an empty batch (zero subjects)', async () => {
     const b = await buildAndValidateEvidenceBundle(batch([]), OPTS);
     expect(b.subject_set).toEqual([]);
+  });
+
+  // Regression guard: this function must FAIL CLOSED when the kernel's validator
+  // export surface does not match what the adapter expects.
+  //
+  // It previously fell through to "structural acceptance" in that case, so a
+  // function named buildAndVALIDATEEvidenceBundle would return an UNVALIDATED
+  // bundle with no signal anywhere. The trigger is a kernel-version mismatch,
+  // which was live: this package was pinned at `^0.1.1` while the kernel shipped
+  // 0.10.0, and a caret range on a 0.x major caps at 0.1.x.
+  //
+  // The mock replaces the kernel module for this test only, so we assert the
+  // refusal without needing to install an incompatible kernel.
+  it('refuses to emit a bundle when the kernel exposes no usable schema', async () => {
+    vi.resetModules();
+    vi.doMock('@intentsolutions/core/validators/v1', () => ({
+      // Deliberately no usable schema. Both names are declared-but-undefined
+      // rather than absent, because vitest's mock proxy THROWS on access to an
+      // undeclared export, whereas a real ESM namespace yields `undefined` —
+      // and `undefined` is the case the production guard has to handle.
+      EvidenceBundleSchema: undefined,
+      EvidenceBundleV1Schema: undefined,
+      SomeUnrelatedSchema: { parse: (x: unknown) => x },
+    }));
+    const { buildAndValidateEvidenceBundle: isolated } = await import('./evidence-bundle.js');
+    await expect(isolated(batch([result()]), OPTS)).rejects.toThrow(
+      /Evidence Bundle validation unavailable/,
+    );
+    vi.doUnmock('@intentsolutions/core/validators/v1');
+    vi.resetModules();
+  });
+
+  // The complement: a schema that IS present must actually be invoked, not merely
+  // looked up. Without this, the guard above could be satisfied by a no-op.
+  it('actually calls the kernel schema parse (validation is not skipped)', async () => {
+    vi.resetModules();
+    let parsed = 0;
+    vi.doMock('@intentsolutions/core/validators/v1', () => ({
+      EvidenceBundleSchema: {
+        parse: (x: unknown) => {
+          parsed += 1;
+          return x;
+        },
+      },
+    }));
+    const { buildAndValidateEvidenceBundle: isolated } = await import('./evidence-bundle.js');
+    await isolated(batch([result()]), OPTS);
+    expect(parsed).toBe(1);
+    vi.doUnmock('@intentsolutions/core/validators/v1');
+    vi.resetModules();
   });
 });

@@ -162,15 +162,33 @@ export async function buildAndValidateEvidenceBundle(
     string,
     unknown
   >;
-  // The kernel exposes a Zod schema for the Evidence Bundle. Find it by the
-  // conventional export name; fall back to structural acceptance if the export
-  // surface differs (the structural checks above + schema-shape are still sound).
+  // The kernel exposes a Zod schema for the Evidence Bundle under one of two
+  // conventional export names. Resolve it, and FAIL CLOSED if neither is present.
+  //
+  // This used to fall through to "structural acceptance" when the export surface
+  // differed — which made a function named buildAndVALIDATEEvidenceBundle return
+  // an UNVALIDATED bundle, silently, with no signal at any layer. The local
+  // structural checks above cover a subject-name pattern and nothing else; they
+  // are not a substitute for the canonical schema and were never sized to be.
+  //
+  // The trigger for that path is precisely a kernel-version mismatch, which is not
+  // hypothetical: this package sat pinned at `^0.1.1` while the kernel shipped
+  // 0.10.0, and caret ranges on a 0.x major cap at 0.1.x — so it could never have
+  // resolved forward on its own. If a future kernel renames this export, the right
+  // outcome is a loud failure telling us to update the adapter, not bundles that
+  // quietly stop being checked while still being emitted, signed, and published.
   const schema =
     (validators['EvidenceBundleSchema'] as { parse: (x: unknown) => unknown } | undefined) ??
     (validators['EvidenceBundleV1Schema'] as { parse: (x: unknown) => unknown } | undefined);
-  if (schema && typeof schema.parse === 'function') {
-    schema.parse(bundle);
+  if (!schema || typeof schema.parse !== 'function') {
+    throw new Error(
+      'Evidence Bundle validation unavailable: @intentsolutions/core/validators/v1 exposes neither ' +
+        'EvidenceBundleSchema nor EvidenceBundleV1Schema with a .parse(). Refusing to emit an ' +
+        'unvalidated bundle. This usually means the installed kernel version is incompatible with ' +
+        'this adapter — check the @intentsolutions/core range in packages/cli/package.json.',
+    );
   }
+  schema.parse(bundle);
   return bundle;
 }
 

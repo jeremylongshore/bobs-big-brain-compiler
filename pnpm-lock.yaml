@@ -88,8 +88,8 @@ importers:
         specifier: ^0.82.0
         version: 0.82.0(zod@4.4.3)
       '@intentsolutions/core':
-        specifier: ^0.1.1
-        version: 0.1.1
+        specifier: ^0.10.0
+        version: 0.10.0
       better-sqlite3:
         specifier: ^11.9.0
         version: 11.10.0
@@ -974,8 +974,8 @@ packages:
     engines: {node: '>=18'}
     hasBin: true
 
-  '@intentsolutions/core@0.1.1':
-    resolution: {integrity: sha512-q6FQCgzRqHG/uEo9L9LpCrNDX1BSahgu+XT5bt1d+NyVwzTG7CVk71JwMCEkRGUzAtSnWNT7+hGUo87GIC6Ziw==}
+  '@intentsolutions/core@0.10.0':
+    resolution: {integrity: sha512-6IF/A5qqrUdA/L4HB6YLd2/7+T3fA/1gY7rX1izkIhrx1E5+4XL/O3MIXvJafobQztPnm6ItYHbHLV1EpLnYOg==}
     engines: {node: '>=20.0.0', pnpm: '>=9.0.0'}
 
   '@jridgewell/gen-mapping@0.3.13':
@@ -3504,7 +3504,7 @@ snapshots:
 
   '@intentsolutions/audit-harness@1.1.5': {}
 
-  '@intentsolutions/core@0.1.1':
+  '@intentsolutions/core@0.10.0':
     dependencies:
       zod: 4.4.3
 
