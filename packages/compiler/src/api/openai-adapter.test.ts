@@ -191,6 +191,148 @@ describe('createClaudeClient — OpenAI-compatible providers', () => {
     }
   });
 
+  it('strips the MiniMax <think> block that arrives inline in content', async () => {
+    process.env['ICO_PROVIDER'] = 'minimax';
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse({
+          // The EXACT shape observed against the live MiniMax-M3 API on
+          // 2026-07-31: chain-of-thought inline in `content`, and
+          // `reasoning_content` empty — so the usual fallback never fires.
+          choices: [
+            {
+              message: {
+                content:
+                  '<think>The user is asking me to reply with only JSON.</think>\n\n{"ok":true}',
+                reasoning_content: '',
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: { prompt_tokens: 5, completion_tokens: 6 },
+        }),
+      ),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const client = createClaudeClient('k');
+    const result = await client.createCompletion('s', 'u', { model: 'MiniMax-M3' });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // The compiler passes parse this as JSON: the think block must be gone
+      // AND the leading blank lines trimmed, leaving parseable output.
+      expect(result.value.content).toBe('{"ok":true}');
+      expect(JSON.parse(result.value.content)).toEqual({ ok: true });
+    }
+  });
+
+  it('falls through to reasoning_content when content is ONLY a think block', async () => {
+    process.env['ICO_PROVIDER'] = 'minimax';
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse({
+          choices: [
+            {
+              message: {
+                content: '<think>still deliberating</think>',
+                reasoning_content: 'the actual compiled page',
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: { prompt_tokens: 5, completion_tokens: 6 },
+        }),
+      ),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const client = createClaudeClient('k');
+    const result = await client.createCompletion('s', 'u', { model: 'MiniMax-M3' });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // Stripping happens BEFORE the `||`, so an all-think content correctly
+      // yields the reasoning fallback rather than leaking chain-of-thought.
+      expect(result.value.content).toBe('the actual compiled page');
+    }
+  });
+
+  it('drops an UNTERMINATED think block rather than returning truncated reasoning', async () => {
+    process.env['ICO_PROVIDER'] = 'minimax';
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse({
+          choices: [
+            {
+              // Model hit its token budget mid-thought: no closing tag.
+              message: { content: '<think>I should start by checking whe' },
+              finish_reason: 'length',
+            },
+          ],
+          usage: { prompt_tokens: 5, completion_tokens: 6 },
+        }),
+      ),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const client = createClaudeClient('k');
+    const result = await client.createCompletion('s', 'u', { model: 'MiniMax-M3' });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // Truncated reasoning is NOT an answer — better to report nothing than to
+      // feed half a thought to a JSON parser.
+      expect(result.value.content).toBe('');
+    }
+  });
+
+  it('leaves non-think content byte-identical for other openai-wire providers', async () => {
+    process.env['ICO_PROVIDER'] = 'groq';
+    const payload = 'a page that merely mentions <thinking> in prose  ';
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse({
+          choices: [{ message: { content: payload }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 5, completion_tokens: 6 },
+        }),
+      ),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const client = createClaudeClient('k');
+    const result = await client.createCompletion('s', 'u', { model: 'llama-3.3-70b-versatile' });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // No `<think>` present → returned untouched, trailing whitespace included.
+      expect(result.value.content).toBe(payload);
+    }
+  });
+
+  it('routes minimax to the MiniMax base URL with its own key env', async () => {
+    process.env['ICO_PROVIDER'] = 'minimax';
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse({
+          choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 },
+        }),
+      ),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const client = createClaudeClient('k');
+    const result = await client.createCompletion('s', 'u', {});
+
+    expect(result.ok).toBe(true);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(String(url)).toBe('https://api.minimax.io/v1/chat/completions');
+    // Default model comes from the registry, not the caller.
+    const body = JSON.parse(init.body as string) as ChatBody;
+    expect(body.model).toBe('MiniMax-M3');
+  });
+
   it('labels the sanitized error with the provider and never leaks the key', async () => {
     process.env['ICO_PROVIDER'] = 'groq';
     globalThis.fetch = (() =>

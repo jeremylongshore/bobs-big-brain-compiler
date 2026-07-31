@@ -62,6 +62,29 @@ describe('cost gate — pricing basis (R12: DeepSeek, not Anthropic)', () => {
     expect(resolvePricingModel('claude-sonnet-4-6')).toBe('claude-sonnet-4-6');
   });
 
+  it('prices any minimax-family tag at MiniMax-M3 rates, normalizing case', () => {
+    // MODEL_PRICING is keyed on the vendor's mixed-case `MiniMax-M3`, but rows
+    // may be tagged lowercase; an exact-match lookup would miss and silently
+    // fall back to Sonnet (~12x over), which at the $1/day ceiling would start
+    // refusing on-push compiles.
+    expect(resolvePricingModel('MiniMax-M3')).toBe('MiniMax-M3');
+    expect(resolvePricingModel('minimax-m3')).toBe('MiniMax-M3');
+    expect(resolvePricingModel('MiniMax-M2')).toBe('MiniMax-M3');
+  });
+
+  it('keeps MiniMax between DeepSeek and Sonnet — never the Sonnet fallback', () => {
+    const tokens = 1_000_000;
+    const deepseek = costOfTokens(tokens, 'deepseek-chat');
+    const minimax = costOfTokens(tokens, 'MiniMax-M3');
+    const sonnet = costOfTokens(tokens, 'claude-sonnet-4-6');
+    // MiniMax: 0.7M*$0.30 + 0.3M*$1.20 = $0.21 + $0.36 = $0.57
+    expect(minimax).toBeCloseTo(0.57, 3);
+    // Biased HIGH vs DeepSeek (never silently under-priced)...
+    expect(minimax).toBeGreaterThan(deepseek);
+    // ...but nowhere near the Sonnet fallback that an unknown tag would inherit.
+    expect(minimax).toBeLessThan(sonnet / 5);
+  });
+
   it('costs ~50x less on DeepSeek than on Anthropic Sonnet for the same tokens', () => {
     const tokens = 1_000_000; // 1M total → 700k in / 300k out (70/30 split)
     const deepseek = costOfTokens(tokens, 'deepseek-chat');
