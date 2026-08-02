@@ -5,6 +5,7 @@
 ### Changed
 
 - The GitHub repository was renamed from `intentional-cognition-os` to `bobs-big-brain-compiler` on 2026-07-19 (public product name: **Bob's Big Brain Compiler**). GitHub 301-redirects the old URLs. The npm package name `intentional-cognition-os`, the `@ico/*` scope, and the bead prefixes are unchanged.
+- Re-ingest now durably marks direct and cross-source dependent compilations stale, and mount-backed ingest records `sources.mount_id` plus `mounts.last_indexed_at` after successful registration (l13.17 / #200).
 
 ## [v1.22.0] - 2026-07-18
 

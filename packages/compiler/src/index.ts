@@ -34,6 +34,7 @@ export {
 export {
   detectStalePages,
   markStale,
+  markSupersededCompilationsStale,
   getUncompiledSources,
   type StalePageInfo,
 } from './staleness.js';

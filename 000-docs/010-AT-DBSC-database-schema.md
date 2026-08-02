@@ -105,13 +105,13 @@ CREATE TABLE mounts (
 );
 ```
 
-| Column            | Type | Constraints      | Description                                                               |
-| ----------------- | ---- | ---------------- | ------------------------------------------------------------------------- |
-| `id`              | TEXT | PRIMARY KEY      | ULID or UUID.                                                             |
-| `name`            | TEXT | NOT NULL, UNIQUE | Human-readable mount name (e.g., "research-papers").                      |
-| `path`            | TEXT | NOT NULL         | Absolute or workspace-relative path to the mount directory.               |
-| `created_at`      | TEXT | NOT NULL         | ISO 8601 timestamp.                                                       |
-| `last_indexed_at` | TEXT | nullable         | ISO 8601 timestamp of last `ico mount` index scan. NULL if never indexed. |
+| Column            | Type | Constraints      | Description                                                                                     |
+| ----------------- | ---- | ---------------- | ----------------------------------------------------------------------------------------------- |
+| `id`              | TEXT | PRIMARY KEY      | ULID or UUID.                                                                                   |
+| `name`            | TEXT | NOT NULL, UNIQUE | Human-readable mount name (e.g., "research-papers").                                            |
+| `path`            | TEXT | NOT NULL         | Absolute or workspace-relative path to the mount directory.                                     |
+| `created_at`      | TEXT | NOT NULL         | ISO 8601 timestamp.                                                                             |
+| `last_indexed_at` | TEXT | nullable         | ISO 8601 timestamp of the last successful source ingest from this mount. NULL if never indexed. |
 
 ### 3.3 compilations
 
@@ -134,16 +134,16 @@ CREATE TABLE compilations (
 );
 ```
 
-| Column        | Type    | Constraints                 | Description                                                                            |
-| ------------- | ------- | --------------------------- | -------------------------------------------------------------------------------------- |
-| `id`          | TEXT    | PRIMARY KEY                 | ULID or UUID.                                                                          |
-| `source_id`   | TEXT    | FK -> sources(id), nullable | Source that was compiled. NULL for cross-source compilations (topics, contradictions). |
-| `type`        | TEXT    | NOT NULL, CHECK             | Compilation pass type. All six blueprint passes represented.                           |
-| `output_path` | TEXT    | NOT NULL                    | Relative path within `workspace/wiki/` to the compiled page.                           |
-| `compiled_at` | TEXT    | NOT NULL                    | ISO 8601 timestamp.                                                                    |
-| `stale`       | INTEGER | NOT NULL, DEFAULT 0, CHECK  | 0 = current, 1 = stale. Set by staleness detection (blueprint Section 6.3).            |
-| `model`       | TEXT    | NOT NULL                    | Model identifier used for this compilation (e.g., "claude-sonnet-4-6").                |
-| `tokens_used` | INTEGER | nullable                    | Total tokens consumed (input + output). NULL if not tracked.                           |
+| Column        | Type    | Constraints                 | Description                                                                                                                               |
+| ------------- | ------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`          | TEXT    | PRIMARY KEY                 | ULID or UUID.                                                                                                                             |
+| `source_id`   | TEXT    | FK -> sources(id), nullable | Source that was compiled. NULL for cross-source compilations (topics, contradictions).                                                    |
+| `type`        | TEXT    | NOT NULL, CHECK             | Compilation pass type. All six blueprint passes represented.                                                                              |
+| `output_path` | TEXT    | NOT NULL                    | Relative path within `workspace/wiki/` to the compiled page.                                                                              |
+| `compiled_at` | TEXT    | NOT NULL                    | ISO 8601 timestamp.                                                                                                                       |
+| `stale`       | INTEGER | NOT NULL, DEFAULT 0, CHECK  | 0 = current, 1 = stale. Set durably on superseding re-ingest or dependency invalidation; timestamp detection remains the legacy fallback. |
+| `model`       | TEXT    | NOT NULL                    | Model identifier used for this compilation (e.g., "claude-sonnet-4-6").                                                                   |
+| `tokens_used` | INTEGER | nullable                    | Total tokens consumed (input + output). NULL if not tracked.                                                                              |
 
 **Unique constraint:** `(source_id, type, output_path)` prevents duplicate compilation records for the same source-type-path combination. Recompilation replaces the existing row.
 
