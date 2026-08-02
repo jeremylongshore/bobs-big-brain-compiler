@@ -50,6 +50,26 @@ will be safely retried.
 run size, which leaves an auditable command-line decision and a bounded blast
 radius.
 
+## Manifest receipt contract
+
+Every emitted spool manifest carries a `batchReceipt` derived from the same
+candidate list and ceiling used by the writer. It contains the producer run's
+`batchId`, the `tenantId`, discovery `scope`, candidate `source` and
+`trustLevel`, the exact `candidateCount`, and the `maxCandidates` ceiling.
+The existing `candidateIds` array remains the per-line identity pin; its set
+must equal the IDs in the JSONL body.
+
+The manifest is published before the final spool-body rename. This preserves
+the receipts-precede-visibility rule: a crash may leave an auditable orphan
+manifest, but never a visible spool body without its hash and admission
+receipt. Registrar PR #333 verifies the hash and receipt before inserting any
+candidate, then persists the `batchId` in its import ledger.
+
+This contract is implemented by bead `intentional-cognition-os-l13.20`,
+GitHub issue #191, and Plane ICOS-26. Normal incremental emits use
+`source: import` / `trustLevel: medium`; explicit `--bulk` emits use
+`source: bulk_import` / `trustLevel: untrusted`.
+
 ## Data model
 
 Migration `005-add-spool-emissions.sql` adds `spool_emissions`, keyed by the
