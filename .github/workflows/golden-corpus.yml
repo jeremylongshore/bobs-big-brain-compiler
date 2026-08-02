@@ -1,0 +1,54 @@
+name: Golden Corpus Compile Quality
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  golden-corpus:
+    name: MiniMax-M3 real-pass quality run
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ICO_PROVIDER: minimax
+      ICO_MODEL: MiniMax-M3
+      # MiniMax's Anthropic-compatible wire keeps judge reasoning out of the
+      # JSON text block. This is the same transport choice used by the live
+      # faithfulness runner.
+      ICO_PROVIDER_WIRE: anthropic
+      ICO_BASE_URL: https://api.minimax.io/anthropic
+      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+      GOLDEN_CORPUS_ROOT: ${{ runner.temp }}/ico-golden-corpus-${{ github.run_id }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Run golden corpus
+        # The runner itself fails closed when the secret is absent and writes
+        # a machine-readable receipt without ever including the key.
+        run: pnpm eval:golden-corpus
+
+      - name: Upload golden corpus receipt
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-corpus-${{ github.run_id }}
+          path: ${{ runner.temp }}/ico-golden-corpus-${{ github.run_id }}/golden-corpus-receipt.json
+          if-no-files-found: warn

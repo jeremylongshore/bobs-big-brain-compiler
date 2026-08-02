@@ -26,7 +26,8 @@
     "arch:graph": "depcruise --config .dependency-cruiser.cjs --output-type dot packages | dot -T svg > .arch/graph.svg",
     "audit:harness": "scripts/audit-harness verify",
     "audit:escape": "scripts/audit-harness escape-scan --staged",
-    "cli:smoke": "node packages/cli/dist/index.js --version && node packages/cli/dist/index.js --help > /dev/null"
+    "cli:smoke": "node packages/cli/dist/index.js --version && node packages/cli/dist/index.js --help > /dev/null",
+    "eval:golden-corpus": "scripts/eval/run-golden-corpus.sh"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs,cjs}": [
