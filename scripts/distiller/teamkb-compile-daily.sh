@@ -51,7 +51,7 @@ EMAIL_SCRIPT=$HOME/.claude/skills/email/scripts/send-email.cjs
 EMAIL_TO=jeremy@intentsolutions.io
 SCRATCH=/tmp/teamkb-compile
 LOG_DIR=$HOME/.local/state/teamkb-compile-daily
-NTFY_TOPIC_FILE=$HOME/.ntfy-topic
+ALERT_FLOOR_LIB="${TEAMKB_ALERT_FLOOR:-$HOME/bin/lib/alert-floor.sh}"
 
 # Agent: minimax (default) | grok | claude. See header.
 TEAMKB_AGENT="${TEAMKB_AGENT:-minimax}"
@@ -101,6 +101,13 @@ mkdir -p "$_BEATDIR" 2>/dev/null || true
 : > "$_BEATDIR/teamkb-compile-daily.beat" 2>/dev/null || true
 
 log() { echo "[$(date -Is)] $*" | tee -a "$LOG"; }
+
+# Estate notification routing is optional for fresh clones, but when present
+# it is the only status/failure transport. The home-directory wrapper is a shim;
+# this repo copy owns the behavior that lands after merge.
+# shellcheck source=notify-routing.sh
+. "$SCRIPT_DIR/notify-routing.sh"
+notify_routing_load
 
 # ── MiniMax key resolution (l13.9) ───────────────────────────────────────────
 # Env wins; else decrypt the estate dotenv via a sops PIPE (in-process only).
@@ -357,10 +364,10 @@ notify_unexpected_exit() {
   [ "$rc" -eq 0 ] && return
   [ "$NOTIFIED" -eq 1 ] && return
   log "ABNORMAL EXIT (rc=$rc) before normal notification — sending fail-loud alert"
-  local topic; topic=$(cat "$NTFY_TOPIC_FILE" 2>/dev/null)
-  [ -n "$topic" ] && curl -s -H "Title: 🚨 teamkb-compile aborted early" -H "Priority: max" -H "Tags: rotating_light" \
-    -d "${TARGET}: early exit rc=${rc} — brain may not be updated. Check ${LOG}" \
-    "https://ntfy.sh/$topic" >/dev/null 2>&1 || true
+  notify_estate "sys-incidents" \
+    "teamkb-compile aborted early: ${TARGET}: early exit rc=${rc} — brain may not be updated. Check ${LOG}" \
+    "TeamKB nightly compile aborted before its normal summary with exit code ${rc}; the brain may not be updated, so check the run log." \
+    critical
   if command -v node >/dev/null 2>&1 && [ -f "$EMAIL_SCRIPT" ]; then
     node "$EMAIL_SCRIPT" --to "$EMAIL_TO" \
       --subject "🚨 teamkb-compile aborted early: ${TARGET} (rc=${rc})" \
@@ -533,18 +540,21 @@ if command -v node >/dev/null 2>&1 && [ -f "$EMAIL_SCRIPT" ]; then
     || log "Email send failed — see log"
 fi
 
-# ── ntfy status push (content stays in the email) ────────────────────────────
-NTFY_TOPIC=$(cat "$NTFY_TOPIC_FILE" 2>/dev/null)
-if [ -n "$NTFY_TOPIC" ]; then
-  case "$STATUS" in
-    OK*) _t="teamkb-compile ${MODE} OK"; [ "$GRADUATED" -eq 1 ] && _t="🎓 teamkb-compile graduated → AUTO"
-         curl -s -H "Title: ${_t}" -H "Priority: default" -H "Tags: brain" \
-           -d "${TARGET}: ${STATUS}${GRAD_NOTE:+ — ${GRAD_NOTE}}" "https://ntfy.sh/$NTFY_TOPIC" >> "$LOG" 2>&1 || true ;;
-    *)   _p="high"; [ "$ESC_PRIO" = "max" ] && _p="max"
-         curl -s -H "Title: ${ESC_PREFIX}teamkb-compile FAILED" -H "Priority: ${_p}" -H "Tags: rotating_light" \
-           -d "${TARGET}: ${STATUS} (${CONSEC}-day streak). Log: $LOG" "https://ntfy.sh/$NTFY_TOPIC" >> "$LOG" 2>&1 || true ;;
-  esac
-fi
+# ── Estate status alert (content stays in the email) ─────────────────────────
+# The shared Intent OS alert-floor seam owns MiniMax-first wording, raw-evidence
+# preservation, canonical Buzz aliases, and honest delivery accounting. The
+# wrapper supplies a readable deterministic fallback for every event.
+case "$STATUS" in
+  OK*) _t="teamkb-compile ${MODE} OK"; [ "$GRADUATED" -eq 1 ] && _t="teamkb-compile graduated to AUTO"
+       notify_estate "sys-automation" \
+         "${TARGET}: ${_t} — ${STATUS}${GRAD_NOTE:+ — ${GRAD_NOTE}}" \
+         "TeamKB nightly compile completed for ${TARGET} in ${MODE} mode${GRADUATED:+ and graduated to auto-promote}." \
+         info ;;
+  *)   notify_estate "sys-automation" \
+         "teamkb-compile failed: ${TARGET}: ${STATUS} (${CONSEC}-day streak). Log: $LOG" \
+         "TeamKB nightly compile failed for ${TARGET}; failure streak is ${CONSEC} days, so check the run log." \
+         high ;;
+esac
 
 NOTIFIED=1
 log "=== teamkb-compile-daily end (${STATUS}) ==="

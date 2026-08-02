@@ -5,6 +5,7 @@
 ### Changed
 
 - The GitHub repository was renamed from `intentional-cognition-os` to `bobs-big-brain-compiler` on 2026-07-19 (public product name: **Bob's Big Brain Compiler**). GitHub 301-redirects the old URLs. The npm package name `intentional-cognition-os`, the `@ico/*` scope, and the bead prefixes are unchanged.
+- l13.15 routes the nightly compile wrapper through the shared Intent OS alert-floor/Buzz seam, with deterministic human-readable fallbacks, canonical `sys-*` topics, and no direct ntfy/Slack/`notify-lib` transport. Ownership is documented in `000-docs/042-AT-ARCH-nightly-compile-notification-routing.md`; estate-wide normalization and deletion of the remaining shared compatibility path are tracked by Intent OS `spine-8fl.2` / issue #329.
 
 ## [v1.22.0] - 2026-07-18
 
