@@ -68,7 +68,7 @@ Every event type listed in `011-AT-TRSC` §6.1–6.20 has at least one source em
 
 ### Hash-chain integrity
 
-The append-only JSONL trace files form an integrity chain: every line records `prev_hash = SHA-256(prev_line)`. The `smoke-audit-chain-intact` eval (shipped in E10-B01, `evals/smoke/audit-chain-intact.eval.yaml`) walks every daily trace file via the SQL index and verifies the chain.
+The protocol-level append-only JSONL trace files form an integrity chain: every line records `prev_hash = SHA-256(prev_line)`. The `smoke-audit-chain-intact` eval (shipped in E10-B01, `evals/smoke/audit-chain-intact.eval.yaml`) walks every daily trace file via the SQL index and verifies the chain.
 
 This audit ran the eval against a freshly-built workspace populated by the integration test in this bead and observed **zero chain breaks** across all events emitted by the test flow.
 

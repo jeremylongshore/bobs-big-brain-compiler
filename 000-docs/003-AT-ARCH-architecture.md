@@ -36,14 +36,14 @@ The system is designed for local-first operation (Phases 1-4) with remote/team c
 └─────────────────────────────────────────────────────────────┘
 ```
 
-| Layer                 | Responsibility                                                                         | Storage                 | Mutability                |
-| --------------------- | -------------------------------------------------------------------------------------- | ----------------------- | ------------------------- |
-| 1. Raw Corpus         | Preserve source-of-truth inputs with provenance                                        | `workspace/raw/`        | Append-only               |
-| 2. Semantic Knowledge | Compiled markdown knowledge — summaries, concepts, entities, backlinks, contradictions | `workspace/wiki/`       | Recompilable              |
-| 3. Episodic Tasks     | Temporary scoped research workspaces for complex questions                             | `workspace/tasks/<id>/` | Created/archived per task |
-| 4. Artifacts          | Durable rendered outputs — reports, slides, charts, briefings                          | `workspace/outputs/`    | Promotable to Layer 2     |
-| 5. Recall             | Human retention — flashcards, quizzes, spaced repetition, weak-area reports            | `workspace/recall/`     | Adaptive                  |
-| 6. Audit & Policy     | Deterministic control — provenance, traces, policy, permissions, evals                 | `workspace/audit/`      | Append-only               |
+| Layer                 | Responsibility                                                                         | Storage                 | Mutability                 |
+| --------------------- | -------------------------------------------------------------------------------------- | ----------------------- | -------------------------- |
+| 1. Raw Corpus         | Preserve source-of-truth inputs with provenance                                        | `workspace/raw/`        | Protocol-level append-only |
+| 2. Semantic Knowledge | Compiled markdown knowledge — summaries, concepts, entities, backlinks, contradictions | `workspace/wiki/`       | Recompilable               |
+| 3. Episodic Tasks     | Temporary scoped research workspaces for complex questions                             | `workspace/tasks/<id>/` | Created/archived per task  |
+| 4. Artifacts          | Durable rendered outputs — reports, slides, charts, briefings                          | `workspace/outputs/`    | Promotable to Layer 2      |
+| 5. Recall             | Human retention — flashcards, quizzes, spaced repetition, weak-area reports            | `workspace/recall/`     | Adaptive                   |
+| 6. Audit & Policy     | Deterministic control — provenance, traces, policy, permissions, evals                 | `workspace/audit/`      | Protocol-level append-only |
 
 ## Component Design
 
@@ -131,7 +131,7 @@ For complex questions (`ico research`), the system creates a scoped task workspa
 | Runtime       | TypeScript, Node.js 22+          | Type safety, Claude SDK native, ecosystem                |
 | CLI           | Commander.js                     | Battle-tested, conventional                              |
 | State         | SQLite (better-sqlite3)          | Local-first, zero infrastructure, deterministic          |
-| Traces        | JSONL                            | Append-only, human-readable, greppable                   |
+| Traces        | JSONL                            | Protocol-level append-only, human-readable, greppable    |
 | AI            | Claude API via @anthropic-ai/sdk | Primary compilation and reasoning engine                 |
 | Orchestration | Agent SDK                        | Multi-agent research workflows                           |
 | Retrieval     | Markdown-first, full-text search | Simple before complex — no vector DB until proven needed |

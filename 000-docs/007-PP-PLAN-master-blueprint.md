@@ -111,7 +111,7 @@ Every meaningful event leaves a trace: ingestion, compilation, retrieval hits, t
 └─────────────────────────────────────────────┘
 ```
 
-**L1 — Raw Corpus.** Source-of-truth inputs. PDFs, articles, papers, repos, notes, transcripts, datasets. Append-only. Never modified after ingestion. Stored in `workspace/raw/`.
+**L1 — Raw Corpus.** Source-of-truth inputs. PDFs, articles, papers, repos, notes, transcripts, datasets. Protocol-level append-only. Never modified after ingestion. Stored in `workspace/raw/`.
 
 **L2 — Semantic Knowledge.** Compiled markdown derived from L1. Source summaries, concept pages, topic pages, entity pages, backlinks, contradiction notes, open questions, semantic indexes. Recompilable — can be regenerated from L1 at any time. Stored in `workspace/wiki/`.
 
@@ -121,20 +121,20 @@ Every meaningful event leaves a trace: ingestion, compilation, retrieval hits, t
 
 **L5 — Recall.** Human retention materials. Flashcards, quizzes, spaced repetition decks, weak-area reports. Generated from L2, adapted based on test results. Stored in `workspace/recall/`.
 
-**L6 — Audit & Policy.** Deterministic control layer. Provenance logs, task traces, policy decisions, promotion history, eval results. Append-only. Stored in `workspace/audit/`.
+**L6 — Audit & Policy.** Deterministic control layer. Provenance logs, task traces, policy decisions, promotion history, eval results. Protocol-level append-only. Stored in `workspace/audit/`.
 
 ### 5.2 Data classification
 
 Every piece of data in the system has exactly one classification:
 
-| Classification | Definition                                              | Examples                                      | Lifecycle                                |
-| -------------- | ------------------------------------------------------- | --------------------------------------------- | ---------------------------------------- |
-| **Canonical**  | Source-of-truth inputs that the system never modifies   | Raw corpus files (L1)                         | Append-only, never mutated               |
-| **Compiled**   | Derived from canonical sources via compilation          | Wiki pages, summaries, concept pages (L2)     | Recompilable from L1                     |
-| **Ephemeral**  | Temporary working data scoped to a task                 | Evidence folders, drafts, critiques (L3)      | Archived or pruned after task completion |
-| **Durable**    | Rendered outputs intended for reuse                     | Reports, slides, briefings (L4)               | Permanent unless user deletes            |
-| **Adaptive**   | Generated from compiled knowledge, modified by feedback | Flashcards, quiz results, retention data (L5) | Updated based on recall performance      |
-| **Audit**      | System events and policy decisions                      | Traces, provenance, promotions (L6)           | Append-only, never mutated               |
+| Classification | Definition                                              | Examples                                      | Lifecycle                                 |
+| -------------- | ------------------------------------------------------- | --------------------------------------------- | ----------------------------------------- |
+| **Canonical**  | Source-of-truth inputs that the system never modifies   | Raw corpus files (L1)                         | Protocol-level append-only, never mutated |
+| **Compiled**   | Derived from canonical sources via compilation          | Wiki pages, summaries, concept pages (L2)     | Recompilable from L1                      |
+| **Ephemeral**  | Temporary working data scoped to a task                 | Evidence folders, drafts, critiques (L3)      | Archived or pruned after task completion  |
+| **Durable**    | Rendered outputs intended for reuse                     | Reports, slides, briefings (L4)               | Permanent unless user deletes             |
+| **Adaptive**   | Generated from compiled knowledge, modified by feedback | Flashcards, quiz results, retention data (L5) | Updated based on recall performance       |
+| **Audit**      | System events and policy decisions                      | Traces, provenance, promotions (L6)           | Protocol-level append-only, never mutated |
 
 ### 5.3 Deterministic vs probabilistic boundary
 
@@ -440,7 +440,7 @@ intentional-cognition-os/
 | Language      | TypeScript, Node.js 22+                 | Type safety, Claude SDK native                  |
 | CLI           | Commander.js                            | Conventional, battle-tested                     |
 | State         | SQLite (better-sqlite3)                 | Local-first, zero infrastructure                |
-| Traces        | JSONL                                   | Append-only, greppable                          |
+| Traces        | JSONL                                   | Protocol-level append-only, greppable           |
 | AI            | Claude API via @anthropic-ai/sdk        | Compilation and reasoning engine                |
 | Orchestration | Agent SDK                               | Multi-agent research (Phase 3)                  |
 | Retrieval     | Full-text search over compiled markdown | Simple first — no vector DB until proven needed |

@@ -242,7 +242,7 @@ CREATE TABLE recall_results (
 
 ### 3.7 traces
 
-Index table for JSONL trace files. Provides structured queryability over the append-only audit log. See blueprint Section 5.5 (operational control files) and Section 5.6 (traces as learning substrate). Full trace payloads live in JSONL files at `workspace/audit/traces/`; this table stores enough metadata to query without parsing every line.
+Index table for JSONL trace files. Provides structured queryability over the protocol-level append-only audit log. See blueprint Section 5.5 (operational control files) and Section 5.6 (traces as learning substrate). Full trace payloads live in JSONL files at `workspace/audit/traces/`; this table stores enough metadata to query without parsing every line.
 
 ```sql
 CREATE TABLE traces (
@@ -360,16 +360,16 @@ Common queries the kernel and CLI execute against this schema. Provided as imple
 
 These rules are enforced by the kernel, not by database constraints alone. The database provides the structural foundation; the kernel provides semantic validation.
 
-| Rule                                    | Enforcement                                                                           | Reference                              |
-| --------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------- |
-| Sources are append-only after ingestion | Kernel refuses UPDATE on sources rows (except metadata corrections)                   | Blueprint Section 5.1                  |
-| Compilations track provenance           | Every compilation row links to its source(s) via `source_id` or `compilation_sources` | Blueprint Section 5.3                  |
-| Task state transitions are ordered      | Kernel validates transition legality before UPDATE                                    | Blueprint Section 8.1                  |
-| Promotions are user-initiated only      | `promoted_by` defaults to 'user'; system-initiated promotion is blocked at the kernel | Blueprint Section 7.1 rule 7           |
-| Traces are append-only                  | Kernel never issues UPDATE or DELETE on traces rows                                   | Blueprint Section 5.1 (L6 append-only) |
-| Recall results are append-only          | Each quiz attempt creates a new row; results are never modified                       | Blueprint Section 9.3                  |
-| All timestamps are ISO 8601             | Kernel formats all dates as `YYYY-MM-DDTHH:mm:ss.sssZ` (UTC)                          | Project convention                     |
-| All SQL uses prepared statements        | No string interpolation in queries — parameterized only                               | Security standard (audit H1)           |
+| Rule                                                   | Enforcement                                                                           | Reference                                             |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Sources are protocol-level append-only after ingestion | Kernel refuses UPDATE on sources rows (except metadata corrections)                   | Blueprint Section 5.1                                 |
+| Compilations track provenance                          | Every compilation row links to its source(s) via `source_id` or `compilation_sources` | Blueprint Section 5.3                                 |
+| Task state transitions are ordered                     | Kernel validates transition legality before UPDATE                                    | Blueprint Section 8.1                                 |
+| Promotions are user-initiated only                     | `promoted_by` defaults to 'user'; system-initiated promotion is blocked at the kernel | Blueprint Section 7.1 rule 7                          |
+| Traces are protocol-level append-only                  | Kernel never issues UPDATE or DELETE on traces rows                                   | Blueprint Section 5.1 (L6 protocol-level append-only) |
+| Recall results are protocol-level append-only          | Each quiz attempt creates a new row; results are never modified                       | Blueprint Section 9.3                                 |
+| All timestamps are ISO 8601                            | Kernel formats all dates as `YYYY-MM-DDTHH:mm:ss.sssZ` (UTC)                          | Project convention                                    |
+| All SQL uses prepared statements                       | No string interpolation in queries — parameterized only                               | Security standard (audit H1)                          |
 
 ---
 

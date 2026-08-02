@@ -32,7 +32,7 @@ file. Future versions get `-v3.yaml`, `-v4.yaml`, etc.
 
 Rules:
 
-1. **A bank file is immutable once a run has cited it.** If a typo
+1. **A bank file is write-once by protocol once a run has cited it.** If a typo
    needs fixing in v1 after v1 has been used in a real run, file a
    bead, write `-v2.yaml`, and move forward — do NOT edit v1 in place.
 2. **The `version:` field in the file matches the filename version.**

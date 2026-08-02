@@ -26,6 +26,8 @@
     "arch:graph": "depcruise --config .dependency-cruiser.cjs --output-type dot packages | dot -T svg > .arch/graph.svg",
     "audit:harness": "scripts/audit-harness verify",
     "audit:escape": "scripts/audit-harness escape-scan --staged",
+    "lint:docs-honesty": "bash scripts/lint-forbidden-words.sh",
+    "test:docs-honesty": "bash scripts/test-lint-forbidden-words.sh",
     "cli:smoke": "node packages/cli/dist/index.js --version && node packages/cli/dist/index.js --help > /dev/null"
   },
   "lint-staged": {
