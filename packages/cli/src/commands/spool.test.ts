@@ -189,6 +189,7 @@ describe('runSpoolEmit — tenantId resolution', () => {
     expect(dryRunSpool).toHaveBeenCalledWith(
       tmpWs,
       expect.objectContaining({ tenantId: 'flag-tenant' }),
+      expect.anything(),
     );
   });
 
@@ -205,6 +206,7 @@ describe('runSpoolEmit — tenantId resolution', () => {
     expect(dryRunSpool).toHaveBeenCalledWith(
       tmpWs,
       expect.objectContaining({ tenantId: 'config-tenant' }),
+      expect.anything(),
     );
   });
 
@@ -223,6 +225,7 @@ describe('runSpoolEmit — tenantId resolution', () => {
     expect(dryRunSpool).toHaveBeenCalledWith(
       tmpWs,
       expect.objectContaining({ tenantId: 'flag-tenant' }),
+      expect.anything(),
     );
   });
 
@@ -241,6 +244,7 @@ describe('runSpoolEmit — tenantId resolution', () => {
     expect(dryRunSpool).toHaveBeenCalledWith(
       tmpWs,
       expect.objectContaining({ tenantId: 'config-tenant' }),
+      expect.anything(),
     );
   });
 });
@@ -266,7 +270,11 @@ describe('runSpoolEmit — --scope validation', () => {
       value: makeDryRunSummary(),
     });
     expectExit(0, () => runSpoolEmit({ scope, dryRun: true, tenant: 't' }, fakeCommand()));
-    expect(dryRunSpool).toHaveBeenCalledWith(tmpWs, expect.objectContaining({ scope }));
+    expect(dryRunSpool).toHaveBeenCalledWith(
+      tmpWs,
+      expect.objectContaining({ scope }),
+      expect.anything(),
+    );
   });
 
   it('defaults to wiki when --scope omitted', () => {
@@ -275,7 +283,11 @@ describe('runSpoolEmit — --scope validation', () => {
       value: makeDryRunSummary(),
     });
     expectExit(0, () => runSpoolEmit({ dryRun: true, tenant: 't' }, fakeCommand()));
-    expect(dryRunSpool).toHaveBeenCalledWith(tmpWs, expect.objectContaining({ scope: 'wiki' }));
+    expect(dryRunSpool).toHaveBeenCalledWith(
+      tmpWs,
+      expect.objectContaining({ scope: 'wiki' }),
+      expect.anything(),
+    );
   });
 });
 
@@ -309,6 +321,7 @@ describe('runSpoolEmit — --out path safety', () => {
     expect(dryRunSpool).toHaveBeenCalledWith(
       tmpWs,
       expect.objectContaining({ outDir: join(tmpWs, 'spool/custom') }),
+      expect.anything(),
     );
   });
 
@@ -331,6 +344,7 @@ describe('runSpoolEmit — --out path safety', () => {
       expect(dryRunSpool).toHaveBeenCalledWith(
         tmpWs,
         expect.objectContaining({ outDir: join(fakeBase, 'spool') }),
+        expect.anything(),
       );
     } finally {
       restoreEnv('TEAMKB_BASE_PATH', prevBase);
@@ -361,6 +375,7 @@ describe('runSpoolEmit — ICO→INTKB spool handoff default path', () => {
       expect(dryRunSpool).toHaveBeenCalledWith(
         tmpWs,
         expect.objectContaining({ outDir: join(homedir(), '.teamkb', 'spool') }),
+        expect.anything(),
       );
     } finally {
       restoreEnv('TEAMKB_BASE_PATH', prevBase);
@@ -386,6 +401,7 @@ describe('runSpoolEmit — ICO→INTKB spool handoff default path', () => {
       expect(dryRunSpool).toHaveBeenCalledWith(
         tmpWs,
         expect.objectContaining({ outDir: join(baseDir, 'spool') }),
+        expect.anything(),
       );
     } finally {
       restoreEnv('TEAMKB_BASE_PATH', prevBase);
@@ -412,6 +428,7 @@ describe('runSpoolEmit — ICO→INTKB spool handoff default path', () => {
       expect(dryRunSpool).toHaveBeenCalledWith(
         tmpWs,
         expect.objectContaining({ outDir: join(homeDir, 'spool') }),
+        expect.anything(),
       );
     } finally {
       restoreEnv('TEAMKB_BASE_PATH', prevBase);
@@ -438,6 +455,7 @@ describe('runSpoolEmit — ICO→INTKB spool handoff default path', () => {
       expect(dryRunSpool).toHaveBeenCalledWith(
         tmpWs,
         expect.objectContaining({ outDir: join(baseDir, 'spool') }),
+        expect.anything(),
       );
     } finally {
       restoreEnv('TEAMKB_BASE_PATH', prevBase);
@@ -470,14 +488,14 @@ describe('runSpoolEmit — ICO→INTKB spool handoff default path', () => {
 // ---------------------------------------------------------------------------
 
 describe('runSpoolEmit — dry-run branching', () => {
-  it('dry-run path never touches the database', () => {
+  it('dry-run reads the database watermark but never emits or reconciles', () => {
     vi.mocked(dryRunSpool).mockReturnValue({
       ok: true,
       value: makeDryRunSummary(),
     });
     expectExit(0, () => runSpoolEmit({ scope: 'wiki', dryRun: true, tenant: 't' }, fakeCommand()));
-    expect(initDatabase).not.toHaveBeenCalled();
-    expect(closeDatabase).not.toHaveBeenCalled();
+    expect(initDatabase).toHaveBeenCalledTimes(1);
+    expect(closeDatabase).toHaveBeenCalledTimes(1);
     expect(emitSpool).not.toHaveBeenCalled();
     expect(dryRunSpool).toHaveBeenCalledTimes(1);
   });

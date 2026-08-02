@@ -26,6 +26,7 @@ import type { Command } from 'commander';
 
 import {
   closeDatabase,
+  DEFAULT_SPOOL_EMIT_MAX_CANDIDATES,
   dryRunSpool,
   emitSpool,
   initDatabase,
@@ -48,6 +49,8 @@ interface SpoolEmitOptions {
   tenant?: string;
   workspace?: string;
   bulk?: boolean;
+  full?: boolean;
+  maxCandidates?: number;
   /** Commander maps `--no-reconcile` to `reconcile: false` (default true). */
   reconcile?: boolean;
 }
@@ -268,6 +271,14 @@ function parseScope(raw: string | undefined): SpoolEmitScope | null {
   return VALID_SCOPES.includes(v as SpoolEmitScope) ? (v as SpoolEmitScope) : null;
 }
 
+function parseMaxCandidates(raw: string): number {
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new Error('--max-candidates must be a positive safe integer');
+  }
+  return value;
+}
+
 // ---------------------------------------------------------------------------
 // Command handler
 // ---------------------------------------------------------------------------
@@ -311,13 +322,32 @@ export function runSpoolEmit(options: SpoolEmitOptions, command: Command): void 
   }
   const outDirAbs = pathCheck.resolved;
 
-  // --- Dry-run path: never opens the DB, never writes anything ---
+  // --- Dry-run path: opens the DB read/write handle only to read the
+  // watermark; it never emits files or traces. ---
   if (options.dryRun === true) {
-    const dry = dryRunSpool(workspacePath, {
-      scope,
-      tenantId: tenant.tenantId,
-      outDir: outDirAbs,
-    });
+    const dbResult = initDatabase(ws.value.dbPath);
+    if (!dbResult.ok) {
+      process.stderr.write(formatError(`Database error: ${dbResult.error.message}\n`));
+      process.exit(1);
+    }
+    const db = dbResult.value;
+    let dry: ReturnType<typeof dryRunSpool>;
+    try {
+      dry = dryRunSpool(
+        workspacePath,
+        {
+          scope,
+          tenantId: tenant.tenantId,
+          outDir: outDirAbs,
+          bulkImport: options.bulk ?? false,
+          full: options.full ?? false,
+          ...(options.maxCandidates === undefined ? {} : { maxCandidates: options.maxCandidates }),
+        },
+        db,
+      );
+    } finally {
+      closeDatabase(db);
+    }
     if (!dry.ok) {
       process.stderr.write(formatError(`Dry-run failed: ${dry.error.message}\n`));
       process.exit(1);
@@ -328,6 +358,16 @@ export function runSpoolEmit(options: SpoolEmitOptions, command: Command): void 
     if (options.bulk === true) {
       process.stdout.write(formatInfo(`mode:     bulk (source=bulk_import, trust=untrusted)\n`));
     }
+    if (options.full === true) {
+      process.stdout.write(formatInfo(`watermark: full rebuild (unchanged pages included)\n`));
+    } else {
+      process.stdout.write(formatInfo(`watermark: incremental (default)\n`));
+    }
+    process.stdout.write(
+      formatInfo(
+        `limit:    ${options.maxCandidates ?? DEFAULT_SPOOL_EMIT_MAX_CANDIDATES} candidate(s)\n`,
+      ),
+    );
     process.stdout.write(formatInfo(`tenantId: ${tenant.tenantId}\n`));
     process.stdout.write(formatInfo(`outDir:   ${outDirAbs}\n`));
     process.stdout.write(
@@ -408,12 +448,16 @@ export function runSpoolEmit(options: SpoolEmitOptions, command: Command): void 
       tenantId: tenant.tenantId,
       outDir: outDirAbs,
       bulkImport: options.bulk ?? false,
+      full: options.full ?? false,
+      ...(options.maxCandidates === undefined ? {} : { maxCandidates: options.maxCandidates }),
     });
     if (!result.ok) {
       const errInstance = result.error;
       let exitCode = 1;
       if (errInstance instanceof SpoolError) {
         if (errInstance.code === 'NO_TENANT_ID') exitCode = 2;
+        if (errInstance.code === 'INVALID_MAX_CANDIDATES') exitCode = 2;
+        if (errInstance.code === 'EMIT_LIMIT_EXCEEDED') exitCode = 3;
         if (errInstance.code === 'WRITE_FAILED') exitCode = 4;
         if (errInstance.code === 'TRACE_FAILED') exitCode = 5;
       }
@@ -467,6 +511,16 @@ export function register(program: Command): void {
       'Mark this as a whole-machine / large digestion: every candidate is stamped ' +
         "source 'bulk_import' + trust 'untrusted' so INTKB's policy can gate the flood",
       false,
+    )
+    .option(
+      '--full',
+      'Re-emit unchanged pages too (explicit rebuild; default is incremental)',
+      false,
+    )
+    .option(
+      '--max-candidates <count>',
+      `Per-run candidate ceiling (default: ${DEFAULT_SPOOL_EMIT_MAX_CANDIDATES})`,
+      parseMaxCandidates,
     )
     .option('--dry-run', 'Print what would be emitted, structure only; no writes', false)
     .option(
