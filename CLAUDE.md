@@ -190,6 +190,10 @@ Detailed specs live in `000-docs/` (doc-filing v4 naming):
 - 2-space indentation, LF line endings, UTF-8 (see `.editorconfig`)
 - TypeScript strict mode
 
+### Git hooks and Beads
+
+This repository keeps `core.hooksPath=.husky/_` so Husky's lint-staged and audit gates remain active. The tracked `.husky/*` hooks chain into `.beads/hooks/<hook>` through `.husky/beads-hook`; do not repoint `core.hooksPath` to `.beads/hooks` or bypass the Husky gates. The beads chain is deliberately fail-open, while the repository's lint, escape-scan, and pre-push verification gates remain fail-closed.
+
 ## Non-Negotiable Principles
 
 1. **Compilation, not indexing** — Derive summaries, concepts, backlinks, contradictions from sources

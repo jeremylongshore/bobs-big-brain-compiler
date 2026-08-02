@@ -8,3 +8,4 @@ set -e
 
 pnpm exec lint-staged
 scripts/audit-harness escape-scan --staged
+.husky/beads-hook pre-commit "$@"
