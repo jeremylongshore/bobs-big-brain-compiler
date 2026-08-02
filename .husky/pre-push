@@ -7,3 +7,4 @@
 set -e
 
 scripts/audit-harness verify
+.husky/beads-hook pre-push "$@"
