@@ -23,6 +23,9 @@ kernel lock on the same path_ — that identity is the whole mechanism:
 | Plugin `brain_govern` (`bobs-big-brain-plugin/src/govern.ts` → `runGovernLocked`)    | `fs-ext` native `flock(fd, 'exnb')` poll loop in `src/write-lock.ts`                                                                 | 8 s bounded wait (100 ms poll), then `WriteLockBusyError` → clean "brain busy, retry" MCP result |
 | Plugin `brain_transition` (`src/local-server.ts`)                                    | Same `acquireWriteLock`                                                                                                              | Same 8 s bounded wait → busy result                                                              |
 | Compiler incremental compile (`ico compile`, `packages/cli/src/commands/compile.ts`) | Kernel `withWriteLock` (`packages/kernel/src/write-lock.ts`) — spawns `flock -w 10 -x <lock> cat`, releases by closing `cat`'s stdin | 10 s wait, then skip-graceful `ok({ ran: false })` → exit 4, retry next trigger                  |
+| CLI ingest (`ico ingest`, single file or batch)                                      | CLI `withBrainWriteLock` → kernel `withWriteLock` around DB/raw/trace/audit mutation                                                 | 10 s wait, then retryable busy result (exit 4 for command mode)                                  |
+| CLI promotion (`ico promote --yes`)                                                  | CLI `withBrainWriteLock` → kernel `withWriteLock` around DB/file/audit mutation                                                      | 10 s wait, then retryable busy result (exit 4)                                                   |
+| CLI unpromotion (`ico unpromote --yes`)                                              | CLI `withBrainWriteLock` → kernel `withWriteLock` around DB/file/audit/index mutation                                                | 10 s wait, then retryable busy result (exit 4)                                                   |
 
 Why three implementations of one lock: `/usr/bin/flock`, `fs-ext`'s native binding, and the
 kernel's `flock … cat` subprocess all issue the identical `flock(2)` syscall on the identical
@@ -51,6 +54,8 @@ across artifacts (risk `010-AT-RISK` R13 in the umbrella) or fork the anchor log
 lock:
 
 - spool ingest → dedupe → policy → **promotion** (the govern pass body),
+- CLI source ingest (raw copy + source registration + trace/audit receipt),
+- explicit CLI promotion and unpromotion (DB record + wiki file + receipt/index work),
 - **receipt writes** (audit JSONL append, trace append, anchor commit),
 - the **qmd search-index** refresh and file export,
 - lifecycle transitions (`brain_transition`: DB update + audit insert + anchor append),
@@ -61,6 +66,9 @@ lock:
 
 - **Reads** — `brain_search`, `brain_status`, `brain_audit_verify`, `qmd search`, exports read
   from a consistent WAL snapshot; they never take the lock.
+- **Previews and refusal gates** — `ico promote --dry-run`, `ico unpromote --dry-run`, missing
+  `--yes` confirmation, and ingest metadata previews do not acquire the writer lock because
+  they perform no durable mutation.
 - **`brain_capture`** — an append to the pre-admission spool only. Nothing durable is promoted
   until govern runs, so a capture racing a govern is harmless.
 - **Narrow single-DB writes on the registrar side** (API, curator, mcp-server) — these rely on
@@ -130,7 +138,8 @@ impossible" — "an out-of-band write cannot silently stay in the governed corpu
 ## 6. References
 
 - Kernel lock: `packages/kernel/src/write-lock.ts` (contract comment mirrors the shell
-  wrappers); CLI usage in `packages/cli/src/commands/compile.ts`.
+  wrappers); CLI usage in `packages/cli/src/lib/write-lock.ts` and the ingest/promote/unpromote
+  commands, plus `packages/cli/src/commands/compile.ts`.
 - Plugin lock: `bobs-big-brain-plugin/src/write-lock.ts`, `src/govern.ts` (`runGovernLocked`),
   `src/local-server.ts` (`brain_transition`).
 - Crons: `~/bin/teamkb-backup.sh` (holds `.write.lock`), `~/bin/teamkb-compile-daily.sh`

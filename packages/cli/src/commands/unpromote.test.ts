@@ -116,12 +116,12 @@ function commandOpts(overrides: Partial<UnpromoteCommandOptions> = {}): Unpromot
 // ---------------------------------------------------------------------------
 
 describe('runUnpromote — dry run', () => {
-  it('returns ok with dryRun: true and shows preview output', () => {
+  it('returns ok with dryRun: true and shows preview output', async () => {
     const { targetPath } = createPromotion();
 
     const stdoutMock = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
 
-    const result = runUnpromote(targetPath, commandOpts({ dryRun: true }), globalOpts());
+    const result = await runUnpromote(targetPath, commandOpts({ dryRun: true }), globalOpts());
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -133,12 +133,12 @@ describe('runUnpromote — dry run', () => {
     expect(written).toContain('Dry run');
   });
 
-  it('dry run shows the target and source paths', () => {
+  it('dry run shows the target and source paths', async () => {
     const { targetPath, sourcePath } = createPromotion();
 
     const stdoutMock = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
 
-    runUnpromote(targetPath, commandOpts({ dryRun: true }), globalOpts());
+    await runUnpromote(targetPath, commandOpts({ dryRun: true }), globalOpts());
 
     const written = stdoutMock.mock.calls.map((c) => c[0]).join('');
     expect(written).toContain(targetPath);
@@ -151,10 +151,10 @@ describe('runUnpromote — dry run', () => {
 // ---------------------------------------------------------------------------
 
 describe('runUnpromote — confirmation required', () => {
-  it('returns err when --yes is not provided', () => {
+  it('returns err when --yes is not provided', async () => {
     const { targetPath } = createPromotion();
 
-    const result = runUnpromote(targetPath, commandOpts(), globalOpts());
+    const result = await runUnpromote(targetPath, commandOpts(), globalOpts());
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -162,12 +162,12 @@ describe('runUnpromote — confirmation required', () => {
     expect(result.error.message).toContain('Confirmation required');
   });
 
-  it('outputs a warning when --yes is missing', () => {
+  it('outputs a warning when --yes is missing', async () => {
     const { targetPath } = createPromotion();
 
     const stdoutMock = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
 
-    runUnpromote(targetPath, commandOpts(), globalOpts());
+    await runUnpromote(targetPath, commandOpts(), globalOpts());
 
     const written = stdoutMock.mock.calls.map((c) => c[0]).join('');
     expect(written).toContain('--yes');
@@ -179,12 +179,12 @@ describe('runUnpromote — confirmation required', () => {
 // ---------------------------------------------------------------------------
 
 describe('runUnpromote — success with --yes', () => {
-  it('returns ok and shows removal message', () => {
+  it('returns ok and shows removal message', async () => {
     const { targetPath } = createPromotion();
 
     const stdoutMock = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
 
-    const result = runUnpromote(targetPath, commandOpts({ yes: true }), globalOpts());
+    const result = await runUnpromote(targetPath, commandOpts({ yes: true }), globalOpts());
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -196,8 +196,8 @@ describe('runUnpromote — success with --yes', () => {
     expect(written).toContain(targetPath);
   });
 
-  it('returns err when target path is not in promotions table', () => {
-    const result = runUnpromote(
+  it('returns err when target path is not in promotions table', async () => {
+    const result = await runUnpromote(
       'wiki/topics/nonexistent.md',
       commandOpts({ yes: true }),
       globalOpts(),
@@ -216,12 +216,12 @@ describe('runUnpromote — success with --yes', () => {
 // ---------------------------------------------------------------------------
 
 describe('runUnpromote — JSON output', () => {
-  it('writes JSON to stdout in dry run mode when --json is set', () => {
+  it('writes JSON to stdout in dry run mode when --json is set', async () => {
     const { targetPath } = createPromotion();
 
     const stdoutMock = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
 
-    runUnpromote(targetPath, commandOpts({ dryRun: true }), { ...globalOpts(), json: true });
+    await runUnpromote(targetPath, commandOpts({ dryRun: true }), { ...globalOpts(), json: true });
 
     const written = stdoutMock.mock.calls.map((c) => c[0]).join('');
     const parsed = JSON.parse(written) as Record<string, unknown>;

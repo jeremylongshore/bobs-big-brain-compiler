@@ -79,11 +79,11 @@ describe('runIngest', () => {
   // Happy path — text file
   // -------------------------------------------------------------------------
 
-  it('ingests a text file and copies it to raw/notes/', () => {
+  it('ingests a text file and copies it to raw/notes/', async () => {
     const srcFile = join(tempBase, 'notes.txt');
     writeFile(srcFile);
 
-    const result = runIngest(srcFile, ingestOpts(), globalOpts());
+    const result = await runIngest(srcFile, ingestOpts(), globalOpts());
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -93,11 +93,11 @@ describe('runIngest', () => {
     expect(existsSync(join(workspaceRoot, 'raw', 'notes', 'notes.txt'))).toBe(true);
   });
 
-  it('registers the text file in the database', () => {
+  it('registers the text file in the database', async () => {
     const srcFile = join(tempBase, 'notes.txt');
     writeFile(srcFile);
 
-    const result = runIngest(srcFile, ingestOpts(), globalOpts());
+    const result = await runIngest(srcFile, ingestOpts(), globalOpts());
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -112,11 +112,11 @@ describe('runIngest', () => {
   // Happy path — markdown file
   // -------------------------------------------------------------------------
 
-  it('ingests a markdown file and copies it to raw/notes/', () => {
+  it('ingests a markdown file and copies it to raw/notes/', async () => {
     const srcFile = join(tempBase, 'my-note.md');
     writeFile(srcFile, '# Hello\n\nSome content.');
 
-    const result = runIngest(srcFile, ingestOpts(), globalOpts());
+    const result = await runIngest(srcFile, ingestOpts(), globalOpts());
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -130,17 +130,17 @@ describe('runIngest', () => {
   // No-op re-ingest (same hash)
   // -------------------------------------------------------------------------
 
-  it('returns alreadyIngested=true and no duplicate when re-ingesting the same file', () => {
+  it('returns alreadyIngested=true and no duplicate when re-ingesting the same file', async () => {
     const srcFile = join(tempBase, 'doc.txt');
     writeFile(srcFile, 'stable content');
 
     // First ingest
-    const first = runIngest(srcFile, ingestOpts(), globalOpts());
+    const first = await runIngest(srcFile, ingestOpts(), globalOpts());
     expect(first.ok).toBe(true);
     if (!first.ok) return;
 
     // Second ingest — same file, same content
-    const second = runIngest(srcFile, ingestOpts(), globalOpts());
+    const second = await runIngest(srcFile, ingestOpts(), globalOpts());
     expect(second.ok).toBe(true);
     if (!second.ok) return;
 
@@ -148,12 +148,12 @@ describe('runIngest', () => {
     expect(second.value.id).toBe(first.value.id);
   });
 
-  it('does not create a second database record on re-ingest', () => {
+  it('does not create a second database record on re-ingest', async () => {
     const srcFile = join(tempBase, 'doc.txt');
     writeFile(srcFile, 'stable content');
 
-    runIngest(srcFile, ingestOpts(), globalOpts());
-    runIngest(srcFile, ingestOpts(), globalOpts());
+    await runIngest(srcFile, ingestOpts(), globalOpts());
+    await runIngest(srcFile, ingestOpts(), globalOpts());
 
     // Open DB and count sources at the same relative path.
     const wsResult = initWorkspace('ws', tempBase);
@@ -180,11 +180,11 @@ describe('runIngest', () => {
   // --title option
   // -------------------------------------------------------------------------
 
-  it('sets title in the source record when --title is provided', () => {
+  it('sets title in the source record when --title is provided', async () => {
     const srcFile = join(tempBase, 'paper.txt');
     writeFile(srcFile, 'research content');
 
-    const result = runIngest(srcFile, { title: 'My Paper Title' }, globalOpts());
+    const result = await runIngest(srcFile, { title: 'My Paper Title' }, globalOpts());
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -208,10 +208,10 @@ describe('runIngest', () => {
   // File not found
   // -------------------------------------------------------------------------
 
-  it('returns an error when the file does not exist', () => {
+  it('returns an error when the file does not exist', async () => {
     const missingFile = join(tempBase, 'ghost.txt');
 
-    const result = runIngest(missingFile, ingestOpts(), globalOpts());
+    const result = await runIngest(missingFile, ingestOpts(), globalOpts());
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -224,11 +224,11 @@ describe('runIngest', () => {
   // Disclosure guard — reject comp/PII at the source, before any write
   // -------------------------------------------------------------------------
 
-  it('rejects a source containing compensation content and writes nothing', () => {
+  it('rejects a source containing compensation content and writes nothing', async () => {
     const srcFile = join(tempBase, 'offer.md');
     writeFile(srcFile, 'The package includes a 4-year vesting schedule and stock options.');
 
-    const result = runIngest(srcFile, ingestOpts(), globalOpts());
+    const result = await runIngest(srcFile, ingestOpts(), globalOpts());
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -248,11 +248,11 @@ describe('runIngest', () => {
     }
   });
 
-  it('rejects a source containing PII (SSN) at the source', () => {
+  it('rejects a source containing PII (SSN) at the source', async () => {
     const srcFile = join(tempBase, 'contractor.txt');
     writeFile(srcFile, 'Contractor SSN 123-45-6789 on file for the engagement.');
 
-    const result = runIngest(srcFile, ingestOpts(), globalOpts());
+    const result = await runIngest(srcFile, ingestOpts(), globalOpts());
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -261,7 +261,7 @@ describe('runIngest', () => {
     expect(existsSync(join(workspaceRoot, 'raw', 'notes', 'contractor.txt'))).toBe(false);
   });
 
-  it('ingests a governance doc that merely names "compensation" in policy text', () => {
+  it('ingests a governance doc that merely names "compensation" in policy text', async () => {
     // The disclosure-tier rule NAMES the forbidden category to forbid it — that bare
     // word must not be rejected, or the brain could never ingest its own doctrine.
     const srcFile = join(tempBase, 'doctrine.md');
@@ -270,7 +270,7 @@ describe('runIngest', () => {
       'Disclosure tiers: never write compensation or anyone’s pay into this repo.',
     );
 
-    const result = runIngest(srcFile, ingestOpts(), globalOpts());
+    const result = await runIngest(srcFile, ingestOpts(), globalOpts());
 
     expect(result.ok).toBe(true);
     expect(existsSync(join(workspaceRoot, 'raw', 'notes', 'doctrine.md'))).toBe(true);
@@ -280,11 +280,11 @@ describe('runIngest', () => {
   // Trace event written
   // -------------------------------------------------------------------------
 
-  it('writes a trace event after successful ingest', () => {
+  it('writes a trace event after successful ingest', async () => {
     const srcFile = join(tempBase, 'traced.txt');
     writeFile(srcFile, 'traceable content');
 
-    const ingestResult = runIngest(srcFile, ingestOpts(), globalOpts());
+    const ingestResult = await runIngest(srcFile, ingestOpts(), globalOpts());
     expect(ingestResult.ok).toBe(true);
     if (!ingestResult.ok) return;
 
@@ -310,11 +310,11 @@ describe('runIngest', () => {
   // Audit log entry
   // -------------------------------------------------------------------------
 
-  it('appends an entry to audit/log.md after ingest', () => {
+  it('appends an entry to audit/log.md after ingest', async () => {
     const srcFile = join(tempBase, 'audited.txt');
     writeFile(srcFile, 'auditable content');
 
-    const result = runIngest(srcFile, ingestOpts(), globalOpts());
+    const result = await runIngest(srcFile, ingestOpts(), globalOpts());
     expect(result.ok).toBe(true);
 
     const logPath = join(workspaceRoot, 'audit', 'log.md');
@@ -329,12 +329,12 @@ describe('runIngest', () => {
   // JSON output mode
   // -------------------------------------------------------------------------
 
-  it('writes JSON to stdout when globalOpts.json is true', () => {
+  it('writes JSON to stdout when globalOpts.json is true', async () => {
     const stdoutMock = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const srcFile = join(tempBase, 'jsonout.txt');
     writeFile(srcFile, 'json output test');
 
-    const result = runIngest(srcFile, ingestOpts(), { ...globalOpts(), json: true });
+    const result = await runIngest(srcFile, ingestOpts(), { ...globalOpts(), json: true });
 
     expect(result.ok).toBe(true);
 
@@ -352,11 +352,11 @@ describe('runIngest', () => {
   // Hash is recorded
   // -------------------------------------------------------------------------
 
-  it('records the SHA-256 hash in the result', () => {
+  it('records the SHA-256 hash in the result', async () => {
     const srcFile = join(tempBase, 'hashed.txt');
     writeFile(srcFile, 'hashed content');
 
-    const result = runIngest(srcFile, ingestOpts(), globalOpts());
+    const result = await runIngest(srcFile, ingestOpts(), globalOpts());
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -543,12 +543,12 @@ describe('runBatchIngest', () => {
     rmSync(tempBase, { recursive: true, force: true });
   });
 
-  it('ingests all supported files in a directory', () => {
+  it('ingests all supported files in a directory', async () => {
     writeFileSync(join(sourceDir, 'alpha.md'), '# Alpha');
     writeFileSync(join(sourceDir, 'beta.txt'), 'beta');
     writeFileSync(join(sourceDir, 'gamma.html'), '<p>gamma</p>');
 
-    const summary = runBatchIngest(sourceDir, ingestOpts(), globalOpts());
+    const summary = await runBatchIngest(sourceDir, ingestOpts(), globalOpts());
 
     expect(summary.total).toBe(3);
     expect(summary.ingested).toBe(3);
@@ -557,13 +557,13 @@ describe('runBatchIngest', () => {
     expect(summary.errors).toHaveLength(0);
   });
 
-  it('skips unsupported file types and only ingests supported ones', () => {
+  it('skips unsupported file types and only ingests supported ones', async () => {
     writeFileSync(join(sourceDir, 'note.md'), '# note');
     writeFileSync(join(sourceDir, 'data.csv'), 'a,b,c'); // unsupported — not returned by scan
     writeFileSync(join(sourceDir, 'code.rs'), 'fn main()'); // unsupported — not returned by scan
     writeFileSync(join(sourceDir, 'page.html'), '<p>hi</p>');
 
-    const summary = runBatchIngest(sourceDir, ingestOpts(), globalOpts());
+    const summary = await runBatchIngest(sourceDir, ingestOpts(), globalOpts());
 
     // scanDirectory only returns .md and .html here — csv/rs are not included
     expect(summary.total).toBe(2);
@@ -571,35 +571,35 @@ describe('runBatchIngest', () => {
     expect(summary.errors).toHaveLength(0);
   });
 
-  it('returns total=0 for an empty directory', () => {
-    const summary = runBatchIngest(sourceDir, ingestOpts(), globalOpts());
+  it('returns total=0 for an empty directory', async () => {
+    const summary = await runBatchIngest(sourceDir, ingestOpts(), globalOpts());
 
     expect(summary.total).toBe(0);
     expect(summary.ingested).toBe(0);
     expect(summary.skipped).toBe(0);
   });
 
-  it('skips hidden files and node_modules', () => {
+  it('skips hidden files and node_modules', async () => {
     writeFileSync(join(sourceDir, '.hidden.md'), '# hidden');
     const nm = join(sourceDir, 'node_modules');
     mkdirSync(nm);
     writeFileSync(join(nm, 'readme.md'), '# pkg readme');
     writeFileSync(join(sourceDir, 'visible.txt'), 'visible');
 
-    const summary = runBatchIngest(sourceDir, ingestOpts(), globalOpts());
+    const summary = await runBatchIngest(sourceDir, ingestOpts(), globalOpts());
 
     expect(summary.total).toBe(1);
     expect(summary.ingested).toBe(1);
   });
 
-  it('reports alreadyIngested count when re-running on the same directory', () => {
+  it('reports alreadyIngested count when re-running on the same directory', async () => {
     writeFileSync(join(sourceDir, 'doc.txt'), 'same content');
 
     // First batch
-    runBatchIngest(sourceDir, ingestOpts(), globalOpts());
+    await runBatchIngest(sourceDir, ingestOpts(), globalOpts());
 
     // Second batch — same file, same content
-    const summary = runBatchIngest(sourceDir, ingestOpts(), globalOpts());
+    const summary = await runBatchIngest(sourceDir, ingestOpts(), globalOpts());
 
     expect(summary.total).toBe(1);
     expect(summary.ingested).toBe(0);
@@ -607,7 +607,7 @@ describe('runBatchIngest', () => {
     expect(summary.skipped).toBe(0);
   });
 
-  it('collects errors without aborting the whole batch', () => {
+  it('collects errors without aborting the whole batch', async () => {
     // One valid file, one that will fail because it references a non-existent path
     // We can simulate a failure by removing a file mid-scan by writing an oversized file
     // when force is not set. Use a separate file that exceeds the markdown limit.
@@ -615,7 +615,7 @@ describe('runBatchIngest', () => {
     writeFileSync(join(sourceDir, 'toobig.md'), bigContent);
     writeFileSync(join(sourceDir, 'small.txt'), 'small content');
 
-    const summary = runBatchIngest(sourceDir, ingestOpts(), globalOpts());
+    const summary = await runBatchIngest(sourceDir, ingestOpts(), globalOpts());
 
     // toobig.md fails size check; small.txt succeeds
     expect(summary.total).toBe(2);

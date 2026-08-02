@@ -35,6 +35,11 @@ import {
   formatWarning,
 } from '../lib/output.js';
 import { resolveWorkspace } from '../lib/workspace-resolver.js';
+import {
+  isBrainWriteLockBusyError,
+  warnIfWriteLockDegraded,
+  withBrainWriteLock,
+} from '../lib/write-lock.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -144,11 +149,11 @@ export function scanDirectory(dirPath: string): string[] {
  * @param globalOpts - Global CLI options forwarded to each `runIngest` call.
  * @returns A summary object with counts of ingested, skipped, and errored files.
  */
-export function runBatchIngest(
+export async function runBatchIngest(
   dirPath: string,
   ingestOpts: IngestOptions,
   globalOpts: GlobalOptions,
-): BatchIngestSummary {
+): Promise<BatchIngestSummary> {
   const files = scanDirectory(dirPath);
   const summary: BatchIngestSummary = {
     total: files.length,
@@ -163,7 +168,7 @@ export function runBatchIngest(
   }
 
   for (const file of files) {
-    const result = runIngest(file, ingestOpts, globalOpts);
+    const result = await runIngest(file, ingestOpts, globalOpts);
     if (!result.ok) {
       summary.errors.push({ file, message: result.error.message });
       summary.skipped++;
@@ -237,11 +242,11 @@ export function slugify(filename: string): string {
  * @returns `{ ok: true, value: IngestResult }` on success (including no-ops),
  *          or `{ ok: false, error: Error }` on failure.
  */
-export function runIngest(
+export async function runIngest(
   filePath: string,
   ingestOpts: IngestOptions,
   globalOpts: GlobalOptions,
-): { ok: true; value: IngestResult } | { ok: false; error: Error } {
+): Promise<{ ok: true; value: IngestResult } | { ok: false; error: Error }> {
   // 1. Resolve workspace
   const wsResolveOpts =
     globalOpts.workspace !== undefined ? { workspace: globalOpts.workspace } : {};
@@ -310,6 +315,41 @@ export function runIngest(
       ),
     };
   }
+
+  // The expensive read/disclosure work above is intentionally outside the
+  // critical section. Only the DB + raw/ + trace/audit mutation phase takes
+  // the shared writer lock.
+  const lockResult = await withBrainWriteLock(() =>
+    runIngestMutation({
+      filePath,
+      ingestOpts,
+      globalOpts,
+      wsRoot,
+      dbPath,
+      sourceType,
+      hash,
+    }),
+  );
+  if (!lockResult.ok) return lockResult;
+  if (!lockResult.value.locked) warnIfWriteLockDegraded(globalOpts.json === true);
+  return lockResult.value.value;
+}
+
+interface IngestMutationInput {
+  filePath: string;
+  ingestOpts: IngestOptions;
+  globalOpts: GlobalOptions;
+  wsRoot: string;
+  dbPath: string;
+  sourceType: SourceType;
+  hash: string;
+}
+
+/** Execute the state/filesystem mutation portion of ingest under the writer lock. */
+function runIngestMutation(
+  input: IngestMutationInput,
+): { ok: true; value: IngestResult } | { ok: false; error: Error } {
+  const { filePath, ingestOpts, globalOpts, wsRoot, dbPath, sourceType, hash } = input;
 
   // 6. Build destination path: workspace/raw/<subdir>/<slug>
   const subdir = TYPE_TO_SUBDIR[sourceType];
@@ -551,6 +591,7 @@ export function register(program: Command): void {
         let batchIngested = 0;
         let batchAlreadyIngested = 0;
         let batchSkipped = 0;
+        let batchLockBusy = false;
         const batchErrors: Array<{ file: string; message: string }> = [];
 
         for (const file of files) {
@@ -576,10 +617,11 @@ export function register(program: Command): void {
             process.exit(1);
           }
 
-          const result = runIngest(file, ingestOpts, global);
+          const result = await runIngest(file, ingestOpts, global);
           if (!result.ok) {
             process.stderr.write(formatError(`${basename(file)}: ${result.error.message}`) + '\n');
             batchErrors.push({ file, message: result.error.message });
+            batchLockBusy ||= isBrainWriteLockBusyError(result.error);
             batchSkipped++;
           } else if (result.value.alreadyIngested === true) {
             batchAlreadyIngested++;
@@ -598,7 +640,7 @@ export function register(program: Command): void {
         );
 
         if (batchErrors.length > 0) {
-          process.exit(1);
+          process.exit(batchLockBusy ? 4 : 1);
         }
         return;
       }
@@ -637,10 +679,10 @@ export function register(program: Command): void {
         }
       }
 
-      const result = runIngest(filePath, ingestOpts, global);
+      const result = await runIngest(filePath, ingestOpts, global);
       if (!result.ok) {
         process.stderr.write(formatError(result.error.message) + '\n');
-        process.exit(1);
+        process.exit(isBrainWriteLockBusyError(result.error) ? 4 : 1);
       }
     });
 }

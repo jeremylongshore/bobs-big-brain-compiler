@@ -6,6 +6,10 @@
 
 - The GitHub repository was renamed from `intentional-cognition-os` to `bobs-big-brain-compiler` on 2026-07-19 (public product name: **Bob's Big Brain Compiler**). GitHub 301-redirects the old URLs. The npm package name `intentional-cognition-os`, the `@ico/*` scope, and the bead prefixes are unchanged.
 
+### Fixed
+
+- `ico ingest`, `ico promote --yes`, and `ico unpromote --yes` now serialize their durable database/filesystem mutations with the canonical brain writer lock, report contention as retryable, and surface degraded mode when `flock` is unavailable. Dry-run and confirmation-refusal paths remain non-mutating and lock-free. (#202)
+
 ## [v1.22.0] - 2026-07-18
 
 ### Changed
