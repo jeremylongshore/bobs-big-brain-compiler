@@ -468,6 +468,33 @@ else
   else STATUS="FAILED (exit ${EXIT:-1})"; log "${AGENT_NAME} -p exited non-zero (${EXIT:-1}) after ${WALL}s"; fi
 fi
 
+# ── Post-compile retrieval outcome gate (gybo.2 / Track A) ──────────────────
+# Govern may report success while its derived qmd update was skipped or
+# misrouted. The separate Registrar wrapper probes both live tenants and
+# self-heals once; only its final known-positive canary result counts here.
+run_reindex_heal() {
+  local heal_bin="${BBB_REINDEX_HEAL_BIN:-$HOME/bin/bbb-reindex-heal.sh}"
+  if [ ! -x "$heal_bin" ]; then
+    log "FATAL: post-compile reindex gate missing or not executable: $heal_bin"
+    log "Install Registrar bin/bbb-reindex-heal.sh to ~/bin before enabling this compile path"
+    return 1
+  fi
+  log "Running post-compile retrieval outcome gate: $heal_bin"
+  if "$heal_bin" >> "$LOG" 2>&1; then
+    log "post-compile retrieval outcome gate PASSED"
+    return 0
+  fi
+  local heal_rc=$?
+  log "FATAL: post-compile retrieval outcome gate FAILED (rc=$heal_rc) — promoted memories may be unsearchable"
+  return "$heal_rc"
+}
+
+if [ "$STATUS" = "OK" ]; then
+  if ! run_reindex_heal; then
+    STATUS="FAILED (post-compile reindex/self-heal gate)"
+  fi
+fi
+
 # ── Classify result ──────────────────────────────────────────────────────────
 HAS_RECORD=0
 grep -qE "\"date\"[[:space:]]*:[[:space:]]*\"${TARGET}\"" "$DECISIONS" 2>/dev/null && HAS_RECORD=1
