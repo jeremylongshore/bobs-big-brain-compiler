@@ -37,7 +37,8 @@ Prompt dict shape (single source of truth for downstream consumers):
 from __future__ import annotations
 
 import pathlib
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 import yaml
 

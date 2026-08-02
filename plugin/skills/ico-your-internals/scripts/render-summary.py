@@ -27,7 +27,6 @@ import pathlib
 import sys
 from typing import Any
 
-
 PROGRESS_HEADER_PATTERN = "| run_id "
 
 
@@ -187,13 +186,17 @@ def main() -> int:
         f"- Total citations: **{total_citations}**",
         f"- Verified: **{verified}**, Challenged: **{challenged}**, Unverified: **{unverified}**",
         f"- **Verify-rate: {verify_rate * 100:.1f}%**",
-        f"- **Paraphrase robustness: {paraphrase_robustness * 100:.1f}%** "
-        f"({paraphrases_robust}/{paraphrases_run} paraphrases surfaced ≥1 verified citation)",
+        (
+            f"- **Paraphrase robustness: {paraphrase_robustness * 100:.1f}%** "
+            f"({paraphrases_robust}/{paraphrases_run} paraphrases surfaced ≥1 verified citation)"
+        ),
         f"- Tokens: {tokens_in} in / {tokens_out} out",
         f"- Friction entries: {len(merged_friction)}",
         "",
-        "_The two headline metrics answer different questions and are "
-        "reported side-by-side per ADR-030 — never composited._",
+        (
+            "_The two headline metrics answer different questions and are "
+            "reported side-by-side per ADR-030 — never composited._"
+        ),
         "",
         "## Per-paraphrase signal",
         "",
