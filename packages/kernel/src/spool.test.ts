@@ -40,6 +40,7 @@ function seedWikiPage(
   filename: string,
   title: string,
   body: string,
+  extraFrontmatter: readonly string[] = [],
 ): void {
   const fm = [
     '---',
@@ -48,6 +49,7 @@ function seedWikiPage(
     'id: 00000000-0000-4000-8000-000000000000',
     'compiled_at: 2026-05-23T00:00:00.000Z',
     'model: claude-sonnet-4-6',
+    ...extraFrontmatter,
     '---',
   ].join('\n');
   writeFile(join(workspacePath, 'wiki', subdir, filename), `${fm}\n\n${body}\n`);
@@ -141,6 +143,123 @@ describe('emitSpool', () => {
     });
     expect(bulkManifest.batchReceipt['batchId']).toEqual(expect.any(String));
     expect(bulkManifest.batchReceipt['candidateCount']).toBe(bulkManifest.candidateIds.length);
+  });
+
+  it('derives a conservative trust floor and flags deterministic quality risks', () => {
+    const adequateBody =
+      'This compiled page contains enough grounded words to avoid the thin-content quality signal.';
+    seedWikiPage('concept', 'concepts', 'truncated.md', 'Truncated page', adequateBody, [
+      'truncated: true',
+    ]);
+    seedWikiPage('concept', 'concepts', 'repaired.md', 'Repaired page', adequateBody, [
+      'fence_repaired: true',
+    ]);
+    seedWikiPage('concept', 'concepts', 'thin.md', 'Thin page', 'brief');
+    writeFile(
+      join(workspacePath, 'wiki', 'concepts', 'missing-provenance.md'),
+      ['---', 'type: concept', 'title: Missing provenance', '---', '', adequateBody].join('\n'),
+    );
+
+    const r = emitSpool(db, workspacePath, { scope: 'wiki', tenantId: 'ico-test' });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.emittedCount).toBe(4);
+
+    const candidates = readFileSync(r.value.spoolFile, 'utf-8')
+      .trim()
+      .split('\n')
+      .map((line) => SpoolMemoryCandidateSchema.parse(JSON.parse(line)));
+    const byPath = new Map(
+      candidates.map((candidate) => [candidate.metadata.filePaths[0], candidate]),
+    );
+    expect(byPath.get('wiki/concepts/truncated.md')?.prePolicyFlags.lowConfidence).toBe(true);
+    expect(byPath.get('wiki/concepts/repaired.md')?.prePolicyFlags.lowConfidence).toBe(true);
+    expect(byPath.get('wiki/concepts/thin.md')?.prePolicyFlags.lowConfidence).toBe(true);
+    expect(byPath.get('wiki/concepts/missing-provenance.md')?.trustLevel).toBe('low');
+
+    const manifest = JSON.parse(readFileSync(r.value.manifestFile, 'utf-8')) as {
+      batchReceipt: { trustLevel: string };
+    };
+    expect(manifest.batchReceipt.trustLevel).toBe('low');
+  });
+
+  it('marks all candidates sharing a normalized title as duplicate suspects', () => {
+    const body =
+      'This page contains enough grounded words to remain above the thin-content threshold.';
+    seedWikiPage('concept', 'concepts', 'a.md', 'Queue Backpressure', body);
+    seedWikiPage('topic', 'topics', 'b.md', 'queue-backpressure', body);
+
+    const r = emitSpool(db, workspacePath, { scope: 'wiki', tenantId: 'ico-test' });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const candidates = readFileSync(r.value.spoolFile, 'utf-8')
+      .trim()
+      .split('\n')
+      .map((line) => SpoolMemoryCandidateSchema.parse(JSON.parse(line)));
+    expect(candidates).toHaveLength(2);
+    expect(candidates.every((candidate) => candidate.prePolicyFlags.duplicateSuspect)).toBe(true);
+  });
+
+  it('skips strongly identified license, contributing, and conduct boilerplate', () => {
+    writeFile(
+      join(workspacePath, 'wiki', 'sources', 'LICENSE.md'),
+      [
+        '---',
+        'type: source-summary',
+        'title: LICENSE',
+        'compiled_at: 2026-05-23T00:00:00.000Z',
+        'model: claude-sonnet-4-6',
+        '---',
+        '',
+        'MIT License. Permission is hereby granted to use, copy, modify, and distribute this work.',
+      ].join('\n'),
+    );
+    writeFile(
+      join(workspacePath, 'wiki', 'sources', 'CONTRIBUTING.md'),
+      [
+        '---',
+        'type: source-summary',
+        'title: Contributing',
+        'compiled_at: 2026-05-23T00:00:00.000Z',
+        'model: claude-sonnet-4-6',
+        '---',
+        '',
+        'How to contribute: use the development setup, file a bug report, and open a pull request.',
+      ].join('\n'),
+    );
+    writeFile(
+      join(workspacePath, 'wiki', 'sources', 'CODE_OF_CONDUCT.md'),
+      [
+        '---',
+        'type: source-summary',
+        'title: Code of Conduct',
+        'compiled_at: 2026-05-23T00:00:00.000Z',
+        'model: claude-sonnet-4-6',
+        '---',
+        '',
+        'Expected behavior is to be respectful; unacceptable behavior is handled through enforcement.',
+      ].join('\n'),
+    );
+
+    const r = emitSpool(db, workspacePath, { scope: 'wiki', tenantId: 'ico-test' });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.emittedCount).toBe(0);
+    expect(r.value.skipped.map((skip) => skip.code).sort()).toEqual([
+      'BOILERPLATE_SKIPPED',
+      'BOILERPLATE_SKIPPED',
+      'BOILERPLATE_SKIPPED',
+    ]);
+
+    const preview = dryRunSpool(workspacePath, { scope: 'wiki', tenantId: 'ico-test' }, db);
+    expect(preview.ok).toBe(true);
+    if (!preview.ok) return;
+    expect(preview.value.wouldEmit).toHaveLength(0);
+    expect(preview.value.skipped.map((skip) => skip.code).sort()).toEqual([
+      'BOILERPLATE_SKIPPED',
+      'BOILERPLATE_SKIPPED',
+      'BOILERPLATE_SKIPPED',
+    ]);
   });
 
   it('emits one candidate per compiled wiki page and writes manifest sidecar', () => {
