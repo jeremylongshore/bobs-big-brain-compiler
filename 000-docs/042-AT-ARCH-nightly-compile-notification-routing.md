@@ -10,12 +10,12 @@ The public repository name is `bobs-big-brain-compiler`, while the npm package a
 bead prefix retain the historical `intentional-cognition-os` identity. That historical
 prefix does not make the compiler the owner of estate-wide notifications.
 
-| Layer                                          | Owner                          | Contract                                                                                           |
-| ---------------------------------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------- |
-| Nightly compile caller                         | `bobs-big-brain-compiler`      | Supplies the raw event and a deterministic plain-English fallback.                                 |
-| Normalization, evidence, retry, floor, receipt | `intent-os` `ops/alert-floor/` | MiniMax-M3 formats a redacted copy first; deterministic facts remain authoritative.                |
-| Buzz transport and topic taxonomy              | Intent OS/Buzz                 | Delivers to canonical `sys-*`/content topics; callers do not use retired channel aliases.          |
-| Cross-repo tracking                            | umbrella + each owning repo    | The compiler bead is a caller child; Intent OS bead `spine-8fl.2` owns the shared corrective work. |
+| Layer                                          | Owner                          | Contract                                                                                                                                    |
+| ---------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Nightly compile caller                         | `bobs-big-brain-compiler`      | Supplies the raw event and a deterministic plain-English fallback.                                                                          |
+| Normalization, evidence, retry, floor, receipt | `intent-os` `ops/alert-floor/` | MiniMax-M3 formats a redacted copy first; deterministic facts remain authoritative.                                                         |
+| Buzz transport and topic taxonomy              | Intent OS/Buzz                 | Delivers to canonical `sys-*`/content topics; callers do not use retired channel aliases.                                                   |
+| Cross-repo tracking                            | umbrella + each owning repo    | The compiler bead is a caller child; Intent OS `spine-8fl.2` owns semantic hardening and `spine-8fl.3` owns estate-wide migration/deletion. |
 
 ## Caller contract
 
