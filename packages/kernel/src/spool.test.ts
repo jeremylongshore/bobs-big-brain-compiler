@@ -127,6 +127,20 @@ describe('emitSpool', () => {
       expect(c.source).toBe('bulk_import');
       expect(c.trustLevel).toBe('untrusted');
     }
+    const bulkManifest = JSON.parse(readFileSync(bulk.value.manifestFile, 'utf-8')) as {
+      candidateIds: string[];
+      batchReceipt: Record<string, unknown>;
+    };
+    expect(bulkManifest.batchReceipt).toMatchObject({
+      tenantId: 'ico-test',
+      scope: 'wiki',
+      source: 'bulk_import',
+      trustLevel: 'untrusted',
+      candidateCount: 2,
+      maxCandidates: 5000,
+    });
+    expect(bulkManifest.batchReceipt['batchId']).toEqual(expect.any(String));
+    expect(bulkManifest.batchReceipt['candidateCount']).toBe(bulkManifest.candidateIds.length);
   });
 
   it('emits one candidate per compiled wiki page and writes manifest sidecar', () => {
@@ -171,12 +185,34 @@ describe('emitSpool', () => {
       spoolFileBytes: number;
       emittedAt: string;
       candidateIds: string[];
+      batchReceipt: {
+        batchId: string;
+        tenantId: string;
+        scope: string;
+        source: string;
+        trustLevel: string;
+        candidateCount: number;
+        maxCandidates: number;
+      };
     };
     expect(manifest.schemaVersion).toBe('1');
     expect(manifest.emittedCount).toBe(2);
     expect(manifest.spoolFileSha256).toBe(r.value.spoolFileSha256);
     expect(manifest.spoolFileBytes).toBe(r.value.spoolFileBytes);
     expect(manifest.candidateIds.length).toBe(2);
+    expect(typeof manifest.batchReceipt.batchId).toBe('string');
+    expect(manifest.batchReceipt).toMatchObject({
+      tenantId: 'ico-test',
+      scope: 'wiki',
+      source: 'import',
+      trustLevel: 'medium',
+      candidateCount: 2,
+      maxCandidates: 5000,
+    });
+    expect(manifest.batchReceipt.candidateCount).toBe(manifest.candidateIds.length);
+    expect(manifest.candidateIds).toEqual(
+      lines.map((line) => (JSON.parse(line) as { id: string }).id),
+    );
 
     // SHA-256 in manifest matches recomputed SHA-256 of the file body.
     const raw = readFileSync(r.value.spoolFile, 'utf-8');

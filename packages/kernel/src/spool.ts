@@ -69,6 +69,24 @@ import { deriveSpoolCandidateId, uuidV5 } from './uuid.js';
 /** Subset of compiled artifacts the emitter operates over. */
 export type SpoolEmitScope = 'wiki' | 'outputs' | 'all';
 
+/** Producer receipt carried in every spool manifest. */
+export interface SpoolBatchReceipt {
+  /** Stable identity for this producer emission run. */
+  batchId: string;
+  /** Tenant boundary asserted on every emitted candidate. */
+  tenantId: string;
+  /** Discovery scope used for this emission. */
+  scope: SpoolEmitScope;
+  /** Source stamp expected on every emitted candidate. */
+  source: 'import' | 'bulk_import';
+  /** Trust stamp expected on every emitted candidate. */
+  trustLevel: 'medium' | 'untrusted';
+  /** Exact number of candidates in the JSONL body. */
+  candidateCount: number;
+  /** Per-run ceiling applied before the files become visible. */
+  maxCandidates: number;
+}
+
 /** Options accepted by `emitSpool`. */
 export interface SpoolEmitOptions {
   /**
@@ -531,6 +549,7 @@ function atomicWriteSpool(
   filename: string,
   jsonlBody: string,
   candidateIds: string[],
+  batchReceipt: SpoolBatchReceipt,
   emittedAt: string,
   schemaVersion: string,
 ): Result<WriteOutcome, Error> {
@@ -554,7 +573,6 @@ function atomicWriteSpool(
     const bytes = fstatSync(spoolFd).size;
     closeSync(spoolFd);
     spoolFd = -1;
-    renameSync(spoolTmp, spoolFile);
 
     const sha256 = createHash('sha256').update(jsonlBody, 'utf-8').digest('hex');
     const manifest = {
@@ -565,12 +583,17 @@ function atomicWriteSpool(
       spoolFileBytes: bytes,
       spoolFileSha256: sha256,
       candidateIds,
+      batchReceipt,
     };
     manifestFd = openSync(manifestTmp, O_FLAGS, MODE);
     writeSync(manifestFd, JSON.stringify(manifest, null, 2) + '\n', null, 'utf-8');
     closeSync(manifestFd);
     manifestFd = -1;
     renameSync(manifestTmp, manifestFile);
+    // Publish the spool body last. A crash can leave an orphan manifest, which
+    // the audit surface reports, but cannot leave a visible candidate file
+    // without its receipt and hash sidecar (l13.4).
+    renameSync(spoolTmp, spoolFile);
 
     return ok({ spoolFile, manifestFile, spoolFileSha256: sha256, spoolFileBytes: bytes });
   } catch (e) {
@@ -827,6 +850,15 @@ export function emitSpool(
     filename,
     jsonlBody,
     candidates.map((c) => c.id),
+    {
+      batchId,
+      tenantId: opts.tenantId,
+      scope: opts.scope,
+      source: opts.bulkImport === true ? 'bulk_import' : 'import',
+      trustLevel: opts.bulkImport === true ? 'untrusted' : 'medium',
+      candidateCount: candidates.length,
+      maxCandidates: maxResult.value,
+    },
     startedAt,
     '1',
   );
