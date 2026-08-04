@@ -174,11 +174,18 @@ interface TodaySpendRow {
  * Map a model tag to the key used for pricing. Any `deepseek*` family tag
  * (e.g. `deepseek-v4-flash`, `deepseek-chat`) prices at `deepseek-chat` rates so
  * the DeepSeek figure stays honest even for tags not literally in the table.
+ * Any `minimax*` tag likewise prices at `MiniMax-M3` rates — this also
+ * normalizes CASE, which matters because {@link MODEL_PRICING} is keyed on the
+ * vendor's mixed-case `MiniMax-M3` while rows may be tagged `minimax-m3`; an
+ * exact-match lookup would otherwise miss and fall back to Sonnet.
  * Everything else passes through; `calculateCost` handles unknowns by falling
  * back to Sonnet (an over-estimate — fail safe).
  */
 export function resolvePricingModel(model: string): string {
-  return model.toLowerCase().startsWith('deepseek') ? 'deepseek-chat' : model;
+  const lower = model.toLowerCase();
+  if (lower.startsWith('deepseek')) return 'deepseek-chat';
+  if (lower.startsWith('minimax')) return 'MiniMax-M3';
+  return model;
 }
 
 /** Split a total-token figure into (input, output) via the 70/30 heuristic. */
