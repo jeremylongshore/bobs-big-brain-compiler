@@ -1,41 +1,38 @@
 # Synthesize-pass quality eval (E10-B02).
 #
 # Scores a compiled topic page — the cross-source synthesis output —
-# against five rubric criteria. Topic pages should integrate multiple
-# sources, identify cross-cutting themes, and surface where sources
-# agree or disagree.
+# against five rubric criteria. The golden-corpus runner retargets this
+# spec to a real topic page after compilation; the checked-in path is the
+# deterministic default produced from tests/fixtures/populated.
 #
 # Run with: ico eval run --spec evals/compilation-quality/synthesize-topic.eval.yaml
 id: compile-synthesize-topic-001
-name: Synthesize quality — multi-source topic
+name: Synthesize quality — golden corpus topic page
 description: |
-  Verifies the synthesize pass produced a topic page that covers every
-  in-scope source, identifies themes, and is honest about disagreement.
+  Verifies the synthesize pass produced a cross-source topic page with
+  traceable coverage, meaningful themes, and honest treatment of uncertainty.
 type: compilation
 pass: synthesize
-target_page: topics/transformer-attention.md
+target_page: topics/knowledge-compilation-as-a-category-defining-operation.md
 threshold: 0.8
 criteria:
   - id: coverage
     description: |
-      Every source listed in `source_paths` frontmatter appears in the
-      body via citation or wikilink. No silently dropped sources.
-  - id: theme-identification
+      The page identifies multiple contributing sources in frontmatter and
+      integrates their relevant claims without silently dropping a source.
+  - id: cross-source-synthesis
     description: |
-      The page identifies at least two cross-cutting themes (e.g.
-      "Architecture Variants", "Training Approaches", "Limitations").
-      Themes are named explicitly as section headers.
-  - id: disagreement-surfaced
+      The page identifies meaningful themes that cut across sources rather
+      than merely concatenating one summary after another.
+  - id: uncertainty-honesty
     description: |
-      Where sources disagree (different methods, conflicting results,
-      unresolved debates), the disagreement is named — not papered over.
-      Score 1 if disagreements were hidden, 5 if they are foregrounded.
+      Where the sources disagree or leave questions open, the page names
+      that uncertainty; when no disagreement is present, it does not invent one.
   - id: no-redundancy
     description: |
-      Each section adds new information. The Overview and Conclusions
-      don't repeat the same sentences. No source is summarized twice.
+      Each section adds new information. The page does not repeat a source
+      summary wholesale or pad the synthesis with redundant prose.
   - id: schema-conformance
     description: |
-      Frontmatter has title, type=topic, source_paths array, tags.
-      Body has Overview + at least two theme sections + Limitations or
-      Open Problems, per the synthesize prompt template (017-AT-PRMP).
+      Frontmatter includes title, type=topic, summary, compiled_at, model,
+      source_ids, and concept_ids; the body is structured readable Markdown.

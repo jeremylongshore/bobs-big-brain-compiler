@@ -1,41 +1,37 @@
 # Summarize-pass quality eval (E10-B02).
 #
-# Scores a source summary against five rubric criteria. Each criterion is
-# rated 1–5 by Claude; final score is mean/5 (normalized to 0–1).
+# Scores a source summary against five rubric criteria. The golden-corpus
+# runner retargets this spec to a real page after compilation; the checked-in
+# path is the deterministic default produced from tests/fixtures/populated.
 #
 # Run with: ico eval run --spec evals/compilation-quality/summarize-attention.eval.yaml
-#
-# Adjust `target_page` to a real compiled page in your workspace. The
-# default path is illustrative — if you don't have a wiki/sources/
-# attention-paper.md, the eval will fail with a clear "target_page not
-# found" error.
 id: compile-summarize-attention-001
-name: Summarize quality — attention paper
+name: Summarize quality — golden corpus source page
 description: |
-  Verifies the summarize pass extracted the key claims of a known source
-  without inventing facts, kept the structure intact, and stayed concise.
+  Verifies the summarize pass extracted the key claims of a golden-corpus
+  source without inventing facts, preserved provenance, and stayed concise.
 type: compilation
 pass: summarize
-target_page: sources/attention-paper.md
+target_page: sources/sample-article.md
 threshold: 0.8 # pass when normalized score >= 0.8 (mean criterion >= 4.0)
 criteria:
   - id: completeness
     description: |
-      Captures every major claim from the original source. Missing one
-      core thesis = 1; missing one supporting point = 3; complete = 5.
+      Captures the source's major claims and conclusions. Missing a core
+      thesis = 1; missing a supporting point = 3; complete = 5.
   - id: accuracy
     description: |
-      No invented facts. Every assertion in the summary appears in the
-      source. One paraphrase that distorts meaning = 3; any fabrication = 1.
+      The summary is faithful to the source and does not invent facts,
+      metrics, authors, or methods. A distorted paraphrase = 3; fabrication = 1.
   - id: structure
     description: |
-      Honors the frontmatter schema for source-summary pages (title,
-      type, source_path, summary/key_claims/methods/conclusions sections).
-  - id: citations
+      Honors the source-summary schema: title, type=source-summary,
+      source_path, and Summary, Key Claims, Methods, and Conclusions sections.
+  - id: provenance
     description: |
-      Inline `[source: <title>]` citations match real source titles and
-      are placed where the claim is made, not lumped at the end.
+      Frontmatter preserves provenance sufficient to trace the page back to
+      its raw source, including source_id, source_path, and content_hash.
   - id: concision
     description: |
-      No filler. No restating section headings as prose. No "this paper
-      discusses…" preamble. Bullet points or terse paragraphs only.
+      No material filler or unsupported digressions. The page is a useful
+      compact representation rather than a near-verbatim copy of the source.

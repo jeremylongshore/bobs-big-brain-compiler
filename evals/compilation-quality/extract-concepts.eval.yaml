@@ -1,40 +1,38 @@
 # Extract-pass quality eval (E10-B02).
 #
-# Scores a compiled concept page against five rubric criteria. The
-# extract pass produces wiki/concepts/<slug>.md from one or more source
-# summaries; this eval asks whether the concept is well-formed and
-# linked back to evidence.
+# Scores a compiled concept page against five rubric criteria. The golden-
+# corpus runner retargets this spec to a real concept page after compilation;
+# the checked-in path is the deterministic default produced from
+# tests/fixtures/populated.
 #
 # Run with: ico eval run --spec evals/compilation-quality/extract-concepts.eval.yaml
 id: compile-extract-concept-001
-name: Extract quality — single concept page
+name: Extract quality — golden corpus concept page
 description: |
-  Verifies the extract pass produced a concept page that names the right
-  thing, defines it crisply, cites supporting sources, and links to
-  related concepts.
+  Verifies the extract pass produced a focused concept page with a clear
+  definition, source attribution, and schema-valid provenance.
 type: compilation
 pass: extract
-target_page: concepts/self-attention.md
+target_page: concepts/knowledge-compilation.md
 threshold: 0.8
 criteria:
   - id: definition-clarity
     description: |
-      The Definition section is one short paragraph that a domain
+      The frontmatter definition is one clear sentence that a domain
       newcomer could understand without consulting other pages.
   - id: source-grounding
     description: |
-      Every claim in Discussion / Definition is backed by an inline
-      `[source: <title>]` citation or a `[[wikilink]]` to a wiki/sources
-      page that supports it.
-  - id: wikilinks
-    description: |
-      Related concepts mentioned in the body are formatted as
-      `[[concept-slug]]` wikilinks, not bare text. Reachability matters.
+      The page is grounded in the source summaries and carries non-empty
+      source_ids that identify the evidence behind the concept.
   - id: schema-conformance
     description: |
-      Frontmatter includes title, type=concept, tags, source_paths.
-      Body has Definition, Discussion, Sources sections in that order.
+      Frontmatter includes title, type=concept, definition, compiled_at,
+      model, and source_ids; the body is non-empty and readable Markdown.
   - id: scope
     description: |
-      The page discusses one concept. Multiple-concept pages should have
-      been split. Score 1 if the page is a topic page mislabeled as concept.
+      The page discusses one discrete concept. Multiple-concept pages or a
+      topic mislabeled as a concept score 1.
+  - id: terminology
+    description: |
+      The page uses the source material's canonical terminology and does not
+      introduce unsupported synonyms, entities, or claims.

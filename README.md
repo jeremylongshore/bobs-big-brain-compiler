@@ -32,7 +32,7 @@ You drop documents into a folder. `ico` reads them, compiles the content into a 
 - **Recall** what you ingested — generate flashcards with spaced repetition; export to Anki if you prefer.
 - **Audit** anything. Every API call, file write, and task transition is recorded in append-only JSONL with a SHA-256 hash chain. If a citation looks wrong, you can trace it back to the exact source and prompt.
 
-It is a cognition runtime, not a chat wrapper. The model proposes; a deterministic kernel owns durable state, traces, and control. **Your data lives in plain markdown + SQLite on your machine.** The model API is called only for the compilation/synthesis/reasoning steps — and only when you trigger them. The backend is a pluggable provider registry: Claude by default, or any OpenAI- or Anthropic-wire provider (OpenAI, Groq, NVIDIA, DeepSeek) or a local server (Ollama, vLLM, LM Studio) via `ICO_PROVIDER` — so you can keep every call on-device if you want to.
+It is a cognition runtime, not a chat wrapper. The model proposes; a deterministic kernel owns durable state, traces, and control. **Your data lives in plain markdown + SQLite on your machine.** The model API is called only for the compilation/synthesis/reasoning steps — and only when you trigger them. The backend is a pluggable provider registry: Claude by default, or any OpenAI- or Anthropic-wire provider (OpenAI, Groq, NVIDIA, DeepSeek, MiniMax) or a local server (Ollama, vLLM, LM Studio) via `ICO_PROVIDER` — so you can keep every call on-device if you want to.
 
 ---
 
@@ -41,11 +41,14 @@ It is a cognition runtime, not a chat wrapper. The model proposes; a determinist
 ```bash
 # the npm name predates the repo rename — intentional
 npm install -g intentional-cognition-os
-ico --version          # → 1.21.0
+ico --version          # → 1.22.0
+export ICO_PROVIDER=anthropic
 export ANTHROPIC_API_KEY=sk-ant-...
+# Or use MiniMax-M3: ICO_PROVIDER=minimax, ICO_MODEL=MiniMax-M3,
+# with MINIMAX_API_KEY set in the environment.
 ```
 
-Requires **Node 22+** and an [Anthropic API key](https://console.anthropic.com/). pnpm not required for usage — only for building from source.
+Requires **Node 22+** and an API key for the selected provider. pnpm not required for usage — only for building from source.
 
 From source:
 
@@ -69,7 +72,7 @@ ico mount add papers ~/Documents/papers --workspace my-research
 # 3. Ingest (parses PDFs/MD/web clips into ./raw/)
 ico ingest ~/Documents/papers --workspace my-research
 
-# 4. Compile — the Claude calls happen here
+# 4. Compile — the configured provider calls happen here
 ico compile all --workspace my-research
 
 # 5. Ask
@@ -145,20 +148,20 @@ The hard constraint, drilled through every component: **the model never directly
 
 ## Commands you'll actually use
 
-|                                   |                                                        |
-| --------------------------------- | ------------------------------------------------------ |
-| `ico init <name>`                 | Create a workspace                                     |
-| `ico mount add <name> <path>`     | Register a source directory                            |
-| `ico ingest <path>`               | Parse PDFs/MD/web-clips into the raw layer             |
-| `ico compile all`                 | Run the six compiler passes (Claude calls happen here) |
-| `ico ask "<question>"`            | Grounded Q&A with citations                            |
-| `ico research "<brief>"`          | Multi-agent research task (5 stages, ~5 min)           |
-| `ico render report --topic <t>`   | Generate a markdown report                             |
-| `ico recall generate --topic <t>` | Build flashcards from compiled wiki                    |
-| `ico recall quiz --topic <t>`     | Interactive quiz; tracks retention                     |
-| `ico recall export --format anki` | Anki-importable TSV                                    |
-| `ico lint`                        | Audit the wiki (schema, staleness, orphans)            |
-| `ico status` / `ico inspect`      | Workspace summary / per-subsystem detail               |
+|                                   |                                                          |
+| --------------------------------- | -------------------------------------------------------- |
+| `ico init <name>`                 | Create a workspace                                       |
+| `ico mount add <name> <path>`     | Register a source directory                              |
+| `ico ingest <path>`               | Parse PDFs/MD/web-clips into the raw layer               |
+| `ico compile all`                 | Run the six compiler passes (provider calls happen here) |
+| `ico ask "<question>"`            | Grounded Q&A with citations                              |
+| `ico research "<brief>"`          | Multi-agent research task (5 stages, ~5 min)             |
+| `ico render report --topic <t>`   | Generate a markdown report                               |
+| `ico recall generate --topic <t>` | Build flashcards from compiled wiki                      |
+| `ico recall quiz --topic <t>`     | Interactive quiz; tracks retention                       |
+| `ico recall export --format anki` | Anki-importable TSV                                      |
+| `ico lint`                        | Audit the wiki (schema, staleness, orphans)              |
+| `ico status` / `ico inspect`      | Workspace summary / per-subsystem detail                 |
 
 Global flags on every command: `--workspace <path>`, `--json`, `--verbose`, `--quiet`. Full reference: `ico --help` or any command with `--help`.
 
@@ -166,10 +169,10 @@ Global flags on every command: `--workspace <path>`, `--json`, `--verbose`, `--q
 
 ## Status
 
-**v1.21.0 — stable.** 1.21.0 tests passing across 5 packages. Used daily by the author. Public release on npm.
+**v1.22.0 — stable.** 1,737 deterministic tests passing (1,712 package tests plus 25 integration tests), with live model-output quality measured separately by the manual MiniMax-M3 golden-corpus workflow. Public release on npm.
 
 - **Stable**: all 16 commands, the compilation passes, ask + research + recall + render + promote, the audit chain.
-- **In progress**: post-v1 coverage uplift on compiler + cli packages; mutation-testing baseline.
+- **In progress**: manual golden-corpus quality receipts and post-v1 coverage uplift on compiler + CLI packages.
 - **Roadmap**: remote/sync (Phase 3), multi-user (Phase 4), plugin system (Phase 5). All deliberately deferred to keep v1 local-first and inspectable.
 
 ---
