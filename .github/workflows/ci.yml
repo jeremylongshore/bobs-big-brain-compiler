@@ -243,6 +243,21 @@ jobs:
       - name: Run script tests
         run: plugin/skills/ico-your-internals/scripts/tests/run-all.sh
 
+  distiller-wrapper:
+    name: Distiller Wrapper Notification Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Verify notification routing
+        run: bash scripts/distiller/test-notification-routing.sh
+
+      - name: Shellcheck notification seam
+        run: shellcheck --severity=error scripts/distiller/notify-routing.sh scripts/distiller/test-notification-routing.sh scripts/distiller/teamkb-compile-daily.sh
+
   arch-check:
     name: Architecture Rules
     runs-on: ubuntu-latest
