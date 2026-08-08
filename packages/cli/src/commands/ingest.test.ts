@@ -13,7 +13,14 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Database } from '@ico/kernel';
-import { closeDatabase, initDatabase, initWorkspace, readTraces } from '@ico/kernel';
+import {
+  closeDatabase,
+  getMountByName,
+  initDatabase,
+  initWorkspace,
+  readTraces,
+  registerMount,
+} from '@ico/kernel';
 
 import {
   detectSourceType,
@@ -173,6 +180,148 @@ describe('runIngest', () => {
       expect(rows?.count).toBe(1);
     } finally {
       closeDatabase(localDb);
+    }
+  });
+
+  it('does not mark prior compilations stale when the content hash is unchanged', () => {
+    const srcFile = join(tempBase, 'stable-with-compilation.txt');
+    writeFile(srcFile, 'stable content');
+
+    const first = runIngest(srcFile, ingestOpts(), globalOpts());
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+
+    const dbPath = join(workspaceRoot, '.ico', 'state.db');
+    const beforeNoOp = initDatabase(dbPath);
+    if (!beforeNoOp.ok) throw beforeNoOp.error;
+    beforeNoOp.value
+      .prepare(
+        `INSERT INTO compilations (id, source_id, type, output_path, compiled_at, model)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        'stable-compilation',
+        first.value.id,
+        'summary',
+        'wiki/sources/stable-with-compilation.txt.md',
+        first.value.ingestedAt,
+        'test-model',
+      );
+    closeDatabase(beforeNoOp.value);
+
+    const second = runIngest(srcFile, ingestOpts(), globalOpts());
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    expect(second.value.alreadyIngested).toBe(true);
+
+    const afterNoOp = initDatabase(dbPath);
+    if (!afterNoOp.ok) throw afterNoOp.error;
+    try {
+      const row = afterNoOp.value
+        .prepare<[string], { stale: number }>('SELECT stale FROM compilations WHERE id = ?')
+        .get('stable-compilation');
+      expect(row?.stale).toBe(0);
+    } finally {
+      closeDatabase(afterNoOp.value);
+    }
+  });
+
+  it('marks superseded direct and cross-source compilations stale on changed ingest', () => {
+    const srcFile = join(tempBase, 'stale-chain.txt');
+    writeFile(srcFile, 'version one');
+
+    const first = runIngest(srcFile, ingestOpts(), globalOpts());
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+
+    const dbPath = join(workspaceRoot, '.ico', 'state.db');
+    const beforeChange = initDatabase(dbPath);
+    if (!beforeChange.ok) throw beforeChange.error;
+    beforeChange.value
+      .prepare(
+        `INSERT INTO compilations (id, source_id, type, output_path, compiled_at, model)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        'stale-direct',
+        first.value.id,
+        'summary',
+        'wiki/sources/stale-chain.txt.md',
+        first.value.ingestedAt,
+        'test-model',
+      );
+    beforeChange.value
+      .prepare(
+        `INSERT INTO compilations (id, source_id, type, output_path, compiled_at, model)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        'stale-cross',
+        null,
+        'topic',
+        'wiki/topics/stale-chain.md',
+        first.value.ingestedAt,
+        'test-model',
+      );
+    beforeChange.value
+      .prepare('INSERT INTO compilation_sources (compilation_id, source_id) VALUES (?, ?)')
+      .run('stale-cross', first.value.id);
+    closeDatabase(beforeChange.value);
+
+    writeFile(srcFile, 'version two');
+    const second = runIngest(srcFile, ingestOpts(), globalOpts());
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    expect(second.value.id).not.toBe(first.value.id);
+
+    const afterChange = initDatabase(dbPath);
+    if (!afterChange.ok) throw afterChange.error;
+    try {
+      const rows = afterChange.value
+        .prepare<
+          [],
+          { id: string; stale: number }
+        >('SELECT id, stale FROM compilations ORDER BY id')
+        .all();
+      expect(rows).toEqual([
+        { id: 'stale-cross', stale: 1 },
+        { id: 'stale-direct', stale: 1 },
+      ]);
+    } finally {
+      closeDatabase(afterChange.value);
+    }
+  });
+
+  it('records mount provenance and advances last_indexed_at after successful ingest', () => {
+    const mountRoot = join(tempBase, 'mounted-corpus');
+    mkdirSync(mountRoot, { recursive: true });
+
+    const setupDb = initDatabase(join(workspaceRoot, '.ico', 'state.db'));
+    if (!setupDb.ok) throw setupDb.error;
+    const mount = registerMount(setupDb.value, 'mounted-corpus', mountRoot);
+    expect(mount.ok).toBe(true);
+    closeDatabase(setupDb.value);
+
+    const srcFile = join(mountRoot, 'mounted-note.txt');
+    writeFile(srcFile, 'mounted content');
+    const result = runIngest(srcFile, ingestOpts(), globalOpts());
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const verifyDb = initDatabase(join(workspaceRoot, '.ico', 'state.db'));
+    if (!verifyDb.ok) throw verifyDb.error;
+    try {
+      const source = verifyDb.value
+        .prepare<[string], { mount_id: string | null }>('SELECT mount_id FROM sources WHERE id = ?')
+        .get(result.value.id);
+      expect(source?.mount_id).toBe(mount.ok ? mount.value.id : null);
+
+      const storedMount = getMountByName(verifyDb.value, 'mounted-corpus');
+      expect(storedMount.ok).toBe(true);
+      if (!storedMount.ok) return;
+      expect(storedMount.value?.last_indexed_at).toBeTruthy();
+    } finally {
+      closeDatabase(verifyDb.value);
     }
   });
 

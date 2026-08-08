@@ -22,13 +22,15 @@ The kernel owns all durable state. The compiler (probabilistic layer) proposes; 
 
 ### Mounts
 
-| Function         | Signature                            | Description                    |
-| ---------------- | ------------------------------------ | ------------------------------ |
-| `registerMount`  | `(db, name, path) → Result<Mount>`   | Registers a corpus mount point |
-| `listMounts`     | `(db) → Result<Mount[]>`             | Lists all registered mounts    |
-| `getMount`       | `(db, id) → Result<Mount \| null>`   | Gets a mount by ID             |
-| `getMountByName` | `(db, name) → Result<Mount \| null>` | Gets a mount by name           |
-| `removeMount`    | `(db, id) → Result<boolean>`         | Removes a mount                |
+| Function              | Signature                                | Description                                 |
+| --------------------- | ---------------------------------------- | ------------------------------------------- | ------------------------------------------------------- |
+| `registerMount`       | `(db, name, path) → Result<Mount>`       | Registers a corpus mount point              |
+| `listMounts`          | `(db) → Result<Mount[]>`                 | Lists all registered mounts                 |
+| `findContainingMount` | `(db, filePath) → Result<Mount \\        | null>`                                      | Resolves the longest registered mount containing a path |
+| `markMountIndexedAt`  | `(db, id, timestamp?) → Result<boolean>` | Records a successful source index timestamp |
+| `getMount`            | `(db, id) → Result<Mount \| null>`       | Gets a mount by ID                          |
+| `getMountByName`      | `(db, name) → Result<Mount \| null>`     | Gets a mount by name                        |
+| `removeMount`         | `(db, id) → Result<boolean>`             | Removes a mount                             |
 
 ### Sources
 

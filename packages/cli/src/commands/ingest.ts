@@ -8,19 +8,21 @@
  */
 
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { basename, extname, join, relative } from 'node:path';
+import { basename, extname, join, relative, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 
 import type { Command } from 'commander';
 
-import { ingestSource } from '@ico/compiler';
+import { ingestSource, markSupersededCompilationsStale } from '@ico/compiler';
 import {
   appendAuditLog,
   closeDatabase,
   computeFileHash,
   disclosureLabel,
+  findContainingMount,
   initDatabase,
   isSourceChanged,
+  markMountIndexedAt,
   registerSource,
   scanForDisclosure,
   writeTrace,
@@ -328,6 +330,12 @@ export function runIngest(
   const db = dbResult.value;
 
   try {
+    const containingMountResult = findContainingMount(db, resolve(filePath));
+    if (!containingMountResult.ok) {
+      return { ok: false, error: containingMountResult.error };
+    }
+    const containingMount = containingMountResult.value;
+
     // 9. Check if already ingested (same relative path + same hash = no-op)
     const changedResult = isSourceChanged(db, relPath, hash);
     if (!changedResult.ok) {
@@ -376,6 +384,7 @@ export function runIngest(
     // 11. Register source in SQLite
     const sourceResult = registerSource(db, {
       path: relPath,
+      ...(containingMount !== null && { mountId: containingMount.id }),
       type: sourceType,
       hash,
       ...(ingestOpts.title !== undefined && { title: ingestOpts.title }),
@@ -388,12 +397,40 @@ export function runIngest(
 
     const source: Source = sourceResult.value;
 
+    // A changed re-ingest leaves the old source row in place for provenance.
+    // Invalidate every direct and cross-source compilation that still points
+    // at one of those superseded rows before the source.ingest receipt lands.
+    const staleResult = markSupersededCompilationsStale(db, relPath, source.id);
+    if (!staleResult.ok) {
+      return { ok: false, error: staleResult.error };
+    }
+
+    // A mount timestamp is a freshness receipt, not a registration timestamp:
+    // advance it only after the source row and stale dependency update succeed.
+    if (containingMount !== null) {
+      const indexedResult = markMountIndexedAt(db, containingMount.id);
+      if (!indexedResult.ok) {
+        return {
+          ok: false,
+          error: new Error(`Mount index update failed: ${indexedResult.error.message}`),
+        };
+      }
+      if (!indexedResult.value) {
+        return {
+          ok: false,
+          error: new Error(`Mount not found while indexing: ${containingMount.id}`),
+        };
+      }
+    }
+
     // 12. Write trace event
     writeTrace(db, wsRoot, 'source.ingest', {
       sourceId: source.id,
       path: relPath,
       hash,
       type: sourceType,
+      staleCompilations: staleResult.value,
+      mountId: containingMount?.id ?? null,
     });
 
     // 13. Append audit log (best-effort; non-fatal)

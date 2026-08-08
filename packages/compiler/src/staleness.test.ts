@@ -10,7 +10,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { closeDatabase, type Database, initDatabase } from '@ico/kernel';
 
-import { detectStalePages, getUncompiledSources, markStale } from './staleness.js';
+import {
+  detectStalePages,
+  getUncompiledSources,
+  markStale,
+  markSupersededCompilationsStale,
+} from './staleness.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -310,5 +315,75 @@ describe('markStale', () => {
       .prepare<[], { id: string; stale: number }>('SELECT id, stale FROM compilations')
       .all();
     expect(rows.every((r: { id: string; stale: number }) => r.stale === 1)).toBe(true);
+  });
+});
+
+describe('markSupersededCompilationsStale', () => {
+  let db: Database;
+
+  beforeEach(() => {
+    db = openDb();
+  });
+  afterEach(() => {
+    closeDatabase(db);
+  });
+
+  it('marks direct and compilation_sources dependents for an older path version', () => {
+    const path = 'raw/notes/a.md';
+    insertSource(db, { id: 'old-source', path, ingestedAt: T1 });
+    insertSource(db, { id: 'current-source', path, ingestedAt: T2 });
+    insertCompilation(db, {
+      id: 'direct-page',
+      sourceId: 'old-source',
+      outputPath: 'wiki/sources/a.md',
+      compiledAt: T1,
+    });
+    insertCompilation(db, {
+      id: 'cross-page',
+      sourceId: null,
+      type: 'topic',
+      outputPath: 'wiki/topics/a.md',
+      compiledAt: T2,
+    });
+    db.prepare('INSERT INTO compilation_sources (compilation_id, source_id) VALUES (?, ?)').run(
+      'cross-page',
+      'old-source',
+    );
+
+    const result = markSupersededCompilationsStale(db, path, 'current-source');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toBe(2);
+
+    const rows = db
+      .prepare<[], { id: string; stale: number }>('SELECT id, stale FROM compilations ORDER BY id')
+      .all();
+    expect(rows).toEqual([
+      { id: 'cross-page', stale: 1 },
+      { id: 'direct-page', stale: 1 },
+    ]);
+  });
+
+  it('does nothing for a first ingest and does not recount already-stale rows', () => {
+    const path = 'raw/notes/new.md';
+    insertSource(db, { id: 'current-source', path, ingestedAt: T2 });
+
+    const first = markSupersededCompilationsStale(db, path, 'current-source');
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    expect(first.value).toBe(0);
+
+    insertSource(db, { id: 'old-source', path, ingestedAt: T1 });
+    insertCompilation(db, {
+      id: 'already-stale',
+      sourceId: 'old-source',
+      outputPath: 'wiki/sources/old.md',
+      compiledAt: T1,
+      stale: 1,
+    });
+    const second = markSupersededCompilationsStale(db, path, 'current-source');
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    expect(second.value).toBe(0);
   });
 });

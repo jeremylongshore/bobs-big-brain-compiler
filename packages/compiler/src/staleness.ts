@@ -166,6 +166,57 @@ export function markStale(db: Database, compilationIds: string[]): Result<number
 }
 
 /**
+ * Mark every compilation that depends on superseded versions of a source path
+ * as stale.
+ *
+ * Source rows are append-only: a changed re-ingest creates a new row for the
+ * same path and leaves the old row available for provenance. Direct pages
+ * point at the old row through `compilations.source_id`; cross-source pages
+ * point at it through `compilation_sources`. Both edges must be invalidated
+ * together or the durable `stale` flag understates the rebuild set.
+ *
+ * Existing stale rows are excluded from the count. The operation is
+ * transactional and returns zero for a first ingest or an unchanged path.
+ */
+export function markSupersededCompilationsStale(
+  db: Database,
+  sourcePath: string,
+  currentSourceId: string,
+): Result<number, Error> {
+  try {
+    const run = db.transaction(() => {
+      const previous = db
+        .prepare<
+          [string, string],
+          { id: string }
+        >(`SELECT id FROM sources WHERE path = ? AND id <> ?`)
+        .all(sourcePath, currentSourceId);
+      const previousIds = Array.from(new Set(previous.map((row) => row.id)));
+      if (previousIds.length === 0) return 0;
+
+      const placeholders = previousIds.map(() => '?').join(', ');
+      const sql = `
+        UPDATE compilations
+           SET stale = 1
+         WHERE stale = 0
+           AND (
+             source_id IN (${placeholders})
+             OR id IN (
+               SELECT compilation_id
+                 FROM compilation_sources
+                WHERE source_id IN (${placeholders})
+             )
+           )`;
+      const result = db.prepare<string[], void>(sql).run(...previousIds, ...previousIds);
+      return result.changes;
+    });
+    return ok(run());
+  } catch (e) {
+    return err(e instanceof Error ? e : new Error(String(e)));
+  }
+}
+
+/**
  * Get all uncompiled sources — sources that have no `summary` compilation
  * record yet.
  *
