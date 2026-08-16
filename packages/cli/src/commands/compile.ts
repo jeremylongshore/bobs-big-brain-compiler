@@ -24,12 +24,13 @@
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { extname, join, resolve, sep } from 'node:path';
 
 import type { Command } from 'commander';
 
 import {
   addBacklinks,
+  type AffectedSet,
   type ChangedFile,
   type ClaudeClient,
   CompileSkipError,
@@ -44,13 +45,18 @@ import {
   synthesizeTopics,
 } from '@ico/compiler';
 import {
+  appendAuditLog,
   closeDatabase,
   computeFileHash,
   type Database,
+  disclosureLabel,
   initDatabase,
   loadConfig,
   rebuildWikiIndex,
+  registerSource,
+  scanForDisclosure,
   withWriteLock,
+  writeTrace,
 } from '@ico/kernel';
 
 import { anchorAfterCompile } from '../lib/anchor.js';
@@ -271,7 +277,7 @@ export async function runSummarize(ctx: CompileContext): Promise<void> {
 }
 
 /** Run the extract pass: extract concepts and entities from summaries. */
-async function runExtract(ctx: CompileContext): Promise<void> {
+export async function runExtract(ctx: CompileContext): Promise<void> {
   process.stdout.write(formatInfo('Running extract pass...') + '\n');
 
   const summaryPaths = collectSummaryPaths(ctx.workspacePath);
@@ -301,7 +307,7 @@ async function runExtract(ctx: CompileContext): Promise<void> {
 }
 
 /** Run the synthesize pass: create topic pages from summaries + concepts. */
-async function runSynthesize(ctx: CompileContext): Promise<void> {
+export async function runSynthesize(ctx: CompileContext): Promise<void> {
   process.stdout.write(formatInfo('Running synthesize pass...') + '\n');
 
   const result = await synthesizeTopics(ctx.client, ctx.db, ctx.workspacePath, {
@@ -323,7 +329,7 @@ async function runSynthesize(ctx: CompileContext): Promise<void> {
 }
 
 /** Run the link pass: add backlinks deterministically. */
-async function runLink(ctx: CompileContext): Promise<void> {
+export async function runLink(ctx: CompileContext): Promise<void> {
   process.stdout.write(formatInfo('Running link pass (deterministic)...') + '\n');
 
   const result = await addBacklinks(ctx.client, ctx.db, ctx.workspacePath);
@@ -341,7 +347,7 @@ async function runLink(ctx: CompileContext): Promise<void> {
 }
 
 /** Run the contradict pass: detect conflicting claims. */
-async function runContradict(ctx: CompileContext): Promise<void> {
+export async function runContradict(ctx: CompileContext): Promise<void> {
   process.stdout.write(formatInfo('Running contradict pass...') + '\n');
 
   const result = await detectContradictions(ctx.client, ctx.db, ctx.workspacePath, {
@@ -371,7 +377,7 @@ async function runContradict(ctx: CompileContext): Promise<void> {
 }
 
 /** Run the gap pass: identify knowledge gaps and open questions. */
-async function runGap(ctx: CompileContext): Promise<void> {
+export async function runGap(ctx: CompileContext): Promise<void> {
   process.stdout.write(formatInfo('Running gap pass...') + '\n');
 
   const result = await identifyGaps(ctx.client, ctx.db, ctx.workspacePath, {
@@ -398,6 +404,154 @@ async function runGap(ctx: CompileContext): Promise<void> {
       ) + '\n',
     );
   }
+}
+
+/** Optional provenance attached when a scheduler registers a mounted source. */
+export interface RawSourceProvenance {
+  mountId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Register raw files selected by an already-computed incremental plan.
+ *
+ * Classification MUST happen before registration: inserting the new hash first
+ * would make `computeAffectedSet` call the file unchanged and silently discard
+ * the work. Registration happens under the same write lock as compilation and
+ * re-checks both containment and content hash to close the scan-to-use window.
+ */
+export function registerChangedWorkspaceSources(
+  ctx: Pick<CompileContext, 'workspacePath' | 'db'>,
+  changed: ChangedFile[],
+  affected: AffectedSet,
+  options?: {
+    forcePaths?: string[];
+    provenanceByPath?: ReadonlyMap<string, RawSourceProvenance>;
+  },
+): string[] {
+  const paths = new Set([
+    ...affected.changedSourcePaths,
+    ...affected.newSourcePaths,
+    ...(options?.forcePaths ?? []),
+  ]);
+  const changedByPath = new Map(changed.map((item) => [item.path, item]));
+  const rawRoot = resolve(ctx.workspacePath, 'raw');
+  const registered: string[] = [];
+
+  for (const path of Array.from(paths).sort()) {
+    const item = changedByPath.get(path);
+    if (item === undefined) {
+      throw new Error(`Incremental source is missing from the changed manifest: ${path}`);
+    }
+
+    const absolutePath = resolve(ctx.workspacePath, path);
+    if (absolutePath !== rawRoot && !absolutePath.startsWith(`${rawRoot}${sep}`)) {
+      throw new Error(`Changed path must stay inside workspace/raw: ${path}`);
+    }
+
+    const bytes = readFileSync(absolutePath);
+    const currentHash = computeFileHash(absolutePath);
+    if (!currentHash.ok) throw currentHash.error;
+    if (currentHash.value !== item.hash) {
+      throw new Error(`Changed source moved during planning (hash mismatch): ${path}`);
+    }
+
+    const violation = scanForDisclosure(bytes.toString('utf-8'));
+    if (violation !== null) {
+      throw new Error(
+        `Disclosure check failed: ${disclosureLabel(violation.category)} content detected ` +
+          `("${violation.match}") in ${path}`,
+      );
+    }
+
+    const extension = extname(path).toLowerCase();
+    const type =
+      extension === '.pdf'
+        ? 'pdf'
+        : extension === '.md' || extension === '.mdx'
+          ? 'markdown'
+          : extension === '.html' || extension === '.htm'
+            ? 'html'
+            : 'text';
+    const provenance = options?.provenanceByPath?.get(path);
+    const source = registerSource(ctx.db, {
+      path,
+      type,
+      hash: item.hash,
+      ...(provenance?.mountId !== undefined && { mountId: provenance.mountId }),
+      ...(provenance?.metadata !== undefined && { metadata: provenance.metadata }),
+    });
+    if (!source.ok) throw source.error;
+
+    writeTrace(ctx.db, ctx.workspacePath, 'source.incremental-register', {
+      sourceId: source.value.id,
+      path,
+      hash: item.hash,
+      type,
+    });
+    appendAuditLog(
+      ctx.workspacePath,
+      'source.incremental-register',
+      `Registered incremental source "${path}" (${type})`,
+    );
+    registered.push(path);
+  }
+
+  return registered;
+}
+
+/** Return the page types the cost gate must price for this plan. */
+export function affectedCostTypes(affected: AffectedSet, forcedSourcePaths = 0): string[] {
+  const types = affected.affectedPages.map((page) => page.type);
+  const sourceWork =
+    affected.changedSourcePaths.length + affected.newSourcePaths.length + forcedSourcePaths;
+
+  // A new source has no existing compilation row, so it cannot appear in
+  // affectedPages. Price its mandatory summary + concept work explicitly.
+  for (const type of ['summary', 'concept']) {
+    let present = types.filter((candidate) => candidate === type).length;
+    while (present < sourceWork) {
+      types.push(type);
+      present++;
+    }
+  }
+  return types;
+}
+
+/**
+ * Execute an incremental plan while the caller holds the brain write lock.
+ * Exported for `ico maintain`, which must keep mount copy, source registration,
+ * and every compiler pass inside one critical section.
+ */
+export async function runAffectedPipelineUnlocked(
+  ctx: CompileContext,
+  affected: AffectedSet,
+  options?: { forceSourceWork?: boolean; forceCrossSource?: boolean },
+): Promise<void> {
+  const hasSourceDelta =
+    affected.changedSourcePaths.length > 0 || affected.newSourcePaths.length > 0;
+  const hasSingleSource =
+    options?.forceSourceWork === true ||
+    hasSourceDelta ||
+    affected.affectedPages.some((page) => ['summary', 'concept', 'entity'].includes(page.type));
+  const hasCrossSource =
+    options?.forceCrossSource === true ||
+    affected.conservativeSweep ||
+    affected.affectedPages.some((page) =>
+      ['topic', 'contradiction', 'open-question'].includes(page.type),
+    );
+
+  if (hasSingleSource) {
+    await runSummarize(ctx);
+    await runExtract(ctx);
+  }
+  if (hasCrossSource) {
+    await runSynthesize(ctx);
+    await runLink(ctx);
+    await runContradict(ctx);
+    await runGap(ctx);
+  }
+  rebuildWikiIndex(ctx.workspacePath);
 }
 
 // ---------------------------------------------------------------------------
@@ -493,7 +647,7 @@ export async function runIncremental(
   const gateResult = evaluateCostGate(
     ctx.db,
     {
-      affectedTypes: affected.affectedPages.map((p) => p.type),
+      affectedTypes: affectedCostTypes(affected),
       lastCompileAtMs: opts.lastCompileAtMs ?? null,
     },
     {
@@ -525,7 +679,9 @@ export async function runIncremental(
     return 3;
   }
 
-  if (affected.affectedPages.length === 0) {
+  const hasSourceDelta =
+    affected.changedSourcePaths.length > 0 || affected.newSourcePaths.length > 0;
+  if (affected.affectedPages.length === 0 && !hasSourceDelta) {
     process.stdout.write(formatSuccess('Nothing affected — brain is already fresh.') + '\n');
     return 0;
   }
@@ -541,30 +697,8 @@ export async function runIncremental(
 
   // 3. Recompile under the single-writer lock (serialises vs nightly + backup).
   const lockResult = await withWriteLock(async () => {
-    // Affected single-source pages recompile via the summarize pass (it reads
-    // uncompiled/changed sources from the DB). Cross-source passes re-run when
-    // the conservative sweep flagged them. Deltas run the FULL pipeline — no
-    // fast-path around govern.
-    const hasSingleSource = affected.affectedPages.some((p) =>
-      ['summary', 'concept', 'entity'].includes(p.type),
-    );
-    const hasCrossSource =
-      affected.conservativeSweep ||
-      affected.affectedPages.some((p) =>
-        ['topic', 'contradiction', 'open-question'].includes(p.type),
-      );
-
-    if (hasSingleSource) {
-      await runSummarize(ctx);
-      await runExtract(ctx);
-    }
-    if (hasCrossSource) {
-      await runSynthesize(ctx);
-      await runLink(ctx);
-      await runContradict(ctx);
-      await runGap(ctx);
-    }
-    rebuildWikiIndex(ctx.workspacePath);
+    registerChangedWorkspaceSources(ctx, changed, affected);
+    await runAffectedPipelineUnlocked(ctx, affected);
   });
 
   if (!lockResult.ok) {

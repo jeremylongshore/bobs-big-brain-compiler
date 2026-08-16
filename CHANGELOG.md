@@ -5,6 +5,7 @@
 ### Changed
 
 - The GitHub repository was renamed from `intentional-cognition-os` to `bobs-big-brain-compiler` on 2026-07-19 (public product name: **Bob's Big Brain Compiler**). GitHub 301-redirects the old URLs. The npm package name `intentional-cognition-os`, the `@ico/*` scope, and the bead prefixes are unchanged.
+- Scheduled ICO maintenance is now a separate receipted path from the team distiller. `ico maintain` scans registered mounts case-insensitively, classifies disclosure-blocked files explicitly, compiles eligible deltas under the required writer lock and spend ceiling, and emits only `compiled`, `verified_noop`, or `failure`. Commit-addressed CLI installation and user-systemd scheduling are included.
 
 ## [v1.22.0] - 2026-07-18
 
