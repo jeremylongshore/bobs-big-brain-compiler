@@ -3,7 +3,7 @@
 Bob's Big Brain has two independent scheduled knowledge paths. Keep their names and receipts separate:
 
 - `teamkb-compile-daily.sh` is the agent distiller. It turns recent work into governed team-memory proposals through the registrar.
-- `ico maintain` is compiler maintenance. It scans registered source mounts, hashes eligible files, ingests deltas, and runs the governed ICO passes.
+- `ico maintain` is compiler maintenance. It scans registered source mounts, hashes eligible files, ingests deltas, and runs the governed source-scoped summarize and extract passes.
 
 The distiller does not invoke ICO. A successful distiller run is never evidence that the ICO compiler ran.
 
@@ -11,11 +11,18 @@ The distiller does not invoke ICO. A successful distiller run is never evidence 
 
 Every `ico maintain` run writes `.ico/maintenance/latest.json` plus a run-addressed receipt under `.ico/maintenance/receipts/`. The terminal status is exactly one of:
 
-- `compiled`: eligible deltas added at least one compilation row.
+- `compiled`: every eligible source reached a compiled or explicit governed-exclusion outcome.
+- `partial`: the bounded batch advanced, and the receipt states exactly how many eligible sources remain.
 - `verified_noop`: every eligible mounted file is already represented by the same content hash.
 - `failure`: the input is stale or missing, a source needs explicit retirement, the spend gate deferred work, the write lock was unavailable, or the compiler failed.
 
-Policy-blocked compensation or PII files are counted separately. They are neither ingest failures nor silent omissions. A run that found eligible work cannot report success after adding zero compilation rows. A `running` latest receipt means the prior process died before a terminal receipt and the next run retries its raw paths.
+Policy-blocked compensation or PII files are counted separately. They are neither ingest failures nor silent omissions. Validation-rejected sources receive an explicit governed-exclusion marker. A run cannot report `verified_noop` while eligible sources remain. A `running` latest receipt means the prior process died before a terminal receipt and the next run prioritizes its raw paths.
+
+Every receipt declares `compileScope: "mounted-source"`. Accordingly, `compiled` and `verified_noop` are claims about source representation by content hash; they are not claims that the corpus-wide topic, backlink, contradiction, and gap passes were regenerated. Those four passes read the whole compiled corpus and belong to the explicit six-pass operator workflow (`ico compile all`) with a separate cost decision. Scheduled maintenance never changes scope silently on its final backlog batch.
+
+Maintenance processes at most 10 source candidates per run by default (`--max-candidates` or `ICO_MAINTAIN_MAX_CANDIDATES`). Each receipt exposes `progress.eligible`, `selected`, `processed`, `governedExcluded`, `failed`, and `remaining`. A successful partial run is liveness evidence, not a freshness claim.
+
+The `inference_operations` ledger records exact input and output usage once per successful provider call. The cost gate projects from that operation history and computes UTC-day spend from the same rows. Compilation-page `tokens_used` remains page provenance, but it is not summed as provider spend because one multi-page response can stamp the same batch total onto several pages. A second runtime guard refuses the next call when its conservative worst case could cross the daily ceiling.
 
 ## Production mounts
 
@@ -53,7 +60,7 @@ Run a read-only discovery before changing mounts or provider configuration:
 
 ```bash
 ico --workspace ~/.teamkb/brain maintain --scan-only --max-input-age-days 0
-jq '{status,errorCode,scan,rawPaths}' ~/.teamkb/brain/.ico/maintenance/latest.json
+jq '{status,errorCode,progress,inference,scan,rawPaths}' ~/.teamkb/brain/.ico/maintenance/latest.json
 ```
 
 Inspect the scheduled unit and the latest receipt:
@@ -64,7 +71,7 @@ journalctl --user -u ico-maintain.service -n 100 --no-pager
 jq . ~/.teamkb/brain/.ico/maintenance/latest.json
 ```
 
-The default inference ceiling is `$1.00` per UTC day. A projection above the ceiling is a retryable failure, not permission to spend more. Raise `ICO_DAILY_CEILING_USD` only with an explicit operator decision backed by the receipt's projected cost.
+The default inference ceiling is `$1.00` per UTC day. A projection above the ceiling is a retryable failure, not permission to spend more. Raise `ICO_DAILY_CEILING_USD` only with an explicit operator decision backed by the receipt's projected and measured operation costs.
 
 ## Rollback
 

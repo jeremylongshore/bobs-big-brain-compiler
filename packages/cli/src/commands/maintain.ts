@@ -3,8 +3,9 @@
  * them under one governed write lock.
  *
  * This is intentionally separate from the agent-driven knowledge distiller.
- * A maintenance receipt can say only `compiled`, `verified_noop`, or `failure`;
- * a clean process exit is never used as a proxy for useful work.
+ * A maintenance receipt makes a mounted-source freshness claim and can say
+ * `compiled`, `partial`, `verified_noop`, or `failure`; a clean process exit is
+ * never used as a proxy for useful work.
  */
 
 import { createHash, randomUUID } from 'node:crypto';
@@ -23,10 +24,16 @@ import type { Command } from 'commander';
 
 import {
   type AffectedSet,
+  calculateCost,
   type ChangedFile,
+  type ClaudeClient,
+  type CompletionOptions,
+  type CompletionResult,
   computeAffectedSet,
   createClaudeClient,
+  DEFAULT_BATCH_SIZE,
   evaluateCostGate,
+  resolvePricingModel,
 } from '@ico/compiler';
 import {
   closeDatabase,
@@ -38,22 +45,23 @@ import {
   scanForDisclosure,
   withWriteLock,
 } from '@ico/kernel';
-import type { Mount, Source } from '@ico/types';
+import { err, type Mount, type Result, type Source } from '@ico/types';
 
 import { formatError, formatInfo, formatJSON, formatSuccess } from '../lib/output.js';
 import { resolveWorkspace } from '../lib/workspace-resolver.js';
 import {
-  affectedCostTypes,
   type CompileContext,
   type RawSourceProvenance,
   registerChangedWorkspaceSources,
   runAffectedPipelineUnlocked,
+  summaryPathsForSources,
 } from './compile.js';
 import { scanDirectory } from './ingest.js';
 
-const RECEIPT_SCHEMA_VERSION = 1;
+const RECEIPT_SCHEMA_VERSION = 2;
+const INFERENCE_BUDGET_EXCEEDED = 'INFERENCE_BUDGET_EXCEEDED';
 
-export type MaintenanceStatus = 'compiled' | 'verified_noop' | 'failure';
+export type MaintenanceStatus = 'compiled' | 'partial' | 'verified_noop' | 'failure';
 export type CandidateKind = 'new' | 'changed' | 'pending';
 
 export interface MaintenanceCandidate {
@@ -88,6 +96,7 @@ export interface MaintenanceScan {
     unchanged: number;
     legacyUnchanged: number;
     policyBlocked: number;
+    governedExcluded: number;
     new: number;
     changed: number;
     pending: number;
@@ -100,6 +109,7 @@ export interface MaintenanceScan {
 
 export interface MaintenanceReceipt {
   schemaVersion: number;
+  compileScope: 'mounted-source';
   runId: string;
   startedAt: string;
   finishedAt: string | null;
@@ -111,6 +121,23 @@ export interface MaintenanceReceipt {
   plannedAffectedTypes: string[];
   compilationRowsAdded: number;
   projectedCostUsd: number | null;
+  progress: {
+    eligible: number;
+    selected: number;
+    processed: number;
+    governedExcluded: number;
+    failed: number;
+    remaining: number;
+  };
+  inference: {
+    operations: number;
+    inputTokens: number;
+    outputTokens: number;
+    actualCostUsd: number;
+    spentTodayBeforeUsd: number;
+    spentTodayAfterUsd: number;
+    dailyCeilingUsd: number;
+  };
   errorCode: string | null;
   error: string | null;
 }
@@ -120,6 +147,8 @@ interface MaintenanceOrigin {
   mountName?: unknown;
   relativePath: string;
   originPath?: unknown;
+  completedHash?: unknown;
+  excludedReason?: unknown;
 }
 
 interface OriginMetadata {
@@ -133,6 +162,7 @@ export interface MaintainOptions {
   debounceSeconds?: string;
   maxInputAgeDays?: string;
   lockWaitSeconds?: string;
+  maxCandidates?: string;
 }
 
 interface GlobalOptions {
@@ -190,6 +220,8 @@ function parseOrigin(source: Source): MaintenanceOrigin | null {
       relativePath: value['relativePath'],
       ...(value['mountName'] !== undefined && { mountName: value['mountName'] }),
       ...(value['originPath'] !== undefined && { originPath: value['originPath'] }),
+      ...(value['completedHash'] !== undefined && { completedHash: value['completedHash'] }),
+      ...(value['excludedReason'] !== undefined && { excludedReason: value['excludedReason'] }),
     };
   } catch {
     return null;
@@ -266,6 +298,7 @@ export function scanMountedSources(
     unchanged: 0,
     legacyUnchanged: 0,
     policyBlocked: 0,
+    governedExcluded: 0,
     new: 0,
     changed: 0,
     pending: 0,
@@ -305,9 +338,16 @@ export function scanMountedSources(
 
       const tracked = trackedByOrigin.get(key);
       if (tracked !== undefined) {
-        if (tracked.hash === hash && compiledSourceIds.has(tracked.id)) {
-          counts.unchanged++;
-          continue;
+        const origin = parseOrigin(tracked);
+        if (tracked.hash === hash && origin?.completedHash === hash) {
+          if (typeof origin.excludedReason === 'string') {
+            counts.governedExcluded++;
+            continue;
+          }
+          if (compiledSourceIds.has(tracked.id)) {
+            counts.unchanged++;
+            continue;
+          }
         }
         const kind: CandidateKind = tracked.hash === hash ? 'pending' : 'changed';
         counts[kind]++;
@@ -451,6 +491,166 @@ function finiteNonNegative(raw: string | undefined, fallback: number, label: str
   return value;
 }
 
+function positiveInteger(raw: string | undefined, fallback: number, label: string): number {
+  const value = finiteNonNegative(raw, fallback, label);
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(`${label} must be a positive integer, got "${raw ?? String(fallback)}"`);
+  }
+  return value;
+}
+
+interface MeterState {
+  operations: number;
+  inputTokens: number;
+  outputTokens: number;
+  actualCostUsd: number;
+}
+
+interface MeteredClientOptions {
+  db: Database;
+  runId: string;
+  model: string;
+  dailyCeilingUsd: number;
+  spentTodayBeforeUsd: number;
+  operationType: () => string;
+}
+
+/** Wrap a provider client with a one-row-per-call durable usage ledger and hard runtime ceiling. */
+export function createMeteredMaintenanceClient(
+  client: ClaudeClient,
+  options: MeteredClientOptions,
+): { client: ClaudeClient; state: MeterState } {
+  const state: MeterState = {
+    operations: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    actualCostUsd: 0,
+  };
+
+  const metered: ClaudeClient = {
+    async createCompletion(
+      systemPrompt: string,
+      userPrompt: string,
+      completionOptions?: CompletionOptions,
+    ): Promise<Result<CompletionResult, Error>> {
+      const requestedModel = completionOptions?.model ?? options.model;
+      const maxOutputTokens = completionOptions?.maxTokens ?? 4096;
+      // UTF-8 bytes + a fixed protocol allowance is a deliberately conservative
+      // upper bound for provider input tokens. Refuse before a call whose worst
+      // case could cross the operator's ceiling; actual usage replaces it after.
+      const maxInputTokens = Buffer.byteLength(systemPrompt) + Buffer.byteLength(userPrompt) + 1024;
+      const worstCaseCost = calculateCost(
+        maxInputTokens,
+        maxOutputTokens,
+        resolvePricingModel(requestedModel),
+      );
+      if (
+        options.spentTodayBeforeUsd + state.actualCostUsd + worstCaseCost >
+        options.dailyCeilingUsd
+      ) {
+        return err(
+          new Error(
+            `[${INFERENCE_BUDGET_EXCEEDED}] next ${options.operationType()} call could raise ` +
+              `the UTC-day total above $${options.dailyCeilingUsd.toFixed(2)}`,
+          ),
+        );
+      }
+
+      const result = await client.createCompletion(systemPrompt, userPrompt, completionOptions);
+      if (!result.ok) return result;
+
+      const sequence = state.operations + 1;
+      const occurredAt = new Date().toISOString();
+      try {
+        options.db
+          .prepare(
+            `INSERT INTO inference_operations
+               (id, run_id, operation_sequence, operation_type, occurred_at,
+                model, input_tokens, output_tokens)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            randomUUID(),
+            options.runId,
+            sequence,
+            options.operationType(),
+            occurredAt,
+            result.value.model,
+            result.value.inputTokens,
+            result.value.outputTokens,
+          );
+      } catch (error) {
+        return err(
+          new Error(
+            `Provider call succeeded but its usage receipt could not be recorded: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          ),
+        );
+      }
+
+      state.operations = sequence;
+      state.inputTokens += result.value.inputTokens;
+      state.outputTokens += result.value.outputTokens;
+      state.actualCostUsd += calculateCost(
+        result.value.inputTokens,
+        result.value.outputTokens,
+        resolvePricingModel(result.value.model),
+      );
+      return result;
+    },
+  };
+  return { client: metered, state };
+}
+
+function maintenanceOperationTypes(candidateCount: number): string[] {
+  return [
+    ...Array<string>(candidateCount).fill('summary'),
+    ...Array<string>(Math.ceil(candidateCount / DEFAULT_BATCH_SIZE)).fill('concept'),
+  ];
+}
+
+function markMaintenanceComplete(
+  db: Database,
+  candidate: MaintenanceCandidate,
+  completedAt: string,
+  excludedReason?: string,
+): void {
+  const row = db
+    .prepare<[string, string], { id: string; metadata: string | null }>(
+      `SELECT id, metadata FROM sources
+        WHERE path = ? AND hash = ?
+        ORDER BY ingested_at DESC LIMIT 1`,
+    )
+    .get(candidate.rawPath, candidate.hash);
+  if (row === undefined) {
+    throw new Error(`Completed maintenance source is not registered: ${candidate.rawPath}`);
+  }
+  let metadata: Record<string, unknown> = {};
+  if (row.metadata !== null) {
+    try {
+      metadata = JSON.parse(row.metadata) as Record<string, unknown>;
+    } catch {
+      metadata = {};
+    }
+  }
+  const existing =
+    typeof metadata['maintenance'] === 'object' && metadata['maintenance'] !== null
+      ? (metadata['maintenance'] as Record<string, unknown>)
+      : {};
+  metadata['maintenance'] = {
+    ...existing,
+    mountId: candidate.mountId,
+    mountName: candidate.mountName,
+    relativePath: candidate.relativePath,
+    originPath: candidate.originPath,
+    completedHash: candidate.hash,
+    completedAt,
+    ...(excludedReason === undefined ? {} : { excludedReason }),
+  };
+  db.prepare('UPDATE sources SET metadata = ? WHERE id = ?').run(JSON.stringify(metadata), row.id);
+}
+
 function emptyAffected(): AffectedSet {
   return {
     changedSourcePaths: [],
@@ -470,6 +670,7 @@ function emptyReceiptScan(): Omit<MaintenanceScan, 'candidates'> {
       unchanged: 0,
       legacyUnchanged: 0,
       policyBlocked: 0,
+      governedExcluded: 0,
       new: 0,
       changed: 0,
       pending: 0,
@@ -490,7 +691,8 @@ function printReceipt(receipt: MaintenanceReceipt, json: boolean): void {
   const summary =
     `${receipt.status}: ${counts.files} files, ${counts.new} new, ` +
     `${counts.changed} changed, ${counts.pending} pending, ` +
-    `${counts.policyBlocked} policy-blocked, ${receipt.compilationRowsAdded} compilations added`;
+    `${counts.policyBlocked} policy-blocked, ${receipt.progress.processed} processed, ` +
+    `${receipt.progress.remaining} remaining, ${receipt.compilationRowsAdded} compilations added`;
   process.stdout.write(
     (receipt.status === 'failure' ? formatError(summary) : formatSuccess(summary)) + '\n',
   );
@@ -499,10 +701,38 @@ function printReceipt(receipt: MaintenanceReceipt, json: boolean): void {
   );
 }
 
+function emptyProgress(eligible = 0, selected = 0): MaintenanceReceipt['progress'] {
+  return {
+    eligible,
+    selected,
+    processed: 0,
+    governedExcluded: 0,
+    failed: 0,
+    remaining: eligible,
+  };
+}
+
+function emptyInference(dailyCeilingUsd: number): MaintenanceReceipt['inference'] {
+  return {
+    operations: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    actualCostUsd: 0,
+    spentTodayBeforeUsd: 0,
+    spentTodayAfterUsd: 0,
+    dailyCeilingUsd,
+  };
+}
+
+interface MaintenanceDependencies {
+  createClient?: (apiKey: string) => ClaudeClient;
+}
+
 export async function runMaintenance(
   workspacePath: string,
   dbPath: string,
   opts: MaintainOptions,
+  dependencies: MaintenanceDependencies = {},
 ): Promise<MaintenanceReceipt> {
   const runId = new Date().toISOString().replace(/[:.]/g, '-');
   const startedAt = new Date().toISOString();
@@ -510,6 +740,7 @@ export async function runMaintenance(
   const dailyCeilingUsd = finiteNonNegative(opts.dailyCeilingUsd, 1, '--daily-ceiling-usd');
   const debounceSeconds = finiteNonNegative(opts.debounceSeconds, 300, '--debounce-seconds');
   const lockWaitSeconds = finiteNonNegative(opts.lockWaitSeconds, 10, '--lock-wait-seconds');
+  const maxCandidates = positiveInteger(opts.maxCandidates, 10, '--max-candidates');
   let finalReceipt: MaintenanceReceipt | null = null;
 
   const lockResult = await withWriteLock(
@@ -524,6 +755,7 @@ export async function runMaintenance(
         } catch (error) {
           finalReceipt = {
             schemaVersion: RECEIPT_SCHEMA_VERSION,
+            compileScope: 'mounted-source',
             runId,
             startedAt,
             finishedAt: new Date().toISOString(),
@@ -535,23 +767,48 @@ export async function runMaintenance(
             plannedAffectedTypes: [],
             compilationRowsAdded: 0,
             projectedCostUsd: null,
+            progress: emptyProgress(),
+            inference: emptyInference(dailyCeilingUsd),
             errorCode: 'scan_failed',
             error: error instanceof Error ? error.message : String(error),
           };
           writeMaintenanceReceipt(workspacePath, finalReceipt);
           return;
         }
+        const previous = readLatestMaintenanceReceipt(workspacePath);
+        const retryOrder = new Map(
+          (previous?.status === 'failure' || previous?.status === 'running'
+            ? previous.rawPaths
+            : []
+          ).map((path, index) => [path, index]),
+        );
+        const orderedCandidates = [...scan.candidates].sort((a, b) => {
+          const aRetry = retryOrder.get(a.rawPath);
+          const bRetry = retryOrder.get(b.rawPath);
+          if (aRetry !== undefined || bRetry !== undefined) {
+            if (aRetry === undefined) return 1;
+            if (bRetry === undefined) return -1;
+            return aRetry - bRetry;
+          }
+          return a.rawPath.localeCompare(b.rawPath);
+        });
+        const selectedCandidates =
+          opts.scanOnly === true ? orderedCandidates : orderedCandidates.slice(0, maxCandidates);
+
         const base: Omit<MaintenanceReceipt, 'status' | 'finishedAt' | 'errorCode' | 'error'> = {
           schemaVersion: RECEIPT_SCHEMA_VERSION,
+          compileScope: 'mounted-source',
           runId,
           startedAt,
           workspace: workspacePath,
           model: null,
           scan: receiptScan(scan),
-          rawPaths: scan.candidates.map((candidate) => candidate.rawPath),
+          rawPaths: selectedCandidates.map((candidate) => candidate.rawPath),
           plannedAffectedTypes: [],
           compilationRowsAdded: 0,
           projectedCostUsd: null,
+          progress: emptyProgress(scan.candidates.length, selectedCandidates.length),
+          inference: emptyInference(dailyCeilingUsd),
         };
 
         const fail = (errorCode: string, error: string): MaintenanceReceipt => ({
@@ -586,22 +843,10 @@ export async function runMaintenance(
           return;
         }
 
-        const previous = readLatestMaintenanceReceipt(workspacePath);
-        const retryPaths =
-          previous !== null && (previous.status === 'failure' || previous.status === 'running')
-            ? previous.rawPaths.filter((path) => existsSync(join(workspacePath, path)))
-            : [];
-        const isRetry = retryPaths.length > 0;
-        const candidatePaths = new Set(scan.candidates.map((candidate) => candidate.rawPath));
-        const retryOnlyPaths = retryPaths.filter((path) => !candidatePaths.has(path));
-        const changed: ChangedFile[] = scan.candidates.map((candidate) => ({
+        const changed: ChangedFile[] = selectedCandidates.map((candidate) => ({
           path: candidate.rawPath,
           hash: candidate.hash,
         }));
-        for (const path of retryOnlyPaths) {
-          const bytes = readFileSync(join(workspacePath, path));
-          changed.push({ path, hash: sha256(bytes) });
-        }
 
         if (changed.length === 0) {
           const terminalReceipt: MaintenanceReceipt = {
@@ -624,29 +869,21 @@ export async function runMaintenance(
           return;
         }
         const affected = affectedResult.value;
-        const forcedPaths = [
-          ...scan.candidates
-            .filter((candidate) => candidate.kind === 'pending')
-            .map((candidate) => candidate.rawPath),
-          ...retryOnlyPaths,
-        ];
-        const plannedAffectedTypes =
-          isRetry && previous?.plannedAffectedTypes.length
-            ? previous.plannedAffectedTypes
-            : affectedCostTypes(affected, forcedPaths.length);
-        const retryNeedsCrossSource =
-          isRetry &&
-          (previous?.plannedAffectedTypes.some((type) =>
-            ['topic', 'contradiction', 'open-question'].includes(type),
-          ) ??
-            false);
+        const forcedPaths = selectedCandidates
+          .filter((candidate) => candidate.kind === 'pending')
+          .map((candidate) => candidate.rawPath);
+        // Scheduled maintenance makes one narrow, machine-checkable freshness
+        // claim: every mounted source hash has a summary or an explicit
+        // governed exclusion. Corpus-wide synthesis is intentionally reserved
+        // for `ico compile all`; attempting it on the final catch-up batch would
+        // turn a bounded source job into an uncheckpointed all-corpus rewrite.
+        const plannedAffectedTypes = maintenanceOperationTypes(selectedCandidates.length);
         base.plannedAffectedTypes = [...plannedAffectedTypes];
-        base.rawPaths = Array.from(new Set(changed.map((item) => item.path))).sort();
 
         if (opts.scanOnly === true) {
           finalReceipt = fail(
             'scan_found_pending_work',
-            `Scan-only run found ${changed.length} source path(s) requiring work`,
+            `Scan-only run found ${scan.candidates.length} source path(s) requiring work`,
           );
           writeMaintenanceReceipt(workspacePath, finalReceipt);
           return;
@@ -680,6 +917,8 @@ export async function runMaintenance(
           return;
         }
         base.projectedCostUsd = gate.value.projectedCostUsd;
+        base.inference.spentTodayBeforeUsd = gate.value.spentTodayUsd;
+        base.inference.spentTodayAfterUsd = gate.value.spentTodayUsd;
         if (gate.value.decision !== 'proceed') {
           finalReceipt = fail(`cost_${gate.value.decision}`, gate.value.reason);
           writeMaintenanceReceipt(workspacePath, finalReceipt);
@@ -700,11 +939,13 @@ export async function runMaintenance(
           .get();
         if (before === undefined) throw new Error('Could not count compilation rows before run');
 
+        let meter: ReturnType<typeof createMeteredMaintenanceClient> | null = null;
         try {
-          for (const candidate of scan.candidates) atomicWriteCandidate(workspacePath, candidate);
+          for (const candidate of selectedCandidates)
+            atomicWriteCandidate(workspacePath, candidate);
 
           const provenance = new Map<string, RawSourceProvenance>();
-          for (const candidate of scan.candidates) {
+          for (const candidate of selectedCandidates) {
             provenance.set(candidate.rawPath, {
               mountId: candidate.mountId,
               metadata: {
@@ -726,14 +967,29 @@ export async function runMaintenance(
             provenanceByPath: provenance,
           });
 
-          const client = createClaudeClient(config.apiKey);
-          const ctx: CompileContext = { workspacePath, dbPath, db, client, model };
-          await runAffectedPipelineUnlocked(ctx, affected, {
+          let operationType = 'unknown';
+          meter = createMeteredMaintenanceClient(
+            (dependencies.createClient ?? createClaudeClient)(config.apiKey),
+            {
+              db,
+              runId,
+              model,
+              dailyCeilingUsd,
+              spentTodayBeforeUsd: gate.value.spentTodayUsd,
+              operationType: () => operationType,
+            },
+          );
+          const ctx: CompileContext = { workspacePath, dbPath, db, client: meter.client, model };
+          const pipeline = await runAffectedPipelineUnlocked(ctx, affected, {
             forceSourceWork: forcedPaths.length > 0,
-            // A retry may have registered the raw source before a later pass
-            // failed, so today's diff can be empty. Resume only the pass classes
-            // that the preceding, already-priced plan contained.
-            forceCrossSource: retryNeedsCrossSource,
+            // Keep this scheduler bounded even on the final backlog batch.
+            // Operators run the six-pass, corpus-wide path explicitly with
+            // `ico compile all` under its own cost decision and evidence.
+            suppressCrossSource: true,
+            sourcePaths: selectedCandidates.map((candidate) => candidate.rawPath),
+            onPassStart: (type) => {
+              operationType = type;
+            },
           });
 
           const after = db
@@ -741,24 +997,79 @@ export async function runMaintenance(
             .get();
           if (after === undefined) throw new Error('Could not count compilation rows after run');
           base.compilationRowsAdded = after.n - before.n;
-          if (base.compilationRowsAdded <= 0) {
-            throw new Error('Compiler returned without adding a compilation row');
+
+          const skipped = new Set(pipeline.summary.skippedPaths);
+          const completedAt = new Date().toISOString();
+          const completed: MaintenanceCandidate[] = [];
+          const failed: MaintenanceCandidate[] = [];
+          for (const candidate of selectedCandidates) {
+            const hasSummary = summaryPathsForSources(db, [candidate.rawPath]).length > 0;
+            if (hasSummary || skipped.has(candidate.rawPath)) {
+              markMaintenanceComplete(
+                db,
+                candidate,
+                completedAt,
+                skipped.has(candidate.rawPath) ? 'compile_validation' : undefined,
+              );
+              completed.push(candidate);
+            } else {
+              failed.push(candidate);
+            }
+          }
+
+          base.progress.processed = completed.length;
+          base.progress.governedExcluded = completed.filter((candidate) =>
+            skipped.has(candidate.rawPath),
+          ).length;
+          base.progress.failed = failed.length;
+          base.progress.remaining = scan.candidates.length - completed.length;
+          base.inference = {
+            operations: meter.state.operations,
+            inputTokens: meter.state.inputTokens,
+            outputTokens: meter.state.outputTokens,
+            actualCostUsd: meter.state.actualCostUsd,
+            spentTodayBeforeUsd: gate.value.spentTodayUsd,
+            spentTodayAfterUsd: gate.value.spentTodayUsd + meter.state.actualCostUsd,
+            dailyCeilingUsd,
+          };
+
+          if (failed.length > 0) {
+            finalReceipt = fail(
+              'source_compile_failed',
+              `${failed.length} selected source(s) did not reach a summary or governed exclusion`,
+            );
+            writeMaintenanceReceipt(workspacePath, finalReceipt);
+            return;
           }
 
           const terminalReceipt: MaintenanceReceipt = {
             ...base,
-            finishedAt: new Date().toISOString(),
-            status: 'compiled',
+            finishedAt: completedAt,
+            status: base.progress.remaining > 0 ? 'partial' : 'compiled',
             errorCode: null,
             error: null,
           };
-          db.prepare('UPDATE mounts SET last_indexed_at = ?').run(terminalReceipt.finishedAt);
+          if (terminalReceipt.status === 'compiled') {
+            db.prepare('UPDATE mounts SET last_indexed_at = ?').run(terminalReceipt.finishedAt);
+          }
           writeMaintenanceReceipt(workspacePath, terminalReceipt);
           finalReceipt = terminalReceipt;
         } catch (error) {
+          if (meter !== null) {
+            base.inference = {
+              operations: meter.state.operations,
+              inputTokens: meter.state.inputTokens,
+              outputTokens: meter.state.outputTokens,
+              actualCostUsd: meter.state.actualCostUsd,
+              spentTodayBeforeUsd: base.inference.spentTodayBeforeUsd,
+              spentTodayAfterUsd: base.inference.spentTodayBeforeUsd + meter.state.actualCostUsd,
+              dailyCeilingUsd,
+            };
+          }
+          const message = error instanceof Error ? error.message : String(error);
           finalReceipt = fail(
-            'compile_failed',
-            error instanceof Error ? error.message : String(error),
+            message.includes(INFERENCE_BUDGET_EXCEEDED) ? 'cost_runtime_defer' : 'compile_failed',
+            message,
           );
           writeMaintenanceReceipt(workspacePath, finalReceipt);
         }
@@ -776,6 +1087,7 @@ export async function runMaintenance(
     if (finalReceipt === null) {
       finalReceipt = {
         schemaVersion: RECEIPT_SCHEMA_VERSION,
+        compileScope: 'mounted-source',
         runId,
         startedAt,
         finishedAt: new Date().toISOString(),
@@ -787,6 +1099,8 @@ export async function runMaintenance(
         plannedAffectedTypes: [],
         compilationRowsAdded: 0,
         projectedCostUsd: null,
+        progress: emptyProgress(),
+        inference: emptyInference(dailyCeilingUsd),
         errorCode: 'write_lock_unavailable',
         error: message,
       };
@@ -814,9 +1128,10 @@ export function register(program: Command): void {
       '0',
     )
     .option('--lock-wait-seconds <n>', 'Seconds to wait for the required brain write lock', '10')
+    .option('--max-candidates <n>', 'Maximum mounted source candidates processed per run', '10')
     .addHelpText(
       'after',
-      '\nOutcomes:\n  compiled       eligible deltas produced compilation rows\n  verified_noop content hashes prove there was no eligible work\n  failure        stale/missing input, pending retirement, budget, lock, or compiler failure',
+      '\nOutcomes:\n  compiled       every eligible delta reached a compiled or governed outcome\n  partial        the bounded batch advanced, with remaining work receipted\n  verified_noop content hashes prove there was no eligible work\n  failure        stale/missing input, pending retirement, budget, lock, or compiler failure',
     )
     .action(async (opts: MaintainOptions, cmd: Command) => {
       const global = cmd.optsWithGlobals<GlobalOptions>();

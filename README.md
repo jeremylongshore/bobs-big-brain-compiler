@@ -151,7 +151,7 @@ The hard constraint, drilled through every component: **the model never directly
 | `ico mount add <name> <path>`     | Register a source directory                              |
 | `ico ingest <path>`               | Parse PDFs/MD/web-clips into the raw layer               |
 | `ico compile all`                 | Run the six compiler passes (provider calls happen here) |
-| `ico maintain`                    | Scan mounts and emit a compiled/no-op/failure receipt    |
+| `ico maintain`                    | Run bounded, receipted mounted-source compilation        |
 | `ico ask "<question>"`            | Grounded Q&A with citations                              |
 | `ico research "<brief>"`          | Multi-agent research task (5 stages, ~5 min)             |
 | `ico render report --topic <t>`   | Generate a markdown report                               |

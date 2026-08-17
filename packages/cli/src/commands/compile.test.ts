@@ -125,7 +125,7 @@ function writeSource(relPath: string, content: string): void {
  * `fn` exactly once so callers can still assert mock call counts afterward. The
  * name is retained from the pre-#154 process.exit era; the contract is a throw.
  */
-async function expectExit(code: number, fn: () => Promise<void>): Promise<void> {
+async function expectExit(code: number, fn: () => Promise<unknown>): Promise<void> {
   let thrown: unknown;
   try {
     await fn();

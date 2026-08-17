@@ -4,12 +4,15 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ClaudeClient } from '@ico/compiler';
 import { closeDatabase, initDatabase, registerMount, registerSource } from '@ico/kernel';
+import { ok } from '@ico/types';
 
 import {
   buildMaintenanceRawPath,
+  createMeteredMaintenanceClient,
   type MaintenanceReceipt,
   readLatestMaintenanceReceipt,
   runMaintenance,
@@ -26,6 +29,8 @@ describe('ico maintain planning', () => {
   let workspace: string;
   let mounted: string;
   let savedTeamkbLock: string | undefined;
+  let savedProvider: string | undefined;
+  let savedMiniMaxKey: string | undefined;
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'ico-maintain-'));
@@ -35,12 +40,20 @@ describe('ico maintain planning', () => {
     mkdirSync(join(workspace, 'raw', 'notes'), { recursive: true });
     mkdirSync(mounted, { recursive: true });
     savedTeamkbLock = process.env['TEAMKB_LOCK'];
+    savedProvider = process.env['ICO_PROVIDER'];
+    savedMiniMaxKey = process.env['MINIMAX_API_KEY'];
     process.env['TEAMKB_LOCK'] = join(root, '.write.lock');
+    process.env['ICO_PROVIDER'] = 'minimax';
+    process.env['MINIMAX_API_KEY'] = 'test-key';
   });
 
   afterEach(() => {
     if (savedTeamkbLock === undefined) delete process.env['TEAMKB_LOCK'];
     else process.env['TEAMKB_LOCK'] = savedTeamkbLock;
+    if (savedProvider === undefined) delete process.env['ICO_PROVIDER'];
+    else process.env['ICO_PROVIDER'] = savedProvider;
+    if (savedMiniMaxKey === undefined) delete process.env['MINIMAX_API_KEY'];
+    else process.env['MINIMAX_API_KEY'] = savedMiniMaxKey;
     rmSync(root, { recursive: true, force: true });
   });
 
@@ -144,7 +157,8 @@ describe('ico maintain planning', () => {
 
   it('writes latest and history receipts atomically', () => {
     const receipt: MaintenanceReceipt = {
-      schemaVersion: 1,
+      schemaVersion: 2,
+      compileScope: 'mounted-source',
       runId: '2026-08-16T00-00-00-000Z',
       startedAt: '2026-08-16T00:00:00.000Z',
       finishedAt: '2026-08-16T00:00:01.000Z',
@@ -159,6 +173,7 @@ describe('ico maintain planning', () => {
           unchanged: 0,
           legacyUnchanged: 0,
           policyBlocked: 0,
+          governedExcluded: 0,
           new: 0,
           changed: 0,
           pending: 0,
@@ -172,6 +187,23 @@ describe('ico maintain planning', () => {
       plannedAffectedTypes: [],
       compilationRowsAdded: 0,
       projectedCostUsd: null,
+      progress: {
+        eligible: 0,
+        selected: 0,
+        processed: 0,
+        governedExcluded: 0,
+        failed: 0,
+        remaining: 0,
+      },
+      inference: {
+        operations: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        actualCostUsd: 0,
+        spentTodayBeforeUsd: 0,
+        spentTodayAfterUsd: 0,
+        dailyCeilingUsd: 1,
+      },
       errorCode: null,
       error: null,
     };
@@ -240,6 +272,183 @@ describe('ico maintain planning', () => {
     expect(receipt.rawPaths).toHaveLength(1);
     expect(receipt.rawPaths[0]).toMatch(/^raw\/notes\/live-repo-new-[0-9a-f]{12}\.md$/);
     expect(readLatestMaintenanceReceipt(workspace)).toEqual(receipt);
+  });
+
+  it('processes a bounded batch, receipts exact calls once, and leaves honest remaining work', async () => {
+    const dbPath = join(workspace, '.ico', 'state.db');
+    const dbResult = initDatabase(dbPath);
+    expect(dbResult.ok).toBe(true);
+    if (!dbResult.ok) return;
+    try {
+      expect(registerMount(dbResult.value, 'live-repo', mounted).ok).toBe(true);
+      writeFileSync(join(mounted, 'a.md'), '# Alpha\nA durable alpha decision.\n', 'utf-8');
+      writeFileSync(join(mounted, 'b.md'), '# Beta\nA durable beta decision.\n', 'utf-8');
+    } finally {
+      closeDatabase(dbResult.value);
+    }
+
+    let call = 0;
+    const fakeClient: ClaudeClient = {
+      createCompletion: vi.fn(() => {
+        call++;
+        const content =
+          call === 1
+            ? `---\ntype: source-summary\nid: 11111111-1111-4111-8111-111111111111\ntitle: Bounded Source\nsource_id: 22222222-2222-4222-8222-222222222222\nsource_path: raw/notes/source.md\ncompiled_at: 2026-08-16T00:00:00.000Z\nmodel: MiniMax-M3\ncontent_hash: abc123\n---\n\n## Summary\n\nThis source records a durable decision with enough grounded detail for deterministic validation.`
+            : `---\ntype: concept\nid: 33333333-3333-4333-8333-333333333333\ntitle: Bounded Progress\ndefinition: A compiler processes a deterministic subset without claiming the backlog is fresh.\nsource_ids: []\ncompiled_at: 2026-08-16T00:00:00.000Z\nmodel: MiniMax-M3\n---\n\n## Definition\n\nBounded progress exposes completed and remaining work in the same receipt.`;
+        return Promise.resolve(
+          ok({
+            content,
+            inputTokens: call === 1 ? 120 : 80,
+            outputTokens: call === 1 ? 60 : 40,
+            model: 'MiniMax-M3',
+            stopReason: 'stop',
+          }),
+        );
+      }),
+    };
+
+    const receipt = await runMaintenance(
+      workspace,
+      dbPath,
+      {
+        maxCandidates: '1',
+        dailyCeilingUsd: '10',
+        debounceSeconds: '0',
+        lockWaitSeconds: '1',
+      },
+      { createClient: () => fakeClient },
+    );
+
+    expect(receipt.status).toBe('partial');
+    expect(receipt.compileScope).toBe('mounted-source');
+    expect(receipt.progress).toMatchObject({
+      eligible: 2,
+      selected: 1,
+      processed: 1,
+      failed: 0,
+      remaining: 1,
+    });
+    expect(receipt.inference).toMatchObject({
+      operations: 2,
+      inputTokens: 200,
+      outputTokens: 100,
+    });
+    expect(receipt.inference.actualCostUsd).toBeGreaterThan(0);
+
+    const verifyResult = initDatabase(dbPath);
+    expect(verifyResult.ok).toBe(true);
+    if (!verifyResult.ok) return;
+    try {
+      const operations = verifyResult.value
+        .prepare<[], { n: number }>('SELECT COUNT(*) AS n FROM inference_operations')
+        .get();
+      expect(operations?.n).toBe(2);
+      const scan = scanMountedSources(verifyResult.value, workspace);
+      expect(scan.candidates).toHaveLength(1);
+      expect(scan.counts.unchanged).toBe(1);
+    } finally {
+      closeDatabase(verifyResult.value);
+    }
+  });
+
+  it('keeps the final source batch bounded instead of launching corpus-wide passes', async () => {
+    const dbPath = join(workspace, '.ico', 'state.db');
+    const dbResult = initDatabase(dbPath);
+    expect(dbResult.ok).toBe(true);
+    if (!dbResult.ok) return;
+    try {
+      expect(registerMount(dbResult.value, 'live-repo', mounted).ok).toBe(true);
+      writeFileSync(join(mounted, 'only.md'), '# Only\nOne final durable source.\n', 'utf-8');
+    } finally {
+      closeDatabase(dbResult.value);
+    }
+
+    let call = 0;
+    const fakeClient: ClaudeClient = {
+      createCompletion: vi.fn(() => {
+        call++;
+        if (call > 2) throw new Error('unexpected corpus-wide provider call');
+        const content =
+          call === 1
+            ? `---\ntype: source-summary\nid: 11111111-1111-4111-8111-111111111111\ntitle: Final Source\nsource_id: 22222222-2222-4222-8222-222222222222\nsource_path: raw/notes/source.md\ncompiled_at: 2026-08-16T00:00:00.000Z\nmodel: MiniMax-M3\ncontent_hash: abc123\n---\n\n## Summary\n\nThis final source records a durable decision with enough grounded detail for deterministic validation.`
+            : `---\ntype: concept\nid: 33333333-3333-4333-8333-333333333333\ntitle: Final Batch\ndefinition: The terminal source batch remains bounded to mounted-source compilation.\nsource_ids: []\ncompiled_at: 2026-08-16T00:00:00.000Z\nmodel: MiniMax-M3\n---\n\n## Definition\n\nThe scheduled maintainer does not silently expand into a corpus-wide rewrite.`;
+        return Promise.resolve(
+          ok({
+            content,
+            inputTokens: 100,
+            outputTokens: 50,
+            model: 'MiniMax-M3',
+            stopReason: 'stop',
+          }),
+        );
+      }),
+    };
+
+    const receipt = await runMaintenance(
+      workspace,
+      dbPath,
+      {
+        maxCandidates: '10',
+        dailyCeilingUsd: '10',
+        debounceSeconds: '0',
+        lockWaitSeconds: '1',
+      },
+      { createClient: () => fakeClient },
+    );
+
+    expect(receipt.status).toBe('compiled');
+    expect(receipt.compileScope).toBe('mounted-source');
+    expect(receipt.progress.remaining).toBe(0);
+    expect(receipt.plannedAffectedTypes).toEqual(['summary', 'concept']);
+    expect(receipt.inference.operations).toBe(2);
+    expect(call).toBe(2);
+  });
+
+  it('refuses a provider call before its worst case can cross the runtime ceiling', async () => {
+    const dbPath = join(workspace, '.ico', 'state.db');
+    const dbResult = initDatabase(dbPath);
+    expect(dbResult.ok).toBe(true);
+    if (!dbResult.ok) return;
+    try {
+      const provider = vi.fn(() =>
+        Promise.resolve(
+          ok({
+            content: 'unused',
+            inputTokens: 1,
+            outputTokens: 1,
+            model: 'MiniMax-M3',
+            stopReason: 'stop',
+          }),
+        ),
+      );
+      const metered = createMeteredMaintenanceClient(
+        { createCompletion: provider },
+        {
+          db: dbResult.value,
+          runId: 'runtime-ceiling-test',
+          model: 'MiniMax-M3',
+          dailyCeilingUsd: 0.000001,
+          spentTodayBeforeUsd: 0,
+          operationType: () => 'summary',
+        },
+      );
+
+      const result = await metered.client.createCompletion('system', 'prompt', {
+        model: 'MiniMax-M3',
+        maxTokens: 4096,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.message).toContain('INFERENCE_BUDGET_EXCEEDED');
+      expect(provider).not.toHaveBeenCalled();
+      expect(metered.state.operations).toBe(0);
+      const operations = dbResult.value
+        .prepare<[], { n: number }>('SELECT COUNT(*) AS n FROM inference_operations')
+        .get();
+      expect(operations?.n).toBe(0);
+    } finally {
+      closeDatabase(dbResult.value);
+    }
   });
 
   it('cannot emit success when a registered mount is missing', async () => {

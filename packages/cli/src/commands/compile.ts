@@ -166,7 +166,16 @@ export function isAuthError(message: string): boolean {
  * regardless of total failure count — masked bad API keys as silent success
  * with empty wiki dirs.
  */
-export async function runSummarize(ctx: CompileContext): Promise<void> {
+export interface SummaryRunOutcome {
+  compiledPaths: string[];
+  skippedPaths: string[];
+  failedPaths: string[];
+}
+
+export async function runSummarize(
+  ctx: CompileContext,
+  sourcePaths?: readonly string[],
+): Promise<SummaryRunOutcome> {
   const uncompiledResult = getUncompiledSources(ctx.db);
   if (!uncompiledResult.ok) {
     const msg = `Failed to list sources: ${uncompiledResult.error.message}`;
@@ -174,12 +183,16 @@ export async function runSummarize(ctx: CompileContext): Promise<void> {
     throw new CompilePassError(1, msg);
   }
 
-  const sources = uncompiledResult.value;
+  const requested = sourcePaths === undefined ? null : new Set(sourcePaths);
+  const sources =
+    requested === null
+      ? uncompiledResult.value
+      : uncompiledResult.value.filter((source) => requested.has(source.path));
   if (sources.length === 0) {
     process.stdout.write(
       formatWarning('No uncompiled sources found. Run `ico ingest` first.') + '\n',
     );
-    return;
+    return { compiledPaths: [], skippedPaths: [], failedPaths: [] };
   }
 
   process.stdout.write(formatInfo(`Found ${sources.length} uncompiled source(s).`) + '\n');
@@ -188,6 +201,9 @@ export async function runSummarize(ctx: CompileContext): Promise<void> {
   let compiled = 0;
   let failed = 0;
   let skipped = 0;
+  const compiledPaths: string[] = [];
+  const skippedPaths: string[] = [];
+  const failedPaths: string[] = [];
 
   for (const source of sources) {
     const absPath = join(ctx.workspacePath, source.path);
@@ -200,6 +216,7 @@ export async function runSummarize(ctx: CompileContext): Promise<void> {
           '\n',
       );
       failed++;
+      failedPaths.push(source.path);
       continue;
     }
 
@@ -229,11 +246,13 @@ export async function runSummarize(ctx: CompileContext): Promise<void> {
       if (result.error instanceof CompileSkipError) {
         process.stderr.write(formatWarning(`  Skipped (validation): ${errMsg}`) + '\n');
         skipped++;
+        skippedPaths.push(source.path);
         continue;
       }
 
       process.stderr.write(formatWarning(`  Failed: ${source.path}: ${errMsg}`) + '\n');
       failed++;
+      failedPaths.push(source.path);
 
       // Auth/permission errors fast-fail — the same bad key will fail every
       // remaining source identically. Exit 2 distinguishes config failures
@@ -249,6 +268,7 @@ export async function runSummarize(ctx: CompileContext): Promise<void> {
 
     totalTokens += result.value.tokensUsed;
     compiled++;
+    compiledPaths.push(source.path);
     process.stdout.write(
       formatSuccess(`  Done: ${result.value.outputPath} (${result.value.tokensUsed} tokens)`) +
         '\n',
@@ -274,13 +294,20 @@ export async function runSummarize(ctx: CompileContext): Promise<void> {
       `Summarize pass complete: ${compiled} compiled, ${skipped} skipped (validation), ${failed} failed, ${totalTokens} tokens used.`,
     ) + '\n',
   );
+  return { compiledPaths, skippedPaths, failedPaths };
 }
 
 /** Run the extract pass: extract concepts and entities from summaries. */
-export async function runExtract(ctx: CompileContext): Promise<void> {
+export async function runExtract(
+  ctx: CompileContext,
+  selectedSummaryPaths?: readonly string[],
+): Promise<void> {
   process.stdout.write(formatInfo('Running extract pass...') + '\n');
 
-  const summaryPaths = collectSummaryPaths(ctx.workspacePath);
+  const summaryPaths =
+    selectedSummaryPaths === undefined
+      ? collectSummaryPaths(ctx.workspacePath)
+      : Array.from(new Set(selectedSummaryPaths)).sort();
   if (summaryPaths.length === 0) {
     process.stdout.write(
       formatWarning('No summaries found. Run `ico compile sources` first.') + '\n',
@@ -518,6 +545,26 @@ export function affectedCostTypes(affected: AffectedSet, forcedSourcePaths = 0):
   return types;
 }
 
+/** Resolve the newest summary page for each selected raw source path. */
+export function summaryPathsForSources(db: Database, sourcePaths: readonly string[]): string[] {
+  const statement = db.prepare<[string], { output_path: string }>(`SELECT c.output_path
+       FROM sources AS s
+       JOIN compilations AS c ON c.source_id = s.id
+      WHERE s.path = ? AND c.type = 'summary' AND c.stale = 0
+      ORDER BY s.ingested_at DESC, c.compiled_at DESC
+      LIMIT 1`);
+  const paths = new Set<string>();
+  for (const sourcePath of sourcePaths) {
+    const row = statement.get(sourcePath);
+    if (row !== undefined) paths.add(row.output_path);
+  }
+  return Array.from(paths).sort();
+}
+
+export interface AffectedPipelineOutcome {
+  summary: SummaryRunOutcome;
+}
+
 /**
  * Execute an incremental plan while the caller holds the brain write lock.
  * Exported for `ico maintain`, which must keep mount copy, source registration,
@@ -526,8 +573,14 @@ export function affectedCostTypes(affected: AffectedSet, forcedSourcePaths = 0):
 export async function runAffectedPipelineUnlocked(
   ctx: CompileContext,
   affected: AffectedSet,
-  options?: { forceSourceWork?: boolean; forceCrossSource?: boolean },
-): Promise<void> {
+  options?: {
+    forceSourceWork?: boolean;
+    forceCrossSource?: boolean;
+    suppressCrossSource?: boolean;
+    sourcePaths?: readonly string[];
+    onPassStart?: (operationType: string) => void;
+  },
+): Promise<AffectedPipelineOutcome> {
   const hasSourceDelta =
     affected.changedSourcePaths.length > 0 || affected.newSourcePaths.length > 0;
   const hasSingleSource =
@@ -535,23 +588,40 @@ export async function runAffectedPipelineUnlocked(
     hasSourceDelta ||
     affected.affectedPages.some((page) => ['summary', 'concept', 'entity'].includes(page.type));
   const hasCrossSource =
-    options?.forceCrossSource === true ||
-    affected.conservativeSweep ||
-    affected.affectedPages.some((page) =>
-      ['topic', 'contradiction', 'open-question'].includes(page.type),
-    );
+    options?.suppressCrossSource !== true &&
+    (options?.forceCrossSource === true ||
+      affected.conservativeSweep ||
+      affected.affectedPages.some((page) =>
+        ['topic', 'contradiction', 'open-question'].includes(page.type),
+      ));
 
+  let summary: SummaryRunOutcome = {
+    compiledPaths: [],
+    skippedPaths: [],
+    failedPaths: [],
+  };
   if (hasSingleSource) {
-    await runSummarize(ctx);
-    await runExtract(ctx);
+    options?.onPassStart?.('summary');
+    summary = await runSummarize(ctx, options?.sourcePaths);
+    const summaryPaths =
+      options?.sourcePaths === undefined
+        ? undefined
+        : summaryPathsForSources(ctx.db, options.sourcePaths);
+    options?.onPassStart?.('concept');
+    await runExtract(ctx, summaryPaths);
   }
   if (hasCrossSource) {
+    options?.onPassStart?.('topic');
     await runSynthesize(ctx);
+    options?.onPassStart?.('link');
     await runLink(ctx);
+    options?.onPassStart?.('contradiction');
     await runContradict(ctx);
+    options?.onPassStart?.('open-question');
     await runGap(ctx);
   }
   rebuildWikiIndex(ctx.workspacePath);
+  return { summary };
 }
 
 // ---------------------------------------------------------------------------

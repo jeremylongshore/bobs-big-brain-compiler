@@ -17,6 +17,7 @@ TIMEOUT_SECONDS="${ICO_MAINTAIN_TIMEOUT:-4500}"
 MAX_INPUT_AGE_DAYS="${ICO_MAX_INPUT_AGE_DAYS:-0}"
 DAILY_CEILING_USD="${ICO_DAILY_CEILING_USD:-1}"
 LOCK_WAIT_SECONDS="${ICO_LOCK_WAIT_SECONDS:-600}"
+MAX_CANDIDATES="${ICO_MAINTAIN_MAX_CANDIDATES:-10}"
 AF_LIB="${AF_LIB:-$HOME/bin/lib/alert-floor.sh}"
 
 mkdir -p "$STATE_DIR"
@@ -64,6 +65,7 @@ timeout --signal=TERM --kill-after=60s "$TIMEOUT_SECONDS" \
     --debounce-seconds 0 \
     --max-input-age-days "$MAX_INPUT_AGE_DAYS" \
     --lock-wait-seconds "$LOCK_WAIT_SECONDS" \
+    --max-candidates "$MAX_CANDIDATES" \
     >"$run_log" 2>&1
 run_code=$?
 set -e
@@ -76,7 +78,9 @@ if [ -s "$receipt" ]; then
   error_code="$(jq -r '.errorCode // "none"' "$receipt" 2>/dev/null || echo invalid)"
 fi
 
-if [ "$run_code" -eq 0 ] && { [ "$status" = compiled ] || [ "$status" = verified_noop ]; }; then
+if [ "$run_code" -eq 0 ] && {
+  [ "$status" = compiled ] || [ "$status" = partial ] || [ "$status" = verified_noop ]
+}; then
   jq -n \
     --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     --arg status "$status" \
