@@ -1,6 +1,14 @@
 import { spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -210,6 +218,14 @@ describe('ico maintain planning', () => {
 
     writeMaintenanceReceipt(workspace, receipt);
     expect(readLatestMaintenanceReceipt(workspace)).toEqual(receipt);
+
+    const receiptRoot = join(workspace, '.ico', 'maintenance');
+    const history = join(receiptRoot, 'receipts');
+    chmodSync(receiptRoot, 0o755);
+    chmodSync(history, 0o755);
+    writeMaintenanceReceipt(workspace, receipt);
+    expect(statSync(receiptRoot).mode & 0o777).toBe(0o700);
+    expect(statSync(history).mode & 0o777).toBe(0o700);
   });
 
   it('emits a verified_noop terminal receipt for a clean hash-complete mount', async () => {

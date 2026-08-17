@@ -189,9 +189,11 @@ export async function runSummarize(
       ? uncompiledResult.value
       : uncompiledResult.value.filter((source) => requested.has(source.path));
   if (sources.length === 0) {
-    process.stdout.write(
-      formatWarning('No uncompiled sources found. Run `ico ingest` first.') + '\n',
-    );
+    const warning =
+      requested === null
+        ? 'No uncompiled sources found. Run `ico ingest` first.'
+        : 'No selected sources need summary compilation.';
+    process.stdout.write(formatWarning(warning) + '\n');
     return { compiledPaths: [], skippedPaths: [], failedPaths: [] };
   }
 

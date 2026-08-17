@@ -10,6 +10,7 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -446,6 +447,10 @@ export function writeMaintenanceReceipt(workspacePath: string, receipt: Maintena
   const root = receiptDirectory(workspacePath);
   const history = join(root, 'receipts');
   mkdirSync(history, { recursive: true, mode: 0o700 });
+  // mkdir's mode is creation-only. Repair an existing directory on every run
+  // so a previously loose umask/manual creation cannot leave receipts exposed.
+  chmodSync(root, 0o700);
+  chmodSync(history, 0o700);
   const text = `${JSON.stringify(receipt, null, 2)}\n`;
   for (const target of [join(history, `${receipt.runId}.json`), join(root, 'latest.json')]) {
     const temporary = `${target}.tmp-${process.pid}-${randomUUID()}`;

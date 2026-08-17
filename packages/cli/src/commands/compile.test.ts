@@ -292,6 +292,20 @@ describe('runSummarize — preserved success / partial-success paths', () => {
     expect(summarizeSource).not.toHaveBeenCalled();
   });
 
+  it('reports a clean selected-source no-op without telling maintenance to ingest', async () => {
+    vi.mocked(getUncompiledSources).mockReturnValue({
+      ok: true,
+      value: [{ id: 's1', path: 'raw/other.md' } as never],
+    });
+
+    await runSummarize(makeCtx(), ['raw/selected.md']);
+
+    expect(stdoutText()).toMatch(/No selected sources need summary compilation/);
+    expect(stdoutText()).not.toMatch(/Run `ico ingest` first/);
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(summarizeSource).not.toHaveBeenCalled();
+  });
+
   it('exits 1 when getUncompiledSources fails', async () => {
     vi.mocked(getUncompiledSources).mockReturnValue({
       ok: false,
