@@ -31,7 +31,6 @@ import {
   type CompletionResult,
   computeAffectedSet,
   createClaudeClient,
-  DEFAULT_BATCH_SIZE,
   evaluateCostGate,
   resolvePricingModel,
 } from '@ico/compiler';
@@ -604,13 +603,10 @@ export function createMeteredMaintenanceClient(
 }
 
 function maintenanceOperationTypes(candidateCount: number): string[] {
-  return [
-    // summarizeSource may make one validation-repair retry. Price that
-    // documented maximum up front; the operation ledger records only the calls
-    // actually made, so the day-spend receipt remains exact.
-    ...Array<string>(candidateCount * 2).fill('summary'),
-    ...Array<string>(Math.ceil(candidateCount / DEFAULT_BATCH_SIZE)).fill('concept'),
-  ];
+  // summarizeSource may make one validation-repair retry. Price that
+  // documented maximum up front; the operation ledger records only the calls
+  // actually made, so the day-spend receipt remains exact.
+  return Array<string>(candidateCount * 2).fill('summary');
 }
 
 function markMaintenanceComplete(
@@ -877,9 +873,11 @@ export async function runMaintenance(
           .map((candidate) => candidate.rawPath);
         // Scheduled maintenance makes one narrow, machine-checkable freshness
         // claim: every mounted source hash has a summary or an explicit
-        // governed exclusion. Corpus-wide synthesis is intentionally reserved
-        // for `ico compile all`; attempting it on the final catch-up batch would
-        // turn a bounded source job into an uncheckpointed all-corpus rewrite.
+        // governed exclusion. Concept extraction is deliberately outside this
+        // checkpoint: it aggregates summaries, so one provider timeout would
+        // otherwise discard honest per-source progress for an entire batch.
+        // Operators run `ico compile concepts` / `ico compile all` explicitly
+        // under their own cost decision and evidence.
         const plannedAffectedTypes = maintenanceOperationTypes(selectedCandidates.length);
         base.plannedAffectedTypes = [...plannedAffectedTypes];
 
@@ -985,9 +983,8 @@ export async function runMaintenance(
           const ctx: CompileContext = { workspacePath, dbPath, db, client: meter.client, model };
           const pipeline = await runAffectedPipelineUnlocked(ctx, affected, {
             forceSourceWork: forcedPaths.length > 0,
-            // Keep this scheduler bounded even on the final backlog batch.
-            // Operators run the six-pass, corpus-wide path explicitly with
-            // `ico compile all` under its own cost decision and evidence.
+            // Keep this scheduler independently checkpointable per source.
+            suppressExtract: true,
             suppressCrossSource: true,
             sourcePaths: selectedCandidates.map((candidate) => candidate.rawPath),
             onPassStart: (type) => {

@@ -576,6 +576,7 @@ export async function runAffectedPipelineUnlocked(
   options?: {
     forceSourceWork?: boolean;
     forceCrossSource?: boolean;
+    suppressExtract?: boolean;
     suppressCrossSource?: boolean;
     sourcePaths?: readonly string[];
     onPassStart?: (operationType: string) => void;
@@ -603,12 +604,14 @@ export async function runAffectedPipelineUnlocked(
   if (hasSingleSource) {
     options?.onPassStart?.('summary');
     summary = await runSummarize(ctx, options?.sourcePaths);
-    const summaryPaths =
-      options?.sourcePaths === undefined
-        ? undefined
-        : summaryPathsForSources(ctx.db, options.sourcePaths);
-    options?.onPassStart?.('concept');
-    await runExtract(ctx, summaryPaths);
+    if (options?.suppressExtract !== true) {
+      const summaryPaths =
+        options?.sourcePaths === undefined
+          ? undefined
+          : summaryPathsForSources(ctx.db, options.sourcePaths);
+      options?.onPassStart?.('concept');
+      await runExtract(ctx, summaryPaths);
+    }
   }
   if (hasCrossSource) {
     options?.onPassStart?.('topic');

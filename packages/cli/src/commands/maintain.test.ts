@@ -291,15 +291,12 @@ describe('ico maintain planning', () => {
     const fakeClient: ClaudeClient = {
       createCompletion: vi.fn(() => {
         call++;
-        const content =
-          call === 1
-            ? `---\ntype: source-summary\nid: 11111111-1111-4111-8111-111111111111\ntitle: Bounded Source\nsource_id: 22222222-2222-4222-8222-222222222222\nsource_path: raw/notes/source.md\ncompiled_at: 2026-08-16T00:00:00.000Z\nmodel: MiniMax-M3\ncontent_hash: abc123\n---\n\n## Summary\n\nThis source records a durable decision with enough grounded detail for deterministic validation.`
-            : `---\ntype: concept\nid: 33333333-3333-4333-8333-333333333333\ntitle: Bounded Progress\ndefinition: A compiler processes a deterministic subset without claiming the backlog is fresh.\nsource_ids: []\ncompiled_at: 2026-08-16T00:00:00.000Z\nmodel: MiniMax-M3\n---\n\n## Definition\n\nBounded progress exposes completed and remaining work in the same receipt.`;
+        const content = `---\ntype: source-summary\nid: 11111111-1111-4111-8111-111111111111\ntitle: Bounded Source\nsource_id: 22222222-2222-4222-8222-222222222222\nsource_path: raw/notes/source.md\ncompiled_at: 2026-08-16T00:00:00.000Z\nmodel: MiniMax-M3\ncontent_hash: abc123\n---\n\n## Summary\n\nThis source records a durable decision with enough grounded detail for deterministic validation.`;
         return Promise.resolve(
           ok({
             content,
-            inputTokens: call === 1 ? 120 : 80,
-            outputTokens: call === 1 ? 60 : 40,
+            inputTokens: 120,
+            outputTokens: 60,
             model: 'MiniMax-M3',
             stopReason: 'stop',
           }),
@@ -329,10 +326,11 @@ describe('ico maintain planning', () => {
       remaining: 1,
     });
     expect(receipt.inference).toMatchObject({
-      operations: 2,
-      inputTokens: 200,
-      outputTokens: 100,
+      operations: 1,
+      inputTokens: 120,
+      outputTokens: 60,
     });
+    expect(call).toBe(1);
     expect(receipt.inference.actualCostUsd).toBeGreaterThan(0);
 
     const verifyResult = initDatabase(dbPath);
@@ -342,7 +340,7 @@ describe('ico maintain planning', () => {
       const operations = verifyResult.value
         .prepare<[], { n: number }>('SELECT COUNT(*) AS n FROM inference_operations')
         .get();
-      expect(operations?.n).toBe(2);
+      expect(operations?.n).toBe(1);
       const scan = scanMountedSources(verifyResult.value, workspace);
       expect(scan.candidates).toHaveLength(1);
       expect(scan.counts.unchanged).toBe(1);
@@ -351,7 +349,7 @@ describe('ico maintain planning', () => {
     }
   });
 
-  it('keeps the final source batch bounded instead of launching corpus-wide passes', async () => {
+  it('checkpoints the final source batch without aggregate extract or corpus-wide passes', async () => {
     const dbPath = join(workspace, '.ico', 'state.db');
     const dbResult = initDatabase(dbPath);
     expect(dbResult.ok).toBe(true);
@@ -367,11 +365,8 @@ describe('ico maintain planning', () => {
     const fakeClient: ClaudeClient = {
       createCompletion: vi.fn(() => {
         call++;
-        if (call > 2) throw new Error('unexpected corpus-wide provider call');
-        const content =
-          call === 1
-            ? `---\ntype: source-summary\nid: 11111111-1111-4111-8111-111111111111\ntitle: Final Source\nsource_id: 22222222-2222-4222-8222-222222222222\nsource_path: raw/notes/source.md\ncompiled_at: 2026-08-16T00:00:00.000Z\nmodel: MiniMax-M3\ncontent_hash: abc123\n---\n\n## Summary\n\nThis final source records a durable decision with enough grounded detail for deterministic validation.`
-            : `---\ntype: concept\nid: 33333333-3333-4333-8333-333333333333\ntitle: Final Batch\ndefinition: The terminal source batch remains bounded to mounted-source compilation.\nsource_ids: []\ncompiled_at: 2026-08-16T00:00:00.000Z\nmodel: MiniMax-M3\n---\n\n## Definition\n\nThe scheduled maintainer does not silently expand into a corpus-wide rewrite.`;
+        if (call > 1) throw new Error('unexpected aggregate provider call');
+        const content = `---\ntype: source-summary\nid: 11111111-1111-4111-8111-111111111111\ntitle: Final Source\nsource_id: 22222222-2222-4222-8222-222222222222\nsource_path: raw/notes/source.md\ncompiled_at: 2026-08-16T00:00:00.000Z\nmodel: MiniMax-M3\ncontent_hash: abc123\n---\n\n## Summary\n\nThis final source records a durable decision with enough grounded detail for deterministic validation.`;
         return Promise.resolve(
           ok({
             content,
@@ -399,9 +394,9 @@ describe('ico maintain planning', () => {
     expect(receipt.status).toBe('compiled');
     expect(receipt.compileScope).toBe('mounted-source');
     expect(receipt.progress.remaining).toBe(0);
-    expect(receipt.plannedAffectedTypes).toEqual(['summary', 'summary', 'concept']);
-    expect(receipt.inference.operations).toBe(2);
-    expect(call).toBe(2);
+    expect(receipt.plannedAffectedTypes).toEqual(['summary', 'summary']);
+    expect(receipt.inference.operations).toBe(1);
+    expect(call).toBe(1);
   });
 
   it('refuses a provider call before its worst case can cross the runtime ceiling', async () => {
