@@ -145,20 +145,21 @@ The hard constraint, drilled through every component: **the model never directly
 
 ## Commands you'll actually use
 
-|                                   |                                                        |
-| --------------------------------- | ------------------------------------------------------ |
-| `ico init <name>`                 | Create a workspace                                     |
-| `ico mount add <name> <path>`     | Register a source directory                            |
-| `ico ingest <path>`               | Parse PDFs/MD/web-clips into the raw layer             |
-| `ico compile all`                 | Run the six compiler passes (Claude calls happen here) |
-| `ico ask "<question>"`            | Grounded Q&A with citations                            |
-| `ico research "<brief>"`          | Multi-agent research task (5 stages, ~5 min)           |
-| `ico render report --topic <t>`   | Generate a markdown report                             |
-| `ico recall generate --topic <t>` | Build flashcards from compiled wiki                    |
-| `ico recall quiz --topic <t>`     | Interactive quiz; tracks retention                     |
-| `ico recall export --format anki` | Anki-importable TSV                                    |
-| `ico lint`                        | Audit the wiki (schema, staleness, orphans)            |
-| `ico status` / `ico inspect`      | Workspace summary / per-subsystem detail               |
+|                                   |                                                          |
+| --------------------------------- | -------------------------------------------------------- |
+| `ico init <name>`                 | Create a workspace                                       |
+| `ico mount add <name> <path>`     | Register a source directory                              |
+| `ico ingest <path>`               | Parse PDFs/MD/web-clips into the raw layer               |
+| `ico compile all`                 | Run the six compiler passes (provider calls happen here) |
+| `ico maintain`                    | Run bounded, receipted mounted-source compilation        |
+| `ico ask "<question>"`            | Grounded Q&A with citations                              |
+| `ico research "<brief>"`          | Multi-agent research task (5 stages, ~5 min)             |
+| `ico render report --topic <t>`   | Generate a markdown report                               |
+| `ico recall generate --topic <t>` | Build flashcards from compiled wiki                      |
+| `ico recall quiz --topic <t>`     | Interactive quiz; tracks retention                       |
+| `ico recall export --format anki` | Anki-importable TSV                                      |
+| `ico lint`                        | Audit the wiki (schema, staleness, orphans)              |
+| `ico status` / `ico inspect`      | Workspace summary / per-subsystem detail                 |
 
 Global flags on every command: `--workspace <path>`, `--json`, `--verbose`, `--quiet`. Full reference: `ico --help` or any command with `--help`.
 

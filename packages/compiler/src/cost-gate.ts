@@ -10,7 +10,7 @@
  * `anthropic` default that is ~50× more expensive.
  *
  * This module is that gate. It is deterministic and model-free: it prices a
- * proposed incremental compile from the affected-page set + historical per-type
+ * proposed incremental compile from the operation plan + historical per-call
  * token averages, checks the projection against a per-UTC-day ceiling already
  * spent, and coalesces triggers that arrive inside a debounce window. It never
  * calls an LLM and never mutates durable state; the caller decides what to do
@@ -32,11 +32,12 @@
  *
  * ## Token projection
  *
- * A compile's token cost is projected as `sum over affected pages of the
- * historical average `tokens_used` for that page's type` (from the
- * `compilations` table). When a type has no history, a conservative
- * per-type default is used (again biased high, never low). Input/output split
- * follows the same 70/30 heuristic the token-tracker uses.
+ * A compile's token cost is projected as `sum over planned provider calls of the
+ * historical average input/output usage for that operation type` (from the
+ * `inference_operations` table). One provider response may emit many compiled
+ * pages, but its usage is recorded and priced once. When a type has no history,
+ * a conservative per-type default is used (again biased high, never low).
+ * Input/output split follows the same 70/30 heuristic the token-tracker uses.
  *
  * @module cost-gate
  */
@@ -84,8 +85,8 @@ export const DEFAULT_COST_GATE_CONFIG: CostGateConfig = {
 };
 
 /**
- * Conservative fallback average `tokens_used` per compilation type, used only
- * when the `compilations` table has NO history for that type. Biased toward the
+ * Conservative fallback total per provider operation, used only when the
+ * operation ledger has no history for that type. Biased toward the
  * high end of observed live values (summaries ~5k; syntheses far larger) so an
  * unknown-history projection over-estimates rather than under-estimates — a gate
  * must never wave through a compile it cannot price.
@@ -106,11 +107,11 @@ const FALLBACK_TOKENS_UNKNOWN = 50_000;
 // Public types
 // ---------------------------------------------------------------------------
 
-/** One page's contribution to the projected cost. */
+/** One planned operation type's contribution to the projected cost. */
 export interface CostLineItem {
   type: string;
   count: number;
-  /** Average tokens per page of this type (historical or fallback). */
+  /** Average tokens per provider operation of this type (historical or fallback). */
   avgTokens: number;
   /** Whether `avgTokens` came from history (`true`) or a fallback (`false`). */
   fromHistory: boolean;
@@ -127,7 +128,7 @@ export interface CostGateVerdict {
   reason: string;
   /** Projected cost of THIS compile in USD (DeepSeek-priced). */
   projectedCostUsd: number;
-  /** USD already spent this UTC day (from `compilations` rows dated today). */
+  /** USD already spent this UTC day (from one row per provider call). */
   spentTodayUsd: number;
   /** `spentTodayUsd + projectedCostUsd` — what the day total WOULD be. */
   projectedDayTotalUsd: number;
@@ -142,8 +143,8 @@ export interface CostGateVerdict {
 /** Inputs describing the proposed compile. */
 export interface CostGateInput {
   /**
-   * The affected pages' compilation types (one entry per page to recompile).
-   * Typically `affectedSet.affectedPages.map(p => p.type)`.
+   * Planned operation types. New callers provide one entry per provider call;
+   * legacy incremental callers may conservatively provide one per affected page.
    */
   affectedTypes: string[];
   /**
@@ -159,15 +160,17 @@ export interface CostGateInput {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-interface TypeAvgRow {
+interface OperationAverageRow {
   type: string;
-  avg_tokens: number | null;
+  avg_input_tokens: number | null;
+  avg_output_tokens: number | null;
   n: number;
 }
 
 interface TodaySpendRow {
   model: string;
-  total_tokens: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
 }
 
 /**
@@ -250,39 +253,55 @@ export function evaluateCostGate(
   }
 
   // ---- Project this compile's cost from per-type history ------------------
-  let historyRows: TypeAvgRow[];
+  let historyRows: OperationAverageRow[];
   try {
     historyRows = db
-      .prepare<
-        [],
-        TypeAvgRow
-      >(`SELECT type, AVG(tokens_used) AS avg_tokens, COUNT(*) AS n FROM compilations WHERE tokens_used IS NOT NULL GROUP BY type`)
+      .prepare<[], OperationAverageRow>(
+        `SELECT operation_type AS type,
+                AVG(input_tokens) AS avg_input_tokens,
+                AVG(output_tokens) AS avg_output_tokens,
+                COUNT(*) AS n
+           FROM inference_operations
+          GROUP BY operation_type`,
+      )
       .all();
   } catch (e) {
     return err(e instanceof Error ? e : new Error(String(e)));
   }
-  const avgByType = new Map<string, number>();
+  const avgByType = new Map<string, { input: number; output: number }>();
   for (const r of historyRows) {
-    if (r.n > 0 && r.avg_tokens !== null && r.avg_tokens > 0) {
-      avgByType.set(r.type, r.avg_tokens);
+    if (
+      r.n > 0 &&
+      r.avg_input_tokens !== null &&
+      r.avg_output_tokens !== null &&
+      r.avg_input_tokens + r.avg_output_tokens > 0
+    ) {
+      avgByType.set(r.type, {
+        input: r.avg_input_tokens,
+        output: r.avg_output_tokens,
+      });
     }
   }
 
-  // Count affected pages per type, then build line items.
+  // Count planned operations per type, then build line items.
   const countByType = new Map<string, number>();
   for (const t of input.affectedTypes) {
     countByType.set(t, (countByType.get(t) ?? 0) + 1);
   }
   const lineItems: CostLineItem[] = [];
-  let projectedTokens = 0;
+  let projectedCostUsd = 0;
   for (const [type, count] of Array.from(countByType.entries()).sort((a, b) =>
     a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0,
   )) {
-    const histAvg = avgByType.get(type);
-    const fromHistory = histAvg !== undefined;
-    const avgTokens = histAvg ?? FALLBACK_TOKENS_BY_TYPE[type] ?? FALLBACK_TOKENS_UNKNOWN;
+    const history = avgByType.get(type);
+    const fromHistory = history !== undefined;
+    const avgTokens =
+      history === undefined
+        ? (FALLBACK_TOKENS_BY_TYPE[type] ?? FALLBACK_TOKENS_UNKNOWN)
+        : history.input + history.output;
     const lineTokens = count * avgTokens;
-    projectedTokens += lineTokens;
+    const split = history ?? splitTokens(avgTokens);
+    projectedCostUsd += calculateCost(split.input * count, split.output * count, pricedModel);
     lineItems.push({
       type,
       count,
@@ -291,13 +310,11 @@ export function evaluateCostGate(
       projectedTokens: Math.round(lineTokens),
     });
   }
-  const projectedCostUsd = costOfTokens(projectedTokens, cfg.model);
-
-  // ---- Today's spend (UTC) from compilations dated today ------------------
-  // `compiled_at` is stored as an ISO-8601 UTC string, which sorts
+  // ---- Today's spend (UTC) from provider operations dated today -----------
+  // `occurred_at` is stored as an ISO-8601 UTC string, which sorts
   // lexicographically, so a half-open [startOfDay, startOfNextDay) range picks
-  // out today's rows while remaining SARGable — an index on `compiled_at` can
-  // satisfy it. `substr(compiled_at, 1, 10) = ?` was equivalent but wrapped the
+  // out today's rows while remaining SARGable — the `occurred_at` index can
+  // satisfy it. `substr(occurred_at, 1, 10) = ?` would wrap the
   // column in a function, defeating any index and forcing a full table scan on
   // every cost-gate evaluation.
   const dayStart = new Date(nowMs).toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
@@ -306,10 +323,11 @@ export function evaluateCostGate(
   try {
     spendRows = db
       .prepare<[string, string], TodaySpendRow>(
-        `SELECT model, SUM(tokens_used) AS total_tokens
-           FROM compilations
-          WHERE tokens_used IS NOT NULL
-            AND compiled_at >= ? AND compiled_at < ?
+        `SELECT model,
+                SUM(input_tokens) AS input_tokens,
+                SUM(output_tokens) AS output_tokens
+           FROM inference_operations
+          WHERE occurred_at >= ? AND occurred_at < ?
           GROUP BY model`,
       )
       .all(dayStart, nextDayStart);
@@ -318,9 +336,8 @@ export function evaluateCostGate(
   }
   let spentTodayUsd = 0;
   for (const r of spendRows) {
-    if (r.total_tokens !== null && r.total_tokens > 0) {
-      // Price each model's tokens at ITS OWN rate (DeepSeek-honest per tag).
-      spentTodayUsd += costOfTokens(r.total_tokens, r.model);
+    if (r.input_tokens !== null && r.output_tokens !== null) {
+      spentTodayUsd += calculateCost(r.input_tokens, r.output_tokens, resolvePricingModel(r.model));
     }
   }
 
@@ -367,7 +384,7 @@ export function evaluateCostGate(
     decision: 'proceed',
     reason:
       lineItems.length === 0
-        ? 'Proceed: no affected pages (no-op).'
+        ? 'Proceed: no planned inference operations (no-op).'
         : `Proceed: projected $${projectedCostUsd.toFixed(4)} keeps the day total at ` +
           `$${projectedDayTotalUsd.toFixed(4)}, under the $${cfg.dailyCeilingUsd.toFixed(2)} ceiling.`,
     ...base,

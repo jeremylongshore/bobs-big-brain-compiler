@@ -97,6 +97,19 @@ describe('withWriteLock', () => {
     expect(fn).toHaveBeenCalledOnce();
   });
 
+  it('refuses to run in degraded mode when requireLock is true', async () => {
+    const fn = vi.fn(() => 'should-not-run');
+    const result = await withWriteLock(fn, {
+      flockAvailable: false,
+      requireLock: true,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toMatch(/flock is required/i);
+    expect(fn).not.toHaveBeenCalled();
+  });
+
   it('acquires the lock, runs fn, and releases by closing the holder stdin', async () => {
     const { spawnFn, children } = makeSpawn('acquire');
     const fn = vi.fn(() => 42);

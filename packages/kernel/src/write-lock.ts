@@ -64,6 +64,12 @@ export interface WriteLockOptions {
   spawnFn?: typeof spawn;
   /** Whether `flock` is available. Defaults to a real PATH probe. Injectable for tests. */
   flockAvailable?: boolean;
+  /**
+   * Refuse to run when `flock` is unavailable instead of entering degraded
+   * mode. Scheduled maintenance uses this because ingest + compile is one
+   * logical transaction and must never race another brain writer.
+   */
+  requireLock?: boolean;
 }
 
 /** Outcome of a {@link withWriteLock} attempt. */
@@ -130,6 +136,9 @@ export async function withWriteLock<T>(
   // Degraded mode: no flock on PATH — run without the lock, flag it so the
   // caller can emit the same warning the shell wrapper does.
   if (!available) {
+    if (options?.requireLock === true) {
+      return err(new Error('flock is required for this operation but is not available on PATH'));
+    }
     try {
       const value = await fn();
       return ok({ ran: true, locked: false, value });
