@@ -399,6 +399,90 @@ describe('ico maintain planning', () => {
     expect(call).toBe(1);
   });
 
+  it('resumes from an existing receipted summary without another provider call', async () => {
+    const dbPath = join(workspace, '.ico', 'state.db');
+    const dbResult = initDatabase(dbPath);
+    expect(dbResult.ok).toBe(true);
+    if (!dbResult.ok) return;
+    try {
+      expect(registerMount(dbResult.value, 'live-repo', mounted).ok).toBe(true);
+      writeFileSync(join(mounted, 'resume.md'), '# Resume\nA durable resumable source.\n', 'utf-8');
+    } finally {
+      closeDatabase(dbResult.value);
+    }
+
+    const summaryClient: ClaudeClient = {
+      createCompletion: vi.fn(() =>
+        Promise.resolve(
+          ok({
+            content: `---\ntype: source-summary\nid: 11111111-1111-4111-8111-111111111111\ntitle: Resume Source\nsource_id: 22222222-2222-4222-8222-222222222222\nsource_path: raw/notes/source.md\ncompiled_at: 2026-08-16T00:00:00.000Z\nmodel: MiniMax-M3\ncontent_hash: abc123\n---\n\n## Summary\n\nThis source records a durable checkpoint that a later maintenance run can safely reuse.`,
+            inputTokens: 100,
+            outputTokens: 50,
+            model: 'MiniMax-M3',
+            stopReason: 'stop',
+          }),
+        ),
+      ),
+    };
+    const first = await runMaintenance(
+      workspace,
+      dbPath,
+      {
+        maxCandidates: '1',
+        dailyCeilingUsd: '10',
+        debounceSeconds: '0',
+        lockWaitSeconds: '1',
+      },
+      { createClient: () => summaryClient },
+    );
+    expect(first.status).toBe('compiled');
+
+    const resetResult = initDatabase(dbPath);
+    expect(resetResult.ok).toBe(true);
+    if (!resetResult.ok) return;
+    try {
+      const row = resetResult.value
+        .prepare<
+          [],
+          { id: string; metadata: string }
+        >("SELECT id, metadata FROM sources WHERE path LIKE 'raw/notes/live-repo-resume-%'")
+        .get();
+      expect(row).toBeDefined();
+      if (row === undefined) return;
+      const metadata = JSON.parse(row.metadata) as {
+        maintenance?: { completedHash?: string; excludedReason?: string };
+      };
+      if (metadata.maintenance !== undefined) {
+        delete metadata.maintenance.completedHash;
+        delete metadata.maintenance.excludedReason;
+      }
+      resetResult.value
+        .prepare('UPDATE sources SET metadata = ? WHERE id = ?')
+        .run(JSON.stringify(metadata), row.id);
+    } finally {
+      closeDatabase(resetResult.value);
+    }
+
+    const provider = vi.fn(() => Promise.reject(new Error('must not be called')));
+    const resumed = await runMaintenance(
+      workspace,
+      dbPath,
+      {
+        maxCandidates: '1',
+        dailyCeilingUsd: '10',
+        debounceSeconds: '0',
+        lockWaitSeconds: '1',
+      },
+      { createClient: () => ({ createCompletion: provider }) },
+    );
+
+    expect(resumed.status).toBe('compiled');
+    expect(resumed.progress).toMatchObject({ processed: 1, failed: 0, remaining: 0 });
+    expect(resumed.plannedAffectedTypes).toEqual([]);
+    expect(resumed.inference.operations).toBe(0);
+    expect(provider).not.toHaveBeenCalled();
+  });
+
   it('refuses a provider call before its worst case can cross the runtime ceiling', async () => {
     const dbPath = join(workspace, '.ico', 'state.db');
     const dbResult = initDatabase(dbPath);

@@ -868,7 +868,15 @@ export async function runMaintenance(
           return;
         }
         const affected = affectedResult.value;
-        const forcedPaths = selectedCandidates
+        // A prior run can fail after writing valid, receipted summaries (for
+        // example the historical aggregate extract step timed out). Resume from
+        // those durable per-source checkpoints instead of paying to summarize
+        // the same hash again. The completion marker is written only below,
+        // after the current run has verified the summary still resolves.
+        const compileCandidates = selectedCandidates.filter(
+          (candidate) => summaryPathsForSources(db, [candidate.rawPath]).length === 0,
+        );
+        const forcedPaths = compileCandidates
           .filter((candidate) => candidate.kind === 'pending')
           .map((candidate) => candidate.rawPath);
         // Scheduled maintenance makes one narrow, machine-checkable freshness
@@ -878,7 +886,7 @@ export async function runMaintenance(
         // otherwise discard honest per-source progress for an entire batch.
         // Operators run `ico compile concepts` / `ico compile all` explicitly
         // under their own cost decision and evidence.
-        const plannedAffectedTypes = maintenanceOperationTypes(selectedCandidates.length);
+        const plannedAffectedTypes = maintenanceOperationTypes(compileCandidates.length);
         base.plannedAffectedTypes = [...plannedAffectedTypes];
 
         if (opts.scanOnly === true) {
@@ -986,7 +994,7 @@ export async function runMaintenance(
             // Keep this scheduler independently checkpointable per source.
             suppressExtract: true,
             suppressCrossSource: true,
-            sourcePaths: selectedCandidates.map((candidate) => candidate.rawPath),
+            sourcePaths: compileCandidates.map((candidate) => candidate.rawPath),
             onPassStart: (type) => {
               operationType = type;
             },
