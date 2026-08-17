@@ -22,7 +22,7 @@ Every receipt declares `compileScope: "mounted-source"`. Accordingly, `compiled`
 
 Maintenance processes at most 10 source candidates per run by default (`--max-candidates` or `ICO_MAINTAIN_MAX_CANDIDATES`). Each receipt exposes `progress.eligible`, `selected`, `processed`, `governedExcluded`, `failed`, and `remaining`. A successful partial run is liveness evidence, not a freshness claim.
 
-The `inference_operations` ledger records exact input and output usage once per successful provider call. The cost gate projects from that operation history and computes UTC-day spend from the same rows. Compilation-page `tokens_used` remains page provenance, but it is not summed as provider spend because one multi-page response can stamp the same batch total onto several pages. A second runtime guard refuses the next call when its conservative worst case could cross the daily ceiling.
+The `inference_operations` ledger records exact input and output usage once per successful provider call. The cost gate projects from that operation history and computes UTC-day spend from the same rows. Summary planning prices the compiler's documented one-retry maximum per source. Compilation-page `tokens_used` remains page provenance, but it is not summed as provider spend because one multi-page response can stamp the same batch total onto several pages. A second runtime guard refuses the next call when its conservative worst case could cross the daily ceiling.
 
 ## Production mounts
 

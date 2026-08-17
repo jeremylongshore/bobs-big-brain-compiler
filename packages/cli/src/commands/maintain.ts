@@ -605,7 +605,10 @@ export function createMeteredMaintenanceClient(
 
 function maintenanceOperationTypes(candidateCount: number): string[] {
   return [
-    ...Array<string>(candidateCount).fill('summary'),
+    // summarizeSource may make one validation-repair retry. Price that
+    // documented maximum up front; the operation ledger records only the calls
+    // actually made, so the day-spend receipt remains exact.
+    ...Array<string>(candidateCount * 2).fill('summary'),
     ...Array<string>(Math.ceil(candidateCount / DEFAULT_BATCH_SIZE)).fill('concept'),
   ];
 }

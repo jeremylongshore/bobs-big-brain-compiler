@@ -399,7 +399,7 @@ describe('ico maintain planning', () => {
     expect(receipt.status).toBe('compiled');
     expect(receipt.compileScope).toBe('mounted-source');
     expect(receipt.progress.remaining).toBe(0);
-    expect(receipt.plannedAffectedTypes).toEqual(['summary', 'concept']);
+    expect(receipt.plannedAffectedTypes).toEqual(['summary', 'summary', 'concept']);
     expect(receipt.inference.operations).toBe(2);
     expect(call).toBe(2);
   });
