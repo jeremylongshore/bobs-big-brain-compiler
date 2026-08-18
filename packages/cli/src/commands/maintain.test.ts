@@ -636,6 +636,47 @@ describe('ico maintain planning', () => {
     } finally {
       closeDatabase(verifyResult.value);
     }
+
+    // The failed run already registered the replacement hash. Its next scan is
+    // therefore `pending`, not `changed`; the old path-level summary must still
+    // not be accepted as a resumable checkpoint for this current source row.
+    const recovered = await runMaintenance(workspace, dbPath, options, {
+      createClient: () => validClient,
+    });
+    expect(recovered.status).toBe('compiled');
+    expect(recovered.scan.counts.pending).toBe(1);
+    expect(recovered.compilationRowsAdded).toBe(1);
+    expect(recovered.inference.operations).toBe(1);
+
+    const replacementHash = hash('# Version two\nReplacement truth.\n');
+    const recoveredDbResult = initDatabase(dbPath);
+    expect(recoveredDbResult.ok).toBe(true);
+    if (!recoveredDbResult.ok) return;
+    try {
+      const currentSummary = recoveredDbResult.value
+        .prepare<[string], { output_path: string }>(
+          `SELECT c.output_path
+             FROM sources AS s
+             JOIN compilations AS c ON c.source_id = s.id
+            WHERE s.hash = ? AND c.type = 'summary' AND c.stale = 0
+            LIMIT 1`,
+        )
+        .get(replacementHash);
+      expect(currentSummary).toBeDefined();
+      if (currentSummary === undefined) return;
+      expect(readFileSync(join(workspace, currentSummary.output_path), 'utf-8')).toContain(
+        `content_hash: ${replacementHash}`,
+      );
+    } finally {
+      closeDatabase(recoveredDbResult.value);
+    }
+
+    const verified = await runMaintenance(workspace, dbPath, {
+      scanOnly: true,
+      lockWaitSeconds: '1',
+    });
+    expect(verified.status).toBe('verified_noop');
+    expect(verified.scan.counts.pending).toBe(0);
   });
 
   it('refuses a provider call before its worst case can cross the runtime ceiling', async () => {
