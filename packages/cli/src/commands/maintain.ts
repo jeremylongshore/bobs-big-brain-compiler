@@ -948,7 +948,8 @@ export async function runMaintenance(
             model,
             // Unmetered mode still runs the estimator for receipts and debounce,
             // but its retail-equivalent amount is not an enforced account charge.
-            dailyCeilingUsd: dailyCeilingUsd ?? Number.MAX_SAFE_INTEGER,
+            dailyCeilingUsd: dailyCeilingUsd ?? 1,
+            enforceDailyCeiling: billingMode === 'metered',
             debounceWindowSeconds: debounceSeconds,
           },
         );

@@ -64,6 +64,12 @@ export interface CostGateConfig {
    */
   dailyCeilingUsd: number;
   /**
+   * Whether `dailyCeilingUsd` is enforced. Disable only after an explicit
+   * operator decision for an unmetered account; projections and usage
+   * accounting still run. Default: `true`.
+   */
+  enforceDailyCeiling: boolean;
+  /**
    * Debounce / coalescing window in seconds. Two triggers that arrive within
    * this window of each other collapse into ONE compile — the later trigger is
    * told to coalesce (skip) because the earlier compile already covers the
@@ -80,6 +86,7 @@ export interface CostGateConfig {
 /** The default gate config — the "sane defaults" R12 asks for. */
 export const DEFAULT_COST_GATE_CONFIG: CostGateConfig = {
   dailyCeilingUsd: 1.0,
+  enforceDailyCeiling: true,
   debounceWindowSeconds: 300,
   model: 'deepseek-chat',
 };
@@ -244,6 +251,11 @@ export function evaluateCostGate(
       new Error(`dailyCeilingUsd must be a non-negative number, got ${cfg.dailyCeilingUsd}`),
     );
   }
+  if (typeof cfg.enforceDailyCeiling !== 'boolean') {
+    return err(
+      new Error(`enforceDailyCeiling must be a boolean, got ${String(cfg.enforceDailyCeiling)}`),
+    );
+  }
   if (!Number.isFinite(cfg.debounceWindowSeconds) || cfg.debounceWindowSeconds < 0) {
     return err(
       new Error(
@@ -368,7 +380,7 @@ export function evaluateCostGate(
   }
 
   // ---- Check 2: daily ceiling ---------------------------------------------
-  if (projectedDayTotalUsd > cfg.dailyCeilingUsd) {
+  if (cfg.enforceDailyCeiling && projectedDayTotalUsd > cfg.dailyCeilingUsd) {
     return ok({
       decision: 'defer',
       reason:
@@ -385,8 +397,10 @@ export function evaluateCostGate(
     reason:
       lineItems.length === 0
         ? 'Proceed: no planned inference operations (no-op).'
-        : `Proceed: projected $${projectedCostUsd.toFixed(4)} keeps the day total at ` +
-          `$${projectedDayTotalUsd.toFixed(4)}, under the $${cfg.dailyCeilingUsd.toFixed(2)} ceiling.`,
+        : !cfg.enforceDailyCeiling
+          ? `Proceed (unmetered): estimated retail-equivalent day total $${projectedDayTotalUsd.toFixed(4)}; the USD ceiling is not enforced.`
+          : `Proceed: projected $${projectedCostUsd.toFixed(4)} keeps the day total at ` +
+            `$${projectedDayTotalUsd.toFixed(4)}, under the $${cfg.dailyCeilingUsd.toFixed(2)} ceiling.`,
     ...base,
   });
 }
