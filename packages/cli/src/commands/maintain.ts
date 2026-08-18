@@ -904,7 +904,12 @@ export async function runMaintenance(
         // the same hash again. The completion marker is written only below,
         // after the current run has verified the summary still resolves.
         const compileCandidates = selectedCandidates.filter(
-          (candidate) => summaryPathsForSources(db, [candidate.rawPath]).length === 0,
+          (candidate) =>
+            candidate.kind === 'changed' ||
+            summaryPathsForSources(db, [candidate.rawPath]).length === 0,
+        );
+        const compileCandidatePaths = new Set(
+          compileCandidates.map((candidate) => candidate.rawPath),
         );
         const forcedPaths = compileCandidates
           .filter((candidate) => candidate.kind === 'pending')
@@ -1042,13 +1047,16 @@ export async function runMaintenance(
           if (after === undefined) throw new Error('Could not count compilation rows after run');
           base.compilationRowsAdded = after.n - before.n;
 
+          const compiled = new Set(pipeline.summary.compiledPaths);
           const skipped = new Set(pipeline.summary.skippedPaths);
           const completedAt = new Date().toISOString();
           const completed: MaintenanceCandidate[] = [];
           const failed: MaintenanceCandidate[] = [];
           for (const candidate of selectedCandidates) {
-            const hasSummary = summaryPathsForSources(db, [candidate.rawPath]).length > 0;
-            if (hasSummary || skipped.has(candidate.rawPath)) {
+            const resumed =
+              !compileCandidatePaths.has(candidate.rawPath) &&
+              summaryPathsForSources(db, [candidate.rawPath]).length > 0;
+            if (compiled.has(candidate.rawPath) || resumed || skipped.has(candidate.rawPath)) {
               markMaintenanceComplete(
                 db,
                 candidate,

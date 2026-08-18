@@ -4,6 +4,7 @@ import {
   chmodSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   statSync,
   utimesSync,
@@ -16,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClaudeClient } from '@ico/compiler';
 import { closeDatabase, initDatabase, registerMount, registerSource } from '@ico/kernel';
-import { ok } from '@ico/types';
+import { err, ok } from '@ico/types';
 
 import {
   buildMaintenanceRawPath,
@@ -499,6 +500,142 @@ describe('ico maintain planning', () => {
     expect(resumed.plannedAffectedTypes).toEqual([]);
     expect(resumed.inference.operations).toBe(0);
     expect(provider).not.toHaveBeenCalled();
+  });
+
+  it('recompiles a changed mounted source and then reaches a true hash-complete no-op', async () => {
+    const dbPath = join(workspace, '.ico', 'state.db');
+    const dbResult = initDatabase(dbPath);
+    expect(dbResult.ok).toBe(true);
+    if (!dbResult.ok) return;
+    try {
+      expect(registerMount(dbResult.value, 'live-repo', mounted).ok).toBe(true);
+      writeFileSync(join(mounted, 'changing.md'), '# Version one\nOriginal truth.\n', 'utf-8');
+    } finally {
+      closeDatabase(dbResult.value);
+    }
+
+    let call = 0;
+    const provider = vi.fn(() => {
+      call++;
+      return Promise.resolve(
+        ok({
+          content: `---\ntype: source-summary\nid: ${randomUUID()}\ntitle: Changing Source\nsource_id: ${randomUUID()}\nsource_path: model-invented.md\ncompiled_at: 2026-08-18T00:00:00.000Z\nmodel: MiniMax-M3\ncontent_hash: model-invented\n---\n\n## Summary\n\nThis summary is long enough for deterministic validation and records provider call ${call}.`,
+          inputTokens: 100,
+          outputTokens: 50,
+          model: 'MiniMax-M3',
+          stopReason: 'stop',
+        }),
+      );
+    });
+    const options = {
+      maxCandidates: '1',
+      dailyCeilingUsd: '10',
+      debounceSeconds: '0',
+      lockWaitSeconds: '1',
+    };
+
+    const first = await runMaintenance(workspace, dbPath, options, {
+      createClient: () => ({ createCompletion: provider }),
+    });
+    expect(first.status).toBe('compiled');
+    expect(call).toBe(1);
+
+    const changedContent = '# Version two\nReplacement truth.\n';
+    writeFileSync(join(mounted, 'changing.md'), changedContent, 'utf-8');
+    const second = await runMaintenance(workspace, dbPath, options, {
+      createClient: () => ({ createCompletion: provider }),
+    });
+
+    expect(second.status).toBe('compiled');
+    expect(second.scan.counts.changed).toBe(1);
+    expect(second.compilationRowsAdded).toBe(1);
+    expect(second.inference.operations).toBe(1);
+    expect(call).toBe(2);
+    const verifySummaryResult = initDatabase(dbPath);
+    expect(verifySummaryResult.ok).toBe(true);
+    if (!verifySummaryResult.ok) return;
+    let latestSummaryPath: string;
+    try {
+      const latest = verifySummaryResult.value
+        .prepare<
+          [],
+          { output_path: string }
+        >("SELECT output_path FROM compilations WHERE type = 'summary' ORDER BY compiled_at DESC LIMIT 1")
+        .get();
+      expect(latest).toBeDefined();
+      if (latest === undefined) return;
+      latestSummaryPath = latest.output_path;
+    } finally {
+      closeDatabase(verifySummaryResult.value);
+    }
+    expect(readFileSync(join(workspace, latestSummaryPath), 'utf-8')).toContain(
+      `content_hash: ${hash(changedContent)}`,
+    );
+
+    const verified = await runMaintenance(workspace, dbPath, {
+      scanOnly: true,
+      lockWaitSeconds: '1',
+    });
+    expect(verified.status).toBe('verified_noop');
+    expect(verified.scan.counts.pending).toBe(0);
+    expect(verified.progress.remaining).toBe(0);
+  });
+
+  it('does not let an older path-level summary mask a failed changed-source recompile', async () => {
+    const dbPath = join(workspace, '.ico', 'state.db');
+    const dbResult = initDatabase(dbPath);
+    expect(dbResult.ok).toBe(true);
+    if (!dbResult.ok) return;
+    try {
+      expect(registerMount(dbResult.value, 'live-repo', mounted).ok).toBe(true);
+      writeFileSync(join(mounted, 'failure.md'), '# Version one\nOriginal truth.\n', 'utf-8');
+    } finally {
+      closeDatabase(dbResult.value);
+    }
+
+    const validClient: ClaudeClient = {
+      createCompletion: vi.fn(() =>
+        Promise.resolve(
+          ok({
+            content: `---\ntype: source-summary\nid: ${randomUUID()}\ntitle: Failure Source\nsource_id: ${randomUUID()}\nsource_path: model-invented.md\ncompiled_at: 2026-08-18T00:00:00.000Z\nmodel: MiniMax-M3\ncontent_hash: model-invented\n---\n\n## Summary\n\nThis initial source summary is long enough for deterministic validation.`,
+            inputTokens: 100,
+            outputTokens: 50,
+            model: 'MiniMax-M3',
+            stopReason: 'stop',
+          }),
+        ),
+      ),
+    };
+    const options = {
+      maxCandidates: '1',
+      dailyCeilingUsd: '10',
+      debounceSeconds: '0',
+      lockWaitSeconds: '1',
+    };
+    expect(
+      (await runMaintenance(workspace, dbPath, options, { createClient: () => validClient }))
+        .status,
+    ).toBe('compiled');
+
+    writeFileSync(join(mounted, 'failure.md'), '# Version two\nReplacement truth.\n', 'utf-8');
+    const failed = await runMaintenance(workspace, dbPath, options, {
+      createClient: () => ({
+        createCompletion: vi.fn(() => Promise.resolve(err(new Error('provider unavailable')))),
+      }),
+    });
+    expect(failed.status).toBe('failure');
+    expect(failed.errorCode).toBe('compile_failed');
+
+    const verifyResult = initDatabase(dbPath);
+    expect(verifyResult.ok).toBe(true);
+    if (!verifyResult.ok) return;
+    try {
+      const scan = scanMountedSources(verifyResult.value, workspace);
+      expect(scan.candidates).toHaveLength(1);
+      expect(scan.counts.changed + scan.counts.pending).toBe(1);
+    } finally {
+      closeDatabase(verifyResult.value);
+    }
   });
 
   it('refuses a provider call before its worst case can cross the runtime ceiling', async () => {
