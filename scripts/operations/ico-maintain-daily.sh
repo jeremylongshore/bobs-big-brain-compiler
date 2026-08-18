@@ -15,6 +15,10 @@ TIMEOUT_SECONDS="${ICO_MAINTAIN_TIMEOUT:-4500}"
 # Direct repository mounts can be legitimately unchanged for long periods.
 # Enable an age limit only for a derived feed with an external freshness SLA.
 MAX_INPUT_AGE_DAYS="${ICO_MAX_INPUT_AGE_DAYS:-0}"
+# An unlimited provider plan can opt in with ICO_BILLING_MODE=unmetered.
+# Unmetered disables only the retail-USD stop; max-candidates, timeout, write
+# lock, and exact usage receipts remain mandatory. Metered stays the safe default.
+BILLING_MODE="${ICO_BILLING_MODE:-metered}"
 DAILY_CEILING_USD="${ICO_DAILY_CEILING_USD:-1}"
 LOCK_WAIT_SECONDS="${ICO_LOCK_WAIT_SECONDS:-600}"
 MAX_CANDIDATES="${ICO_MAINTAIN_MAX_CANDIDATES:-10}"
@@ -57,11 +61,15 @@ fi
 trap 'unset MINIMAX_API_KEY minimax_key 2>/dev/null || true' EXIT
 
 run_log="$STATE_DIR/run-$(date -u +%Y%m%dT%H%M%SZ).log"
+billing_args=(--billing-mode "$BILLING_MODE")
+if [ "$BILLING_MODE" = "metered" ]; then
+  billing_args+=(--daily-ceiling-usd "$DAILY_CEILING_USD")
+fi
 set +e
 timeout --signal=TERM --kill-after=60s "$TIMEOUT_SECONDS" \
   env ICO_PROVIDER=minimax ICO_MODEL=MiniMax-M3 \
   "$ICO_BIN" --workspace "$ICO_WORKSPACE" maintain \
-    --daily-ceiling-usd "$DAILY_CEILING_USD" \
+    "${billing_args[@]}" \
     --debounce-seconds 0 \
     --max-input-age-days "$MAX_INPUT_AGE_DAYS" \
     --lock-wait-seconds "$LOCK_WAIT_SECONDS" \

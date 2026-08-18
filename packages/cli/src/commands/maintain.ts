@@ -58,11 +58,12 @@ import {
 } from './compile.js';
 import { scanDirectory } from './ingest.js';
 
-const RECEIPT_SCHEMA_VERSION = 2;
+const RECEIPT_SCHEMA_VERSION = 3;
 const INFERENCE_BUDGET_EXCEEDED = 'INFERENCE_BUDGET_EXCEEDED';
 
 export type MaintenanceStatus = 'compiled' | 'partial' | 'verified_noop' | 'failure';
 export type CandidateKind = 'new' | 'changed' | 'pending';
+export type MaintenanceBillingMode = 'metered' | 'unmetered';
 
 export interface MaintenanceCandidate {
   kind: CandidateKind;
@@ -130,13 +131,17 @@ export interface MaintenanceReceipt {
     remaining: number;
   };
   inference: {
+    /** Whether the retail-equivalent estimate is enforced as a spend ceiling. */
+    billingMode: MaintenanceBillingMode;
     operations: number;
     inputTokens: number;
     outputTokens: number;
+    /** Retail-equivalent estimate from exact operation usage; not an invoice charge. */
     actualCostUsd: number;
     spentTodayBeforeUsd: number;
     spentTodayAfterUsd: number;
-    dailyCeilingUsd: number;
+    /** Null only when an operator explicitly selected unmetered billing. */
+    dailyCeilingUsd: number | null;
   };
   errorCode: string | null;
   error: string | null;
@@ -158,6 +163,7 @@ interface OriginMetadata {
 export interface MaintainOptions {
   scanOnly?: boolean;
   model?: string;
+  billingMode?: string;
   dailyCeilingUsd?: string;
   debounceSeconds?: string;
   maxInputAgeDays?: string;
@@ -503,6 +509,14 @@ function positiveInteger(raw: string | undefined, fallback: number, label: strin
   return value;
 }
 
+function parseBillingMode(raw: string | undefined): MaintenanceBillingMode {
+  const value = raw ?? 'metered';
+  if (value !== 'metered' && value !== 'unmetered') {
+    throw new Error(`--billing-mode must be "metered" or "unmetered", got "${value}"`);
+  }
+  return value;
+}
+
 interface MeterState {
   operations: number;
   inputTokens: number;
@@ -514,7 +528,7 @@ interface MeteredClientOptions {
   db: Database;
   runId: string;
   model: string;
-  dailyCeilingUsd: number;
+  dailyCeilingUsd: number | null;
   spentTodayBeforeUsd: number;
   operationType: () => string;
 }
@@ -549,8 +563,8 @@ export function createMeteredMaintenanceClient(
         resolvePricingModel(requestedModel),
       );
       if (
-        options.spentTodayBeforeUsd + state.actualCostUsd + worstCaseCost >
-        options.dailyCeilingUsd
+        options.dailyCeilingUsd !== null &&
+        options.spentTodayBeforeUsd + state.actualCostUsd + worstCaseCost > options.dailyCeilingUsd
       ) {
         return err(
           new Error(
@@ -716,8 +730,12 @@ function emptyProgress(eligible = 0, selected = 0): MaintenanceReceipt['progress
   };
 }
 
-function emptyInference(dailyCeilingUsd: number): MaintenanceReceipt['inference'] {
+function emptyInference(
+  billingMode: MaintenanceBillingMode,
+  dailyCeilingUsd: number | null,
+): MaintenanceReceipt['inference'] {
   return {
+    billingMode,
     operations: 0,
     inputTokens: 0,
     outputTokens: 0,
@@ -741,7 +759,14 @@ export async function runMaintenance(
   const runId = new Date().toISOString().replace(/[:.]/g, '-');
   const startedAt = new Date().toISOString();
   const maxInputAgeDays = finiteNonNegative(opts.maxInputAgeDays, 0, '--max-input-age-days');
-  const dailyCeilingUsd = finiteNonNegative(opts.dailyCeilingUsd, 1, '--daily-ceiling-usd');
+  const billingMode = parseBillingMode(opts.billingMode);
+  if (billingMode === 'unmetered' && opts.dailyCeilingUsd !== undefined) {
+    throw new Error('--daily-ceiling-usd cannot be combined with --billing-mode unmetered');
+  }
+  const dailyCeilingUsd =
+    billingMode === 'metered'
+      ? finiteNonNegative(opts.dailyCeilingUsd, 1, '--daily-ceiling-usd')
+      : null;
   const debounceSeconds = finiteNonNegative(opts.debounceSeconds, 300, '--debounce-seconds');
   const lockWaitSeconds = finiteNonNegative(opts.lockWaitSeconds, 10, '--lock-wait-seconds');
   const maxCandidates = positiveInteger(opts.maxCandidates, 10, '--max-candidates');
@@ -772,7 +797,7 @@ export async function runMaintenance(
             compilationRowsAdded: 0,
             projectedCostUsd: null,
             progress: emptyProgress(),
-            inference: emptyInference(dailyCeilingUsd),
+            inference: emptyInference(billingMode, dailyCeilingUsd),
             errorCode: 'scan_failed',
             error: error instanceof Error ? error.message : String(error),
           };
@@ -812,7 +837,7 @@ export async function runMaintenance(
           compilationRowsAdded: 0,
           projectedCostUsd: null,
           progress: emptyProgress(scan.candidates.length, selectedCandidates.length),
-          inference: emptyInference(dailyCeilingUsd),
+          inference: emptyInference(billingMode, dailyCeilingUsd),
         };
 
         const fail = (errorCode: string, error: string): MaintenanceReceipt => ({
@@ -921,7 +946,9 @@ export async function runMaintenance(
           { affectedTypes: plannedAffectedTypes },
           {
             model,
-            dailyCeilingUsd,
+            // Unmetered mode still runs the estimator for receipts and debounce,
+            // but its retail-equivalent amount is not an enforced account charge.
+            dailyCeilingUsd: dailyCeilingUsd ?? Number.MAX_SAFE_INTEGER,
             debounceWindowSeconds: debounceSeconds,
           },
         );
@@ -933,7 +960,10 @@ export async function runMaintenance(
         base.projectedCostUsd = gate.value.projectedCostUsd;
         base.inference.spentTodayBeforeUsd = gate.value.spentTodayUsd;
         base.inference.spentTodayAfterUsd = gate.value.spentTodayUsd;
-        if (gate.value.decision !== 'proceed') {
+        if (
+          gate.value.decision === 'coalesce' ||
+          (billingMode === 'metered' && gate.value.decision === 'defer')
+        ) {
           finalReceipt = fail(`cost_${gate.value.decision}`, gate.value.reason);
           writeMaintenanceReceipt(workspacePath, finalReceipt);
           return;
@@ -1037,6 +1067,7 @@ export async function runMaintenance(
           base.progress.failed = failed.length;
           base.progress.remaining = scan.candidates.length - completed.length;
           base.inference = {
+            billingMode,
             operations: meter.state.operations,
             inputTokens: meter.state.inputTokens,
             outputTokens: meter.state.outputTokens,
@@ -1070,6 +1101,7 @@ export async function runMaintenance(
         } catch (error) {
           if (meter !== null) {
             base.inference = {
+              billingMode,
               operations: meter.state.operations,
               inputTokens: meter.state.inputTokens,
               outputTokens: meter.state.outputTokens,
@@ -1113,7 +1145,7 @@ export async function runMaintenance(
         compilationRowsAdded: 0,
         projectedCostUsd: null,
         progress: emptyProgress(),
-        inference: emptyInference(dailyCeilingUsd),
+        inference: emptyInference(billingMode, dailyCeilingUsd),
         errorCode: 'write_lock_unavailable',
         error: message,
       };
@@ -1133,7 +1165,12 @@ export function register(program: Command): void {
     .description('Scan mounted sources and run a receipted incremental compile')
     .option('--scan-only', 'Scan and write a receipt without ingesting or compiling')
     .option('--model <model>', 'Override the configured compiler model')
-    .option('--daily-ceiling-usd <n>', 'Maximum projected UTC-day inference spend', '1')
+    .option(
+      '--billing-mode <mode>',
+      'Billing policy: metered enforces the ceiling; unmetered receipts usage without a USD stop',
+      'metered',
+    )
+    .option('--daily-ceiling-usd <n>', 'Maximum projected UTC-day inference spend (metered only)')
     .option('--debounce-seconds <n>', 'Coalescing window for repeated triggers', '300')
     .option(
       '--max-input-age-days <n>',

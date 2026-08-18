@@ -165,7 +165,7 @@ describe('ico maintain planning', () => {
 
   it('writes latest and history receipts atomically', () => {
     const receipt: MaintenanceReceipt = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       compileScope: 'mounted-source',
       runId: '2026-08-16T00-00-00-000Z',
       startedAt: '2026-08-16T00:00:00.000Z',
@@ -204,6 +204,7 @@ describe('ico maintain planning', () => {
         remaining: 0,
       },
       inference: {
+        billingMode: 'metered',
         operations: 0,
         inputTokens: 0,
         outputTokens: 0,
@@ -342,6 +343,7 @@ describe('ico maintain planning', () => {
       remaining: 1,
     });
     expect(receipt.inference).toMatchObject({
+      billingMode: 'metered',
       operations: 1,
       inputTokens: 120,
       outputTokens: 60,
@@ -544,6 +546,70 @@ describe('ico maintain planning', () => {
     } finally {
       closeDatabase(dbResult.value);
     }
+  });
+
+  it('runs unmetered work past the USD stop while preserving the batch bound and receipts', async () => {
+    const dbPath = join(workspace, '.ico', 'state.db');
+    const dbResult = initDatabase(dbPath);
+    expect(dbResult.ok).toBe(true);
+    if (!dbResult.ok) return;
+    try {
+      expect(registerMount(dbResult.value, 'live-repo', mounted).ok).toBe(true);
+      writeFileSync(join(mounted, 'a.md'), '# Alpha\nA durable alpha decision.\n', 'utf-8');
+      writeFileSync(join(mounted, 'b.md'), '# Beta\nA durable beta decision.\n', 'utf-8');
+    } finally {
+      closeDatabase(dbResult.value);
+    }
+
+    const provider = vi.fn(() =>
+      Promise.resolve(
+        ok({
+          content: `---\ntype: source-summary\nid: 11111111-1111-4111-8111-111111111111\ntitle: Unmetered Source\nsource_id: 22222222-2222-4222-8222-222222222222\nsource_path: raw/notes/source.md\ncompiled_at: 2026-08-18T00:00:00.000Z\nmodel: MiniMax-M3\ncontent_hash: abc123\n---\n\n## Summary\n\nThis source records a durable decision with enough grounded detail for deterministic validation.`,
+          inputTokens: 120,
+          outputTokens: 60,
+          model: 'MiniMax-M3',
+          stopReason: 'stop',
+        }),
+      ),
+    );
+
+    const receipt = await runMaintenance(
+      workspace,
+      dbPath,
+      {
+        billingMode: 'unmetered',
+        maxCandidates: '1',
+        debounceSeconds: '0',
+        lockWaitSeconds: '1',
+      },
+      { createClient: () => ({ createCompletion: provider }) },
+    );
+
+    expect(receipt.status).toBe('partial');
+    expect(receipt.progress).toMatchObject({
+      eligible: 2,
+      selected: 1,
+      processed: 1,
+      remaining: 1,
+    });
+    expect(receipt.inference).toMatchObject({
+      billingMode: 'unmetered',
+      dailyCeilingUsd: null,
+      operations: 1,
+      inputTokens: 120,
+      outputTokens: 60,
+    });
+    expect(receipt.inference.actualCostUsd).toBeGreaterThan(0);
+    expect(provider).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a contradictory unmetered mode plus daily ceiling', async () => {
+    await expect(
+      runMaintenance(workspace, join(workspace, '.ico', 'state.db'), {
+        billingMode: 'unmetered',
+        dailyCeilingUsd: '1',
+      }),
+    ).rejects.toThrow(/cannot be combined/);
   });
 
   it('cannot emit success when a registered mount is missing', async () => {
