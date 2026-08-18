@@ -54,7 +54,6 @@ import {
   type RawSourceProvenance,
   registerChangedWorkspaceSources,
   runAffectedPipelineUnlocked,
-  summaryPathsForSources,
 } from './compile.js';
 import { scanDirectory } from './ingest.js';
 
@@ -628,6 +627,21 @@ function maintenanceOperationTypes(candidateCount: number): string[] {
   return Array<string>(candidateCount * 2).fill('summary');
 }
 
+function hasCurrentSummary(db: Database, candidate: MaintenanceCandidate): boolean {
+  const row = db
+    .prepare<[string, string], { present: number }>(
+      `SELECT 1 AS present
+         FROM sources AS s
+         JOIN compilations AS c ON c.source_id = s.id
+        WHERE s.path = ? AND s.hash = ?
+          AND c.type = 'summary' AND c.stale = 0
+        ORDER BY s.ingested_at DESC, c.compiled_at DESC
+        LIMIT 1`,
+    )
+    .get(candidate.rawPath, candidate.hash);
+  return row !== undefined;
+}
+
 function markMaintenanceComplete(
   db: Database,
   candidate: MaintenanceCandidate,
@@ -656,7 +670,7 @@ function markMaintenanceComplete(
     typeof metadata['maintenance'] === 'object' && metadata['maintenance'] !== null
       ? (metadata['maintenance'] as Record<string, unknown>)
       : {};
-  metadata['maintenance'] = {
+  const maintenance: Record<string, unknown> = {
     ...existing,
     mountId: candidate.mountId,
     mountName: candidate.mountName,
@@ -664,8 +678,10 @@ function markMaintenanceComplete(
     originPath: candidate.originPath,
     completedHash: candidate.hash,
     completedAt,
-    ...(excludedReason === undefined ? {} : { excludedReason }),
   };
+  if (excludedReason === undefined) delete maintenance['excludedReason'];
+  else maintenance['excludedReason'] = excludedReason;
+  metadata['maintenance'] = maintenance;
   db.prepare('UPDATE sources SET metadata = ? WHERE id = ?').run(JSON.stringify(metadata), row.id);
 }
 
@@ -904,9 +920,7 @@ export async function runMaintenance(
         // the same hash again. The completion marker is written only below,
         // after the current run has verified the summary still resolves.
         const compileCandidates = selectedCandidates.filter(
-          (candidate) =>
-            candidate.kind === 'changed' ||
-            summaryPathsForSources(db, [candidate.rawPath]).length === 0,
+          (candidate) => !hasCurrentSummary(db, candidate),
         );
         const compileCandidatePaths = new Set(
           compileCandidates.map((candidate) => candidate.rawPath),
@@ -1054,8 +1068,7 @@ export async function runMaintenance(
           const failed: MaintenanceCandidate[] = [];
           for (const candidate of selectedCandidates) {
             const resumed =
-              !compileCandidatePaths.has(candidate.rawPath) &&
-              summaryPathsForSources(db, [candidate.rawPath]).length > 0;
+              !compileCandidatePaths.has(candidate.rawPath) && hasCurrentSummary(db, candidate);
             if (compiled.has(candidate.rawPath) || resumed || skipped.has(candidate.rawPath)) {
               markMaintenanceComplete(
                 db,
