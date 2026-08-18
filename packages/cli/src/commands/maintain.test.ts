@@ -548,7 +548,7 @@ describe('ico maintain planning', () => {
     }
   });
 
-  it('runs unmetered work past the USD stop while preserving the batch bound and receipts', async () => {
+  it('runs unmetered work, preserves the batch bound, and writes an unmetered receipt', async () => {
     const dbPath = join(workspace, '.ico', 'state.db');
     const dbResult = initDatabase(dbPath);
     expect(dbResult.ok).toBe(true);
