@@ -256,6 +256,32 @@ describe('cost gate — daily ceiling enforcement', () => {
     expect(result.value.projectedCostUsd).toBe(0);
   });
 
+  it('keeps pricing and usage evidence but does not defer in explicit unmetered mode', () => {
+    insertInferenceOperation(db, {
+      id: 'unmetered-prior-spend',
+      type: 'topic',
+      inputTokens: 210_000_000,
+      outputTokens: 90_000_000,
+      occurredAt: `${TODAY}T02:00:00.000Z`,
+      model: 'MiniMax-M3',
+    });
+
+    const result = evaluateCostGate(
+      db,
+      { affectedTypes: ['summary'], nowMs: NOW, lastCompileAtMs: null },
+      {
+        dailyCeilingUsd: 0.01,
+        enforceDailyCeiling: false,
+        model: 'MiniMax-M3',
+      },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.decision).toBe('proceed');
+    expect(result.value.spentTodayUsd).toBeGreaterThan(0.01);
+    expect(result.value.reason).toMatch(/unmetered/);
+  });
+
   // The today-spend query was changed from `substr(compiled_at,1,10) = ?` to a
   // SARGable half-open range `compiled_at >= dayStart AND < nextDayStart`
   // (Gemini review, PR #154 — index-friendly, same result). Prove the range
