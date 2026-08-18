@@ -175,6 +175,7 @@ export interface SummaryRunOutcome {
 export async function runSummarize(
   ctx: CompileContext,
   sourcePaths?: readonly string[],
+  sourceIds?: readonly string[],
 ): Promise<SummaryRunOutcome> {
   const uncompiledResult = getUncompiledSources(ctx.db);
   if (!uncompiledResult.ok) {
@@ -184,10 +185,15 @@ export async function runSummarize(
   }
 
   const requested = sourcePaths === undefined ? null : new Set(sourcePaths);
+  const requestedIds = sourceIds === undefined ? null : new Set(sourceIds);
   const sources =
-    requested === null
+    requested === null && requestedIds === null
       ? uncompiledResult.value
-      : uncompiledResult.value.filter((source) => requested.has(source.path));
+      : uncompiledResult.value.filter(
+          (source) =>
+            (requested === null || requested.has(source.path)) &&
+            (requestedIds === null || requestedIds.has(source.id)),
+        );
   if (sources.length === 0) {
     const warning =
       requested === null
@@ -581,6 +587,7 @@ export async function runAffectedPipelineUnlocked(
     suppressExtract?: boolean;
     suppressCrossSource?: boolean;
     sourcePaths?: readonly string[];
+    sourceIds?: readonly string[];
     onPassStart?: (operationType: string) => void;
   },
 ): Promise<AffectedPipelineOutcome> {
@@ -605,7 +612,7 @@ export async function runAffectedPipelineUnlocked(
   };
   if (hasSingleSource) {
     options?.onPassStart?.('summary');
-    summary = await runSummarize(ctx, options?.sourcePaths);
+    summary = await runSummarize(ctx, options?.sourcePaths, options?.sourceIds);
     if (options?.suppressExtract !== true) {
       const summaryPaths =
         options?.sourcePaths === undefined
