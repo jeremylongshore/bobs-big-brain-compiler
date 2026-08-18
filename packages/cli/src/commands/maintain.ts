@@ -345,12 +345,12 @@ export function scanMountedSources(
       if (tracked !== undefined) {
         const origin = parseOrigin(tracked);
         if (tracked.hash === hash && origin?.completedHash === hash) {
-          if (typeof origin.excludedReason === 'string') {
-            counts.governedExcluded++;
-            continue;
-          }
           if (compiledSourceIds.has(tracked.id)) {
             counts.unchanged++;
+            continue;
+          }
+          if (typeof origin.excludedReason === 'string') {
+            counts.governedExcluded++;
             continue;
           }
         }
@@ -640,6 +640,20 @@ function hasCurrentSummary(db: Database, candidate: MaintenanceCandidate): boole
     )
     .get(candidate.rawPath, candidate.hash);
   return row !== undefined;
+}
+
+function currentSourceId(db: Database, candidate: MaintenanceCandidate): string {
+  const row = db
+    .prepare<[string, string], { id: string }>(
+      `SELECT id FROM sources
+        WHERE path = ? AND hash = ?
+        ORDER BY ingested_at DESC LIMIT 1`,
+    )
+    .get(candidate.rawPath, candidate.hash);
+  if (row === undefined) {
+    throw new Error(`Maintenance source is not registered: ${candidate.rawPath}`);
+  }
+  return row.id;
 }
 
 function markMaintenanceComplete(
@@ -1030,6 +1044,9 @@ export async function runMaintenance(
             forcePaths: forcedPaths,
             provenanceByPath: provenance,
           });
+          const compileCandidateIds = compileCandidates.map((candidate) =>
+            currentSourceId(db, candidate),
+          );
 
           let operationType = 'unknown';
           meter = createMeteredMaintenanceClient(
@@ -1050,6 +1067,7 @@ export async function runMaintenance(
             suppressExtract: true,
             suppressCrossSource: true,
             sourcePaths: compileCandidates.map((candidate) => candidate.rawPath),
+            sourceIds: compileCandidateIds,
             onPassStart: (type) => {
               operationType = type;
             },

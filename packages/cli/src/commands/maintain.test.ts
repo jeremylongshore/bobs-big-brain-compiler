@@ -117,6 +117,53 @@ describe('ico maintain planning', () => {
     expect(second).toMatch(/^raw\/notes\/repo-readme-[0-9a-f]{12}\.md$/);
   });
 
+  it('treats a current summary as complete even if stale exclusion metadata remains', () => {
+    const dbResult = initDatabase(join(workspace, '.ico', 'state.db'));
+    expect(dbResult.ok).toBe(true);
+    if (!dbResult.ok) return;
+    const db = dbResult.value;
+    try {
+      const mountResult = registerMount(db, 'live-repo', mounted);
+      expect(mountResult.ok).toBe(true);
+      if (!mountResult.ok) return;
+      const content = '# Current governed source\n';
+      const relativePath = 'current.md';
+      const rawPath = buildMaintenanceRawPath(mountResult.value, relativePath);
+      writeFileSync(join(mounted, relativePath), content, 'utf-8');
+      writeFileSync(join(workspace, rawPath), content, 'utf-8');
+      const source = registerSource(db, {
+        path: rawPath,
+        mountId: mountResult.value.id,
+        type: 'markdown',
+        hash: hash(content),
+        metadata: {
+          maintenance: {
+            mountId: mountResult.value.id,
+            mountName: mountResult.value.name,
+            relativePath,
+            originPath: join(mounted, relativePath),
+            completedHash: hash(content),
+            excludedReason: 'compile_validation',
+          },
+        },
+      });
+      expect(source.ok).toBe(true);
+      if (!source.ok) return;
+      db.prepare(
+        `INSERT INTO compilations
+          (id, source_id, type, output_path, compiled_at, model, tokens_used)
+         VALUES (?, ?, 'summary', ?, ?, 'MiniMax-M3', 100)`,
+      ).run(randomUUID(), source.value.id, 'wiki/sources/current.md', new Date().toISOString());
+
+      const scan = scanMountedSources(db, workspace);
+      expect(scan.counts.unchanged).toBe(1);
+      expect(scan.counts.governedExcluded).toBe(0);
+      expect(scan.candidates).toHaveLength(0);
+    } finally {
+      closeDatabase(db);
+    }
+  });
+
   it('marks an old mount as stale only when the operator enables an age limit', () => {
     const dbResult = initDatabase(join(workspace, '.ico', 'state.db'));
     expect(dbResult.ok).toBe(true);
@@ -626,6 +673,16 @@ describe('ico maintain planning', () => {
     expect(failed.status).toBe('failure');
     expect(failed.errorCode).toBe('compile_failed');
 
+    const finalContent = '# Version three\nFinal replacement truth.\n';
+    writeFileSync(join(mounted, 'failure.md'), finalContent, 'utf-8');
+    const failedAgain = await runMaintenance(workspace, dbPath, options, {
+      createClient: () => ({
+        createCompletion: vi.fn(() => Promise.resolve(err(new Error('provider unavailable')))),
+      }),
+    });
+    expect(failedAgain.status).toBe('failure');
+    expect(failedAgain.errorCode).toBe('compile_failed');
+
     const verifyResult = initDatabase(dbPath);
     expect(verifyResult.ok).toBe(true);
     if (!verifyResult.ok) return;
@@ -648,7 +705,7 @@ describe('ico maintain planning', () => {
     expect(recovered.compilationRowsAdded).toBe(1);
     expect(recovered.inference.operations).toBe(1);
 
-    const replacementHash = hash('# Version two\nReplacement truth.\n');
+    const replacementHash = hash(finalContent);
     const recoveredDbResult = initDatabase(dbPath);
     expect(recoveredDbResult.ok).toBe(true);
     if (!recoveredDbResult.ok) return;
