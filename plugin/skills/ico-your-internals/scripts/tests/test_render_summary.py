@@ -30,7 +30,6 @@ import sys
 import tempfile
 import unittest
 
-
 SCRIPT = (
     pathlib.Path(__file__).resolve().parent.parent / "render-summary.py"
 )
