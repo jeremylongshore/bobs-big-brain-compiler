@@ -9,25 +9,25 @@
 
 ## Tech Stack
 
-| Layer             | Technology                 | Version | Rationale                                |
-| ----------------- | -------------------------- | ------- | ---------------------------------------- |
-| Language          | TypeScript                 | 5.x     | Type safety, Claude SDK native           |
-| Runtime           | Node.js                    | 22+     | LTS, ESM native                          |
-| Package Manager   | pnpm                       | 10.x    | Workspace support, fast                  |
-| CLI               | Commander.js               | 13.x    | Battle-tested, conventional              |
-| State DB          | SQLite via better-sqlite3  | 11.x    | Local-first, zero infrastructure         |
-| Audit Traces      | JSONL                      | —       | Append-only, human-readable              |
-| AI                | @anthropic-ai/sdk          | 1.x     | Claude API for compilation and reasoning |
-| Orchestration     | claude_agent_sdk           | —       | Multi-agent research workflows (Phase 3) |
-| Schema Validation | Zod                        | 3.x     | Runtime type checking                    |
-| Frontmatter       | gray-matter                | 4.x     | Parsing compiled wiki pages              |
-| PDF Parsing       | pdf-parse                  | —       | Text extraction from PDFs                |
-| Slides            | Marp CLI                   | —       | Markdown to presentation slides          |
-| Charts            | matplotlib (Python)        | —       | Data visualization in reports            |
-| Terminal Output   | chalk                      | 5.x     | CLI formatting                           |
-| Testing           | Vitest                     | 4.x     | Fast, TypeScript-native                  |
-| Linting           | ESLint + typescript-eslint | —       | Code quality                             |
-| Build             | tsup                       | —       | Fast TypeScript bundling                 |
+| Layer             | Technology                 | Version | Rationale                                  |
+| ----------------- | -------------------------- | ------- | ------------------------------------------ |
+| Language          | TypeScript                 | 5.x     | Type safety, Claude SDK native             |
+| Runtime           | Node.js                    | 22+     | LTS, ESM native                            |
+| Package Manager   | pnpm                       | 10.x    | Workspace support, fast                    |
+| CLI               | Commander.js               | 13.x    | Battle-tested, conventional                |
+| State DB          | SQLite via better-sqlite3  | 11.x    | Local-first, zero infrastructure           |
+| Audit Traces      | JSONL                      | —       | Protocol-level append-only, human-readable |
+| AI                | @anthropic-ai/sdk          | 1.x     | Claude API for compilation and reasoning   |
+| Orchestration     | claude_agent_sdk           | —       | Multi-agent research workflows (Phase 3)   |
+| Schema Validation | Zod                        | 3.x     | Runtime type checking                      |
+| Frontmatter       | gray-matter                | 4.x     | Parsing compiled wiki pages                |
+| PDF Parsing       | pdf-parse                  | —       | Text extraction from PDFs                  |
+| Slides            | Marp CLI                   | —       | Markdown to presentation slides            |
+| Charts            | matplotlib (Python)        | —       | Data visualization in reports              |
+| Terminal Output   | chalk                      | 5.x     | CLI formatting                             |
+| Testing           | Vitest                     | 4.x     | Fast, TypeScript-native                    |
+| Linting           | ESLint + typescript-eslint | —       | Code quality                               |
+| Build             | tsup                       | —       | Fast TypeScript bundling                   |
 
 ## Dependencies
 

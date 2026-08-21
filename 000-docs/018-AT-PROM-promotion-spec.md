@@ -345,7 +345,7 @@ In addition to the trace event, each promotion writes a dedicated audit file to 
 }
 ```
 
-This file is append-only and immutable after creation, consistent with the L6 audit directory policy (012-AT-WPOL Section 8).
+This file is protocol-level append-only after creation and hash-chain-evident, not tamper-proof, consistent with the L6 audit directory policy (012-AT-WPOL Section 8).
 
 ---
 

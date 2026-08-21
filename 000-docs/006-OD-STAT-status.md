@@ -12,7 +12,7 @@
 
 The system is feature-complete for Phase 1 (local-first MVP). Epics 1–9 shipped between 2026-04 and 2026-05; the system now ingests sources, compiles a semantic wiki, runs grounded Q&A with citations, drives multi-agent research, renders durable artifacts, generates flashcards/quizzes with retention scoring, and executes YAML eval specs. Epic 10 (hardening + release gate) is **5 of 12 beads** shipped at the time of writing; remaining work is documented below.
 
-Every meaningful mutation emits a trace event into an append-only JSONL chain (SHA-256 prev-hash links). Every public kernel/compiler API returns `Result<T,Error>` rather than throwing. File writes use the `.tmp + rename` atomic pattern — verified by the disk-failure simulation test (E10-B05).
+Every meaningful mutation emits a trace event into a protocol-level append-only JSONL chain (SHA-256 prev-hash links). Every public kernel/compiler API returns `Result<T,Error>` rather than throwing. File writes use the `.tmp + rename` atomic pattern — verified by the disk-failure simulation test (E10-B05).
 
 The CLI publishes as **`intentional-cognition-os`** on npm (workspace renamed in E10-B10); the verification script `scripts/verify-npm-pack.sh` confirms the tarball is shippable.
 
@@ -121,12 +121,12 @@ Six-layer cognition stack with a strict deterministic / probabilistic boundary:
 
 | Layer                 | Path                    | Owner                                                           |
 | --------------------- | ----------------------- | --------------------------------------------------------------- |
-| L1 Raw Corpus         | `workspace/raw/`        | Kernel (append-only)                                            |
+| L1 Raw Corpus         | `workspace/raw/`        | Kernel (protocol-level append-only)                             |
 | L2 Semantic Knowledge | `workspace/wiki/`       | Compiler passes (recompilable)                                  |
 | L3 Episodic Tasks     | `workspace/tasks/<id>/` | Compiler agents (Collector → Summarizer → Skeptic → Integrator) |
 | L4 Artifacts          | `workspace/outputs/`    | Render pipeline (promotable to L2)                              |
 | L5 Recall             | `workspace/recall/`     | Compiler recall module                                          |
-| L6 Audit & Policy     | `workspace/audit/`      | Kernel (append-only, hash-chained)                              |
+| L6 Audit & Policy     | `workspace/audit/`      | Kernel (protocol-level append-only, hash-chained)               |
 
 **The most important constraint** (per blueprint §4.3) — _the model proposes; the deterministic kernel decides_:
 
@@ -210,4 +210,4 @@ The system improves over time at three layers (blueprint §5.6):
 | **Context refinement** | Operator reads trace JSONL, identifies prompt/ingest patterns producing weak outputs, refines         | Per-session — see CLAUDE.md "Trace-based context refinement"        |
 | **Retention loop**     | `recall_results` rows + retention aggregator surface weak concepts; future generation re-targets them | Per-quiz — `ico recall weak --report`                               |
 
-The substrate is the append-only trace chain. Tampering is detectable (SHA-256 prev_hash); the `audit-chain-intact` smoke eval walks it on every `ico eval run`.
+The substrate is the protocol-level append-only trace chain. Tampering is detectable (SHA-256 prev_hash); the `audit-chain-intact` smoke eval walks it on every `ico eval run`.

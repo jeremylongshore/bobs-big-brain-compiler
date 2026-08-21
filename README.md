@@ -11,7 +11,7 @@
 
 Bob's Big Brain Compiler reads your documents, notes, and web clips and turns them into an organized, searchable knowledge base — every answer backed by a citation to the source.
 
-A local-first knowledge OS. Point `ico` at a folder of PDFs, markdown notes, and web clips. It compiles them into a queryable wiki you can read, runs grounded Q&A with inline citations, spins up multi-agent research tasks for hard questions, generates spaced-repetition flashcards from what landed, and writes every step to an append-only audit trail. Single CLI. Your data never leaves disk except for the Claude API calls you opt into.
+A local-first knowledge OS. Point `ico` at a folder of PDFs, markdown notes, and web clips. It compiles them into a queryable wiki you can read, runs grounded Q&A with inline citations, spins up multi-agent research tasks for hard questions, generates spaced-repetition flashcards from what landed, and writes every step to a protocol-level append-only audit trail. Single CLI. Your data never leaves disk except for the Claude API calls you opt into.
 
 [![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
 [![npm](https://img.shields.io/npm/v/intentional-cognition-os.svg)](https://www.npmjs.com/package/intentional-cognition-os)
@@ -30,7 +30,7 @@ You drop documents into a folder. `ico` reads them, compiles the content into a 
 - **Research** a question that's too big for a single retrieval — `ico` spawns a scoped task workspace with four agents (collector, summarizer, skeptic, integrator) that argue across stages and produce a cited final write-up.
 - **Render** a report or slide deck from any topic, and **promote** that artifact back into the wiki so the next answer can cite it.
 - **Recall** what you ingested — generate flashcards with spaced repetition; export to Anki if you prefer.
-- **Audit** anything. Every API call, file write, and task transition is recorded in append-only JSONL with a SHA-256 hash chain. If a citation looks wrong, you can trace it back to the exact source and prompt.
+- **Audit** anything. Every API call, file write, and task transition is recorded in JSONL with a SHA-256 hash chain; the log is protocol-level append-only. If a citation looks wrong, you can trace it back to the exact source and prompt.
 
 It is a cognition runtime, not a chat wrapper. The model proposes; a deterministic kernel owns durable state, traces, and control. **Your data lives in plain markdown + SQLite on your machine.** The model API is called only for the compilation/synthesis/reasoning steps — and only when you trigger them. The backend is a pluggable provider registry: Claude by default, or any OpenAI- or Anthropic-wire provider (OpenAI, Groq, NVIDIA, DeepSeek) or a local server (Ollama, vLLM, LM Studio) via `ICO_PROVIDER` — so you can keep every call on-device if you want to.
 
@@ -110,7 +110,7 @@ You now have:
 | **Inspectable compiled wiki**                | ✅ readable .md files                      | ❌ chat only        | ✅ (but you write the notes)                      | ❌                        | n/a — you build the store | n/a                           |
 | **Multi-agent research mode**                | ✅ collector→summarizer→skeptic→integrator | ❌                  | ❌                                                | ❌                        | you build it              | ❌                            |
 | **Spaced-repetition recall**                 | ✅ built-in, Anki export                   | ❌                  | plugin only                                       | ❌                        | ❌                        | ✅ (that's the whole product) |
-| **Append-only audit trail**                  | ✅ SHA-256 hash-chained JSONL              | ❌                  | ❌                                                | ❌                        | ❌                        | ❌                            |
+| **Protocol-level append-only audit trail**   | ✅ SHA-256 hash-chained JSONL              | ❌                  | ❌                                                | ❌                        | ❌                        | ❌                            |
 | **Open source / hackable**                   | ✅ Apache-2.0                              | ❌                  | partial (core closed)                             | ❌                        | ✅                        | ✅                            |
 | **Single CLI, no plugin zoo**                | ✅ 16 commands                             | n/a                 | ❌ (Obsidian Sync / Smart Connections / Copilot…) | n/a                       | ❌ you assemble           | n/a                           |
 | **You write the data; the AI just reads it** | ✅ kernel owns state                       | ✅                  | ✅                                                | ✅                        | depends                   | ✅                            |
@@ -122,7 +122,7 @@ You now have:
 ## The six layers (architecture in one screen)
 
 ```
-   L1 raw/          ← what you put in (PDFs, MD, web clips)            APPEND-ONLY
+   L1 raw/          ← what you put in (PDFs, MD, web clips)            PROTOCOL-LEVEL APPEND-ONLY
        ↓                                                                deterministic
    L2 wiki/         ← compiled markdown (sources, concepts, topics,    RECOMPILABLE
                       contradictions, open questions)                   probabilistic
@@ -135,7 +135,7 @@ You now have:
        ↓
    L5 recall/       ← flashcards, quizzes, retention scores            ADAPTIVE
                                                                         deterministic
-   L6 audit/        ← trace JSONL + audit log + hash chain             APPEND-ONLY
+   L6 audit/        ← trace JSONL + audit log + hash chain             PROTOCOL-LEVEL APPEND-ONLY
                                                                         deterministic
 ```
 

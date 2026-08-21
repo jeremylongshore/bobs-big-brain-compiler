@@ -162,7 +162,7 @@ the correction below.
 #### Correction (2026-05-26 — Gemini PR #107 review)
 
 The original triage dismissed CodeQL alert #13 (traces.ts:187) with
-"Append-only JSONL appends use atomic appendFileSync (single syscall,
+"Protocol-level append-only JSONL appends use atomic appendFileSync (single syscall,
 kernel-atomic per append)." That's true about the syscall but missed
 the read-compute-write race:
 

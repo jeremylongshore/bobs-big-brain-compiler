@@ -21,7 +21,7 @@ All directories and rules map directly to the six-layer architecture defined in 
 
 ```text
 workspace/
-├── raw/                  # L1: Canonical (append-only)
+├── raw/                  # L1: Canonical (protocol-level append-only)
 │   ├── articles/
 │   ├── papers/
 │   ├── repos/
@@ -52,7 +52,7 @@ workspace/
 │   ├── decks/
 │   ├── quizzes/
 │   └── retention/
-└── audit/                # L6: Audit (append-only)
+└── audit/                # L6: Audit (protocol-level append-only)
     ├── log.md
     ├── traces/
     ├── provenance/
@@ -66,44 +66,44 @@ workspace/
 
 Every file in the workspace has exactly one classification. The classification determines what can happen to that file after it is written.
 
-| Directory                             | Layer | Classification | Definition                                       | Mutability         | Write Policy                                  |
-| ------------------------------------- | ----- | -------------- | ------------------------------------------------ | ------------------ | --------------------------------------------- |
-| `workspace/raw/`                      | L1    | **Canonical**  | Source-of-truth inputs the system never modifies | Append-only        | Write once on ingest, never mutate            |
-| `workspace/raw/articles/`             | L1    | Canonical      | Web-clipped articles and blog posts              | Append-only        | Write once on ingest, never mutate            |
-| `workspace/raw/papers/`               | L1    | Canonical      | Academic papers and PDFs                         | Append-only        | Write once on ingest, never mutate            |
-| `workspace/raw/repos/`                | L1    | Canonical      | Cloned repository snapshots                      | Append-only        | Write once on ingest, never mutate            |
-| `workspace/raw/notes/`                | L1    | Canonical      | User-authored notes and transcripts              | Append-only        | Write once on ingest, never mutate            |
-| `workspace/wiki/`                     | L2    | **Compiled**   | Derived from L1 via compilation passes           | Recompilable       | Overwritten on recompilation only             |
-| `workspace/wiki/index.md`             | L2    | Compiled       | Auto-generated catalog of all compiled pages     | Recompilable       | Rebuilt automatically on compilation          |
-| `workspace/wiki/sources/`             | L2    | Compiled       | Per-source summary pages                         | Recompilable       | Overwritten on recompilation only             |
-| `workspace/wiki/concepts/`            | L2    | Compiled       | Extracted concept definitions                    | Recompilable       | Overwritten on recompilation only             |
-| `workspace/wiki/entities/`            | L2    | Compiled       | Entity pages (people, orgs, tools)               | Recompilable       | Overwritten on recompilation only             |
-| `workspace/wiki/topics/`              | L2    | Compiled       | Cross-source topic synthesis pages               | Recompilable       | Overwritten on recompilation only             |
-| `workspace/wiki/contradictions/`      | L2    | Compiled       | Flagged conflicts between sources                | Recompilable       | Overwritten on recompilation only             |
-| `workspace/wiki/open-questions/`      | L2    | Compiled       | Identified knowledge gaps                        | Recompilable       | Overwritten on recompilation only             |
-| `workspace/wiki/indexes/`             | L2    | Compiled       | Semantic indexes and cross-references            | Recompilable       | Overwritten on recompilation only             |
-| `workspace/tasks/`                    | L3    | **Ephemeral**  | Temporary scoped research workspaces             | Per-task lifecycle | Created on task start, archived on completion |
-| `workspace/tasks/<task-id>/evidence/` | L3    | Ephemeral      | Gathered evidence from L2                        | Per-task lifecycle | Written by collector agents                   |
-| `workspace/tasks/<task-id>/notes/`    | L3    | Ephemeral      | Working notes and summaries                      | Per-task lifecycle | Written by summarizer agents                  |
-| `workspace/tasks/<task-id>/drafts/`   | L3    | Ephemeral      | Draft outputs in progress                        | Per-task lifecycle | Written by integrator agents                  |
-| `workspace/tasks/<task-id>/critique/` | L3    | Ephemeral      | Skeptic challenges and counter-arguments         | Per-task lifecycle | Written by skeptic agents                     |
-| `workspace/tasks/<task-id>/output/`   | L3    | Ephemeral      | Final task deliverables                          | Per-task lifecycle | Written by builder agents                     |
-| `workspace/outputs/`                  | L4    | **Durable**    | Rendered artifacts intended for reuse            | Permanent          | Written on render, deleted only by user       |
-| `workspace/outputs/reports/`          | L4    | Durable        | Markdown reports                                 | Permanent          | Written by `ico render report`                |
-| `workspace/outputs/slides/`           | L4    | Durable        | Marp slide decks                                 | Permanent          | Written by `ico render slides`                |
-| `workspace/outputs/charts/`           | L4    | Durable        | Data visualizations                              | Permanent          | Written by render pipeline                    |
-| `workspace/outputs/briefings/`        | L4    | Durable        | Executive briefings                              | Permanent          | Written by render pipeline                    |
-| `workspace/recall/`                   | L5    | **Adaptive**   | Human retention materials modified by feedback   | Adaptive           | Generated from L2, updated by quiz results    |
-| `workspace/recall/cards/`             | L5    | Adaptive       | Individual flashcard files                       | Adaptive           | Generated and updated per concept             |
-| `workspace/recall/decks/`             | L5    | Adaptive       | Grouped flashcard collections                    | Adaptive           | Rebuilt on generation                         |
-| `workspace/recall/quizzes/`           | L5    | Adaptive       | Quiz question sets                               | Adaptive           | Rebuilt on generation                         |
-| `workspace/recall/retention/`         | L5    | Adaptive       | Retention scores and performance data            | Adaptive           | Updated after each quiz session               |
-| `workspace/audit/`                    | L6    | **Audit**      | Deterministic control data and traces            | Append-only        | Written by kernel, never mutated              |
-| `workspace/audit/log.md`              | L6    | Audit          | Chronological human-readable operation digest    | Append-only        | Appended by kernel on each operation          |
-| `workspace/audit/traces/`             | L6    | Audit          | JSONL event traces per operation                 | Append-only        | One file per traced operation                 |
-| `workspace/audit/provenance/`         | L6    | Audit          | Source-to-derived mapping records                | Append-only        | Written on compilation                        |
-| `workspace/audit/policy/`             | L6    | Audit          | Policy decision records                          | Append-only        | Written on policy evaluation                  |
-| `workspace/audit/promotions/`         | L6    | Audit          | Promotion event log                              | Append-only        | Written on each `ico promote`                 |
+| Directory                             | Layer | Classification | Definition                                       | Mutability                 | Write Policy                                  |
+| ------------------------------------- | ----- | -------------- | ------------------------------------------------ | -------------------------- | --------------------------------------------- |
+| `workspace/raw/`                      | L1    | **Canonical**  | Source-of-truth inputs the system never modifies | Protocol-level append-only | Write once on ingest, never mutate            |
+| `workspace/raw/articles/`             | L1    | Canonical      | Web-clipped articles and blog posts              | Protocol-level append-only | Write once on ingest, never mutate            |
+| `workspace/raw/papers/`               | L1    | Canonical      | Academic papers and PDFs                         | Protocol-level append-only | Write once on ingest, never mutate            |
+| `workspace/raw/repos/`                | L1    | Canonical      | Cloned repository snapshots                      | Protocol-level append-only | Write once on ingest, never mutate            |
+| `workspace/raw/notes/`                | L1    | Canonical      | User-authored notes and transcripts              | Protocol-level append-only | Write once on ingest, never mutate            |
+| `workspace/wiki/`                     | L2    | **Compiled**   | Derived from L1 via compilation passes           | Recompilable               | Overwritten on recompilation only             |
+| `workspace/wiki/index.md`             | L2    | Compiled       | Auto-generated catalog of all compiled pages     | Recompilable               | Rebuilt automatically on compilation          |
+| `workspace/wiki/sources/`             | L2    | Compiled       | Per-source summary pages                         | Recompilable               | Overwritten on recompilation only             |
+| `workspace/wiki/concepts/`            | L2    | Compiled       | Extracted concept definitions                    | Recompilable               | Overwritten on recompilation only             |
+| `workspace/wiki/entities/`            | L2    | Compiled       | Entity pages (people, orgs, tools)               | Recompilable               | Overwritten on recompilation only             |
+| `workspace/wiki/topics/`              | L2    | Compiled       | Cross-source topic synthesis pages               | Recompilable               | Overwritten on recompilation only             |
+| `workspace/wiki/contradictions/`      | L2    | Compiled       | Flagged conflicts between sources                | Recompilable               | Overwritten on recompilation only             |
+| `workspace/wiki/open-questions/`      | L2    | Compiled       | Identified knowledge gaps                        | Recompilable               | Overwritten on recompilation only             |
+| `workspace/wiki/indexes/`             | L2    | Compiled       | Semantic indexes and cross-references            | Recompilable               | Overwritten on recompilation only             |
+| `workspace/tasks/`                    | L3    | **Ephemeral**  | Temporary scoped research workspaces             | Per-task lifecycle         | Created on task start, archived on completion |
+| `workspace/tasks/<task-id>/evidence/` | L3    | Ephemeral      | Gathered evidence from L2                        | Per-task lifecycle         | Written by collector agents                   |
+| `workspace/tasks/<task-id>/notes/`    | L3    | Ephemeral      | Working notes and summaries                      | Per-task lifecycle         | Written by summarizer agents                  |
+| `workspace/tasks/<task-id>/drafts/`   | L3    | Ephemeral      | Draft outputs in progress                        | Per-task lifecycle         | Written by integrator agents                  |
+| `workspace/tasks/<task-id>/critique/` | L3    | Ephemeral      | Skeptic challenges and counter-arguments         | Per-task lifecycle         | Written by skeptic agents                     |
+| `workspace/tasks/<task-id>/output/`   | L3    | Ephemeral      | Final task deliverables                          | Per-task lifecycle         | Written by builder agents                     |
+| `workspace/outputs/`                  | L4    | **Durable**    | Rendered artifacts intended for reuse            | Permanent                  | Written on render, deleted only by user       |
+| `workspace/outputs/reports/`          | L4    | Durable        | Markdown reports                                 | Permanent                  | Written by `ico render report`                |
+| `workspace/outputs/slides/`           | L4    | Durable        | Marp slide decks                                 | Permanent                  | Written by `ico render slides`                |
+| `workspace/outputs/charts/`           | L4    | Durable        | Data visualizations                              | Permanent                  | Written by render pipeline                    |
+| `workspace/outputs/briefings/`        | L4    | Durable        | Executive briefings                              | Permanent                  | Written by render pipeline                    |
+| `workspace/recall/`                   | L5    | **Adaptive**   | Human retention materials modified by feedback   | Adaptive                   | Generated from L2, updated by quiz results    |
+| `workspace/recall/cards/`             | L5    | Adaptive       | Individual flashcard files                       | Adaptive                   | Generated and updated per concept             |
+| `workspace/recall/decks/`             | L5    | Adaptive       | Grouped flashcard collections                    | Adaptive                   | Rebuilt on generation                         |
+| `workspace/recall/quizzes/`           | L5    | Adaptive       | Quiz question sets                               | Adaptive                   | Rebuilt on generation                         |
+| `workspace/recall/retention/`         | L5    | Adaptive       | Retention scores and performance data            | Adaptive                   | Updated after each quiz session               |
+| `workspace/audit/`                    | L6    | **Audit**      | Deterministic control data and traces            | Protocol-level append-only | Written by kernel, never mutated              |
+| `workspace/audit/log.md`              | L6    | Audit          | Chronological human-readable operation digest    | Protocol-level append-only | Appended by kernel on each operation          |
+| `workspace/audit/traces/`             | L6    | Audit          | JSONL event traces per operation                 | Protocol-level append-only | One file per traced operation                 |
+| `workspace/audit/provenance/`         | L6    | Audit          | Source-to-derived mapping records                | Protocol-level append-only | Written on compilation                        |
+| `workspace/audit/policy/`             | L6    | Audit          | Policy decision records                          | Protocol-level append-only | Written on policy evaluation                  |
+| `workspace/audit/promotions/`         | L6    | Audit          | Promotion event log                              | Protocol-level append-only | Written on each `ico promote`                 |
 
 ---
 
@@ -198,15 +198,15 @@ workspace/audit/
 
 ### 5.2 Per-Directory Git Policy
 
-| Directory                 | Tracked                                                   | Rationale                                                                                                                                           |
-| ------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `workspace/raw/`          | **No** — gitignored                                       | Source files are user data, often large binaries (PDFs). Not suitable for version control. Backed up by the user independently.                     |
-| `workspace/wiki/`         | **Yes** — tracked                                         | Compiled knowledge is the primary intellectual asset. Version history enables diff, blame, and rollback of compilation output.                      |
-| `workspace/wiki/index.md` | **Yes** — tracked                                         | Auto-rebuilt catalog; tracked to show knowledge evolution over time.                                                                                |
-| `workspace/tasks/`        | **No** — gitignored                                       | Ephemeral working data. Archived tasks may be large and contain intermediate artifacts not worth versioning.                                        |
-| `workspace/outputs/`      | **No** — gitignored (selective tracking via `git add -f`) | Durable outputs are often large (slides, charts). Selectively force-add specific reports the user wants versioned.                                  |
-| `workspace/recall/`       | **No** — gitignored                                       | Retention data is personal, adaptive, and frequently updated. Not useful in version control.                                                        |
-| `workspace/audit/`        | **No** — gitignored                                       | Audit traces are append-only JSONL files that grow continuously. Tracked operationally, not via git. `audit/log.md` may be selectively force-added. |
+| Directory                 | Tracked                                                   | Rationale                                                                                                                                                          |
+| ------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `workspace/raw/`          | **No** — gitignored                                       | Source files are user data, often large binaries (PDFs). Not suitable for version control. Backed up by the user independently.                                    |
+| `workspace/wiki/`         | **Yes** — tracked                                         | Compiled knowledge is the primary intellectual asset. Version history enables diff, blame, and rollback of compilation output.                                     |
+| `workspace/wiki/index.md` | **Yes** — tracked                                         | Auto-rebuilt catalog; tracked to show knowledge evolution over time.                                                                                               |
+| `workspace/tasks/`        | **No** — gitignored                                       | Ephemeral working data. Archived tasks may be large and contain intermediate artifacts not worth versioning.                                                       |
+| `workspace/outputs/`      | **No** — gitignored (selective tracking via `git add -f`) | Durable outputs are often large (slides, charts). Selectively force-add specific reports the user wants versioned.                                                 |
+| `workspace/recall/`       | **No** — gitignored                                       | Retention data is personal, adaptive, and frequently updated. Not useful in version control.                                                                       |
+| `workspace/audit/`        | **No** — gitignored                                       | Audit traces are protocol-level append-only JSONL files that grow continuously. Tracked operationally, not via git. `audit/log.md` may be selectively force-added. |
 
 ### 5.3 Selective Tracking
 
@@ -318,7 +318,7 @@ If a source in `raw/` needs to be replaced (e.g., a better scan of a paper):
 
 Files in `workspace/audit/` are never deleted, overwritten, or truncated by any system operation. The only exception is workspace destruction (`ico workspace destroy --confirm`), which removes the entire workspace tree.
 
-The `audit/log.md` file is append-only: new entries are appended to the end of the file. The file is never rewritten from scratch. If it becomes unwieldy, the operator can archive it manually and the system starts a new `log.md`.
+The `audit/log.md` file is protocol-level append-only: new entries are appended to the end of the file. The file is never rewritten from scratch. If it becomes unwieldy, the operator can archive it manually and the system starts a new `log.md`.
 
 ---
 
@@ -379,44 +379,44 @@ Place `.gitkeep` in every subdirectory under `workspace/wiki/` (tracked). Do not
 
 Every workspace directory maps to a specific layer and section in the Master Blueprint (007-PP-PLAN).
 
-| Directory                        | Blueprint Layer         | Blueprint Section     | Classification | Deterministic Owner       |
-| -------------------------------- | ----------------------- | --------------------- | -------------- | ------------------------- |
-| `workspace/raw/`                 | L1 — Raw Corpus         | 5.1, 5.2              | Canonical      | Kernel (ingest)           |
-| `workspace/raw/articles/`        | L1                      | 5.1                   | Canonical      | Kernel (ingest)           |
-| `workspace/raw/papers/`          | L1                      | 5.1                   | Canonical      | Kernel (ingest)           |
-| `workspace/raw/repos/`           | L1                      | 5.1                   | Canonical      | Kernel (ingest)           |
-| `workspace/raw/notes/`           | L1                      | 5.1                   | Canonical      | Kernel (ingest)           |
-| `workspace/wiki/`                | L2 — Semantic Knowledge | 5.1, 5.2, 6.1         | Compiled       | Compiler (all passes)     |
-| `workspace/wiki/index.md`        | L2                      | 5.5                   | Compiled       | Kernel (auto-rebuild)     |
-| `workspace/wiki/sources/`        | L2                      | 6.1 (Summarize pass)  | Compiled       | Compiler (summarize)      |
-| `workspace/wiki/concepts/`       | L2                      | 6.1 (Extract pass)    | Compiled       | Compiler (extract)        |
-| `workspace/wiki/entities/`       | L2                      | 6.1 (Extract pass)    | Compiled       | Compiler (extract)        |
-| `workspace/wiki/topics/`         | L2                      | 6.1 (Synthesize pass) | Compiled       | Compiler (synthesize)     |
-| `workspace/wiki/contradictions/` | L2                      | 6.1 (Contradict pass) | Compiled       | Compiler (contradict)     |
-| `workspace/wiki/open-questions/` | L2                      | 6.1 (Gap pass)        | Compiled       | Compiler (gap)            |
-| `workspace/wiki/indexes/`        | L2                      | 6.1 (Link pass)       | Compiled       | Compiler (link)           |
-| `workspace/tasks/`               | L3 — Episodic Tasks     | 5.1, 5.2, 8.1         | Ephemeral      | Kernel (task lifecycle)   |
-| `workspace/tasks/<id>/evidence/` | L3                      | 8.2                   | Ephemeral      | Collector agents          |
-| `workspace/tasks/<id>/notes/`    | L3                      | 8.2                   | Ephemeral      | Summarizer agents         |
-| `workspace/tasks/<id>/drafts/`   | L3                      | 8.2                   | Ephemeral      | Integrator agents         |
-| `workspace/tasks/<id>/critique/` | L3                      | 8.2                   | Ephemeral      | Skeptic agents            |
-| `workspace/tasks/<id>/output/`   | L3                      | 8.2, 8.3              | Ephemeral      | Builder agents            |
-| `workspace/outputs/`             | L4 — Artifacts          | 5.1, 5.2, 7.1         | Durable        | Kernel (render + promote) |
-| `workspace/outputs/reports/`     | L4                      | 7.1                   | Durable        | Render pipeline           |
-| `workspace/outputs/slides/`      | L4                      | 7.1                   | Durable        | Render pipeline           |
-| `workspace/outputs/charts/`      | L4                      | 7.1                   | Durable        | Render pipeline           |
-| `workspace/outputs/briefings/`   | L4                      | 7.1                   | Durable        | Render pipeline           |
-| `workspace/recall/`              | L5 — Recall             | 5.1, 5.2, 9.1         | Adaptive       | Kernel (recall lifecycle) |
-| `workspace/recall/cards/`        | L5                      | 9.2                   | Adaptive       | Recall generator          |
-| `workspace/recall/decks/`        | L5                      | 9.2                   | Adaptive       | Recall generator          |
-| `workspace/recall/quizzes/`      | L5                      | 9.2                   | Adaptive       | Recall generator          |
-| `workspace/recall/retention/`    | L5                      | 9.3                   | Adaptive       | Quiz feedback loop        |
-| `workspace/audit/`               | L6 — Audit & Policy     | 5.1, 5.2, 5.5         | Audit          | Kernel (all operations)   |
-| `workspace/audit/log.md`         | L6                      | 5.5                   | Audit          | Kernel (append-only)      |
-| `workspace/audit/traces/`        | L6                      | 5.5                   | Audit          | Kernel (per-operation)    |
-| `workspace/audit/provenance/`    | L6                      | 5.3                   | Audit          | Kernel (on compilation)   |
-| `workspace/audit/policy/`        | L6                      | 5.3                   | Audit          | Kernel (on policy eval)   |
-| `workspace/audit/promotions/`    | L6                      | 7.1                   | Audit          | Kernel (on promote)       |
+| Directory                        | Blueprint Layer         | Blueprint Section     | Classification | Deterministic Owner                 |
+| -------------------------------- | ----------------------- | --------------------- | -------------- | ----------------------------------- |
+| `workspace/raw/`                 | L1 — Raw Corpus         | 5.1, 5.2              | Canonical      | Kernel (ingest)                     |
+| `workspace/raw/articles/`        | L1                      | 5.1                   | Canonical      | Kernel (ingest)                     |
+| `workspace/raw/papers/`          | L1                      | 5.1                   | Canonical      | Kernel (ingest)                     |
+| `workspace/raw/repos/`           | L1                      | 5.1                   | Canonical      | Kernel (ingest)                     |
+| `workspace/raw/notes/`           | L1                      | 5.1                   | Canonical      | Kernel (ingest)                     |
+| `workspace/wiki/`                | L2 — Semantic Knowledge | 5.1, 5.2, 6.1         | Compiled       | Compiler (all passes)               |
+| `workspace/wiki/index.md`        | L2                      | 5.5                   | Compiled       | Kernel (auto-rebuild)               |
+| `workspace/wiki/sources/`        | L2                      | 6.1 (Summarize pass)  | Compiled       | Compiler (summarize)                |
+| `workspace/wiki/concepts/`       | L2                      | 6.1 (Extract pass)    | Compiled       | Compiler (extract)                  |
+| `workspace/wiki/entities/`       | L2                      | 6.1 (Extract pass)    | Compiled       | Compiler (extract)                  |
+| `workspace/wiki/topics/`         | L2                      | 6.1 (Synthesize pass) | Compiled       | Compiler (synthesize)               |
+| `workspace/wiki/contradictions/` | L2                      | 6.1 (Contradict pass) | Compiled       | Compiler (contradict)               |
+| `workspace/wiki/open-questions/` | L2                      | 6.1 (Gap pass)        | Compiled       | Compiler (gap)                      |
+| `workspace/wiki/indexes/`        | L2                      | 6.1 (Link pass)       | Compiled       | Compiler (link)                     |
+| `workspace/tasks/`               | L3 — Episodic Tasks     | 5.1, 5.2, 8.1         | Ephemeral      | Kernel (task lifecycle)             |
+| `workspace/tasks/<id>/evidence/` | L3                      | 8.2                   | Ephemeral      | Collector agents                    |
+| `workspace/tasks/<id>/notes/`    | L3                      | 8.2                   | Ephemeral      | Summarizer agents                   |
+| `workspace/tasks/<id>/drafts/`   | L3                      | 8.2                   | Ephemeral      | Integrator agents                   |
+| `workspace/tasks/<id>/critique/` | L3                      | 8.2                   | Ephemeral      | Skeptic agents                      |
+| `workspace/tasks/<id>/output/`   | L3                      | 8.2, 8.3              | Ephemeral      | Builder agents                      |
+| `workspace/outputs/`             | L4 — Artifacts          | 5.1, 5.2, 7.1         | Durable        | Kernel (render + promote)           |
+| `workspace/outputs/reports/`     | L4                      | 7.1                   | Durable        | Render pipeline                     |
+| `workspace/outputs/slides/`      | L4                      | 7.1                   | Durable        | Render pipeline                     |
+| `workspace/outputs/charts/`      | L4                      | 7.1                   | Durable        | Render pipeline                     |
+| `workspace/outputs/briefings/`   | L4                      | 7.1                   | Durable        | Render pipeline                     |
+| `workspace/recall/`              | L5 — Recall             | 5.1, 5.2, 9.1         | Adaptive       | Kernel (recall lifecycle)           |
+| `workspace/recall/cards/`        | L5                      | 9.2                   | Adaptive       | Recall generator                    |
+| `workspace/recall/decks/`        | L5                      | 9.2                   | Adaptive       | Recall generator                    |
+| `workspace/recall/quizzes/`      | L5                      | 9.2                   | Adaptive       | Recall generator                    |
+| `workspace/recall/retention/`    | L5                      | 9.3                   | Adaptive       | Quiz feedback loop                  |
+| `workspace/audit/`               | L6 — Audit & Policy     | 5.1, 5.2, 5.5         | Audit          | Kernel (all operations)             |
+| `workspace/audit/log.md`         | L6                      | 5.5                   | Audit          | Kernel (protocol-level append-only) |
+| `workspace/audit/traces/`        | L6                      | 5.5                   | Audit          | Kernel (per-operation)              |
+| `workspace/audit/provenance/`    | L6                      | 5.3                   | Audit          | Kernel (on compilation)             |
+| `workspace/audit/policy/`        | L6                      | 5.3                   | Audit          | Kernel (on policy eval)             |
+| `workspace/audit/promotions/`    | L6                      | 7.1                   | Audit          | Kernel (on promote)                 |
 
 ---
 
@@ -425,7 +425,7 @@ Every workspace directory maps to a specific layer and section in the Master Blu
 These rules are enforced by the kernel and validated by `ico lint knowledge`. Violation of any invariant is a lint error.
 
 1. **No file in `workspace/raw/` is modified after creation.** New versions are new files.
-2. **No file in `workspace/audit/` is modified or deleted.** Append-only, always.
+2. **No file in `workspace/audit/` is modified or deleted.** Protocol-level append-only, always.
 3. **No symlinks exist in `workspace/raw/`.** Ingest resolves and copies.
 4. **No symlinks point outside the workspace root** in any directory.
 5. **All system-generated filenames conform to the slug rules** in Section 4.1.
