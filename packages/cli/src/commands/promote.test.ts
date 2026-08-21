@@ -25,6 +25,10 @@ vi.mock('@ico/kernel', async () => {
     initDatabase: vi.fn(() => ({ ok: true, value: {} })),
     closeDatabase: vi.fn(),
     promoteArtifact: vi.fn(),
+    withWriteLock: vi.fn(async (fn: () => unknown) => ({
+      ok: true as const,
+      value: { ran: true, locked: true, value: await fn() },
+    })),
     // Re-export constants so the module under test can use them
     VALID_PROMOTION_TYPES: actual.VALID_PROMOTION_TYPES,
     PromotionError: actual.PromotionError,
@@ -79,7 +83,7 @@ function mockWorkspace(): void {
 // ---------------------------------------------------------------------------
 
 describe('runPromote — --as validation', () => {
-  it('sets exitCode=2 and writes error when --as is not provided', () => {
+  it('sets exitCode=2 and writes error when --as is not provided', async () => {
     const originalExitCode = process.exitCode;
     process.exitCode = 0;
 
@@ -89,7 +93,7 @@ describe('runPromote — --as validation', () => {
       return true;
     });
 
-    runPromote('outputs/reports/my.md', {}, {});
+    await runPromote('outputs/reports/my.md', {}, {});
 
     spy.mockRestore();
     expect(process.exitCode).toBe(2);
@@ -98,7 +102,7 @@ describe('runPromote — --as validation', () => {
     process.exitCode = originalExitCode as number | undefined;
   });
 
-  it('sets exitCode=2 and writes error when --as has an invalid type', () => {
+  it('sets exitCode=2 and writes error when --as has an invalid type', async () => {
     const originalExitCode = process.exitCode;
     process.exitCode = 0;
 
@@ -108,7 +112,7 @@ describe('runPromote — --as validation', () => {
       return true;
     });
 
-    runPromote('outputs/reports/my.md', { as: 'invalid-type' }, {});
+    await runPromote('outputs/reports/my.md', { as: 'invalid-type' }, {});
 
     spy.mockRestore();
     expect(process.exitCode).toBe(2);
@@ -124,7 +128,7 @@ describe('runPromote — --as validation', () => {
 // ---------------------------------------------------------------------------
 
 describe('runPromote — workspace resolution failure', () => {
-  it('sets exitCode=1 when workspace cannot be resolved', () => {
+  it('sets exitCode=1 when workspace cannot be resolved', async () => {
     const originalExitCode = process.exitCode;
     process.exitCode = 0;
 
@@ -139,7 +143,7 @@ describe('runPromote — workspace resolution failure', () => {
       return true;
     });
 
-    runPromote('outputs/reports/my.md', { as: 'topic' }, {});
+    await runPromote('outputs/reports/my.md', { as: 'topic' }, {});
 
     spy.mockRestore();
     expect(process.exitCode).toBe(1);
@@ -154,7 +158,7 @@ describe('runPromote — workspace resolution failure', () => {
 // ---------------------------------------------------------------------------
 
 describe('runPromote — --dry-run', () => {
-  it('shows a preview and does not call promoteArtifact', () => {
+  it('shows a preview and does not call promoteArtifact', async () => {
     const originalExitCode = process.exitCode;
     process.exitCode = 0;
 
@@ -167,13 +171,14 @@ describe('runPromote — --dry-run', () => {
     });
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-    runPromote('outputs/reports/my-report.md', { as: 'topic', dryRun: true }, {});
+    await runPromote('outputs/reports/my-report.md', { as: 'topic', dryRun: true }, {});
 
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
 
     // Should NOT have promoted
     expect(kernelModule.promoteArtifact).not.toHaveBeenCalled();
+    expect(kernelModule.withWriteLock).not.toHaveBeenCalled();
     // Should have shown preview info
     expect(process.exitCode).toBe(0);
     const output = stdoutMessages.join('');
@@ -184,7 +189,7 @@ describe('runPromote — --dry-run', () => {
     process.exitCode = originalExitCode as number | undefined;
   });
 
-  it('exits cleanly (exitCode 0) after dry-run preview', () => {
+  it('exits cleanly (exitCode 0) after dry-run preview', async () => {
     const originalExitCode = process.exitCode;
     process.exitCode = 0;
 
@@ -193,7 +198,7 @@ describe('runPromote — --dry-run', () => {
     const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-    runPromote('outputs/reports/my-report.md', { as: 'concept', dryRun: true }, {});
+    await runPromote('outputs/reports/my-report.md', { as: 'concept', dryRun: true }, {});
 
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
@@ -209,7 +214,7 @@ describe('runPromote — --dry-run', () => {
 // ---------------------------------------------------------------------------
 
 describe('runPromote — without --yes', () => {
-  it('shows confirmation requirement and sets exitCode=1 without calling promoteArtifact', () => {
+  it('shows confirmation requirement and sets exitCode=1 without calling promoteArtifact', async () => {
     const originalExitCode = process.exitCode;
     process.exitCode = 0;
 
@@ -222,13 +227,14 @@ describe('runPromote — without --yes', () => {
     });
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-    runPromote('outputs/reports/my-report.md', { as: 'topic' }, {});
+    await runPromote('outputs/reports/my-report.md', { as: 'topic' }, {});
 
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
 
     expect(process.exitCode).toBe(1);
     expect(kernelModule.promoteArtifact).not.toHaveBeenCalled();
+    expect(kernelModule.withWriteLock).not.toHaveBeenCalled();
     const output = stdoutMessages.join('');
     expect(output).toContain('--yes');
 
@@ -241,7 +247,7 @@ describe('runPromote — without --yes', () => {
 // ---------------------------------------------------------------------------
 
 describe('runPromote — successful promotion', () => {
-  it('calls promoteArtifact with confirm:true and shows success message', () => {
+  it('calls promoteArtifact with confirm:true and shows success message', async () => {
     const originalExitCode = process.exitCode;
     process.exitCode = 0;
 
@@ -265,12 +271,13 @@ describe('runPromote — successful promotion', () => {
     });
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-    runPromote('outputs/reports/my-report.md', { as: 'topic', yes: true }, {});
+    await runPromote('outputs/reports/my-report.md', { as: 'topic', yes: true }, {});
 
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
 
     expect(process.exitCode).toBe(0);
+    expect(kernelModule.withWriteLock).toHaveBeenCalledOnce();
     expect(kernelModule.promoteArtifact).toHaveBeenCalledOnce();
     expect(kernelModule.promoteArtifact).toHaveBeenCalledWith(expect.anything(), tmpBase, {
       sourcePath: 'outputs/reports/my-report.md',
@@ -286,7 +293,7 @@ describe('runPromote — successful promotion', () => {
     process.exitCode = originalExitCode as number | undefined;
   });
 
-  it('shows both source and target in the success output', () => {
+  it('shows both source and target in the success output', async () => {
     const originalExitCode = process.exitCode;
     process.exitCode = 0;
 
@@ -310,7 +317,7 @@ describe('runPromote — successful promotion', () => {
     });
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-    runPromote('outputs/reports/self-attention.md', { as: 'concept', yes: true }, {});
+    await runPromote('outputs/reports/self-attention.md', { as: 'concept', yes: true }, {});
 
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
@@ -343,7 +350,7 @@ describe('runPromote — PromotionError exit code mapping', () => {
   ];
 
   for (const { code, expectedExitCode } of errorCases) {
-    it(`maps PromotionError(${code}) to exitCode=${expectedExitCode}`, () => {
+    it(`maps PromotionError(${code}) to exitCode=${expectedExitCode}`, async () => {
       const originalExitCode = process.exitCode;
       process.exitCode = 0;
 
@@ -364,7 +371,7 @@ describe('runPromote — PromotionError exit code mapping', () => {
       });
       const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
-      runPromote('outputs/reports/test.md', { as: 'topic', yes: true }, {});
+      await runPromote('outputs/reports/test.md', { as: 'topic', yes: true }, {});
 
       stderrSpy.mockRestore();
       stdoutSpy.mockRestore();
@@ -386,7 +393,7 @@ describe('runPromote — all valid promotion types', () => {
   const validTypes = ['topic', 'concept', 'entity', 'reference'] as const;
 
   for (const type of validTypes) {
-    it(`accepts --as ${type}`, () => {
+    it(`accepts --as ${type}`, async () => {
       const originalExitCode = process.exitCode;
       process.exitCode = 0;
 
@@ -406,7 +413,7 @@ describe('runPromote — all valid promotion types', () => {
       const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
       const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-      runPromote('outputs/reports/test.md', { as: type, yes: true }, {});
+      await runPromote('outputs/reports/test.md', { as: type, yes: true }, {});
 
       stdoutSpy.mockRestore();
       stderrSpy.mockRestore();
