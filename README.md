@@ -18,6 +18,8 @@ A local-first knowledge OS. Point `ico` at a folder of PDFs, markdown notes, and
 [![CI](https://github.com/jeremylongshore/bobs-big-brain-compiler/actions/workflows/ci.yml/badge.svg)](https://github.com/jeremylongshore/bobs-big-brain-compiler/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/jeremylongshore/bobs-big-brain-compiler)](https://github.com/jeremylongshore/bobs-big-brain-compiler/releases)
 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/U5S225PTME)
+
 > **Part of the [Bob's Big Brain](https://github.com/intent-solutions-io/bobs-big-brain-umbrella) stack** — this is the **compile** layer. It pairs with [Bob's Big Brain Registrar](https://github.com/jeremylongshore/bobs-big-brain-registrar) (govern) and [qmd](https://github.com/tobi/qmd) (retrieve) to turn raw corpus into governed, citation-backed memory. → [Ecosystem overview](https://github.com/intent-solutions-io/bobs-big-brain-umbrella)
 
 ---
