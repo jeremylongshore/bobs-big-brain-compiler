@@ -37,27 +37,22 @@ questions:
     question: "test?"
 EOF
 
-# A dummy ANTHROPIC_API_KEY satisfies preflight without exposing real creds.
-export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-test-key-for-dry-run-only}"
+# Dry mode must not require or inspect credentials.
+unset ANTHROPIC_API_KEY || true
 
-# Stub `ico` so run.sh's preflight passes on CI runners that don't have the
-# global package installed. The stub only needs to handle `ico --version`
-# (the only ico call before --dry exits). All other ico subcommands are
-# unreachable in --dry mode.
+# Stub `ico` to fail every call. A successful dry run proves it is unreachable.
 STUB_BIN="$TMP/stub-bin"
 mkdir -p "$STUB_BIN"
 cat > "$STUB_BIN/ico" <<'STUB'
 #!/usr/bin/env bash
-case "$1" in
-  --version) echo "0.0.0-stub" ;;
-  *)         echo "stub ico called with: $*" >&2; exit 2 ;;
-esac
+echo "dry run invoked ico unexpectedly: $*" >&2
+exit 99
 STUB
 chmod +x "$STUB_BIN/ico"
 export PATH="$STUB_BIN:$PATH"
 
-# test 1: --dry mode runs without invoking ico subcommands beyond version
-echo "test 1: --dry mode completes cleanly without Claude calls"
+# test 1: --dry mode runs without ICO, credentials, or filesystem writes
+echo "test 1: --dry is credential-free and write-free"
 DRY_OUT="$("$RUN_SH" --target "$TARGET" --bank "$BANK" --repo-root "$TMP" --dry 2>&1)" || {
   fail "--dry exited non-zero"
 }
@@ -71,6 +66,17 @@ if [ -n "$RUN_ID" ]; then
   pass "--dry surfaced run_id"
 else
   fail "no run_id in --dry output"
+fi
+DRY_WS="$(echo "$DRY_OUT" | grep -oE '"workspace":"[^"]+' | sed 's/"workspace":"//' | head -1)"
+if [ -n "$DRY_WS" ] && [ ! -e "$(dirname "$DRY_WS")" ]; then
+  pass "--dry created no run-cache directory"
+else
+  fail "--dry created a run-cache directory: $(dirname "$DRY_WS")"
+fi
+if [ ! -e "$TMP/dogfood" ]; then
+  pass "--dry created no publication directory"
+else
+  fail "--dry created publication files"
 fi
 
 # test 2: TARGET_SLUG has no trailing dash (bug 1)
@@ -196,6 +202,42 @@ if echo "$DRY_OUT" | grep -qE '"asks_planned":[[:space:]]*[0-9]+'; then
   pass "--dry payload reports asks_planned"
 else
   fail "--dry payload missing asks_planned"
+fi
+
+# test 10: paid runs above $0.50 fail closed before ICO or filesystem writes.
+echo
+echo "test 10: high-cost run requires explicit budget approval"
+EXPENSIVE_TARGET="$TMP/expensive-target"
+mkdir -p "$EXPENSIVE_TARGET"
+echo "test md" > "$EXPENSIVE_TARGET/sample.md"
+EXPENSIVE_BANK="$TMP/expensive-bank.yaml"
+{
+  echo "version: v1"
+  echo "target: expensive-target"
+  echo "questions:"
+  for i in $(seq 1 26); do
+    echo "  - id: Q$i"
+    echo "    question: test"
+  done
+} > "$EXPENSIVE_BANK"
+set +e
+EXPENSIVE_OUT="$("$RUN_SH" --target "$EXPENSIVE_TARGET" --bank "$EXPENSIVE_BANK" --repo-root "$TMP" 2>&1)"
+EXPENSIVE_CODE=$?
+set -e
+if [ "$EXPENSIVE_CODE" -eq 4 ]; then
+  pass "high-cost run exits 4 without --approve-budget"
+else
+  fail "high-cost run exited $EXPENSIVE_CODE instead of 4: $EXPENSIVE_OUT"
+fi
+if echo "$EXPENSIVE_OUT" | grep -q "budget approval required"; then
+  pass "high-cost failure explains the approval boundary"
+else
+  fail "high-cost failure omitted the approval message"
+fi
+if [ ! -e "$TMP/dogfood" ]; then
+  pass "budget refusal created no publication directory"
+else
+  fail "budget refusal created publication files"
 fi
 
 echo

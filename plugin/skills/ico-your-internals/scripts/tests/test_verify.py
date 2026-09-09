@@ -13,6 +13,7 @@ Run from repo root:
 Or directly:
     python3 plugin/skills/ico-your-internals/scripts/tests/test_verify.py
 """
+
 import json
 import pathlib
 import subprocess
@@ -20,10 +21,7 @@ import sys
 import tempfile
 import unittest
 
-
-SCRIPT = (
-    pathlib.Path(__file__).resolve().parent.parent / "verify.py"
-)
+SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "verify.py"
 
 
 def make_run(
@@ -807,6 +805,45 @@ class TestV1ReceiptCompat(unittest.TestCase):
             self.assertEqual(summary["paraphrases_run"], 1)
             self.assertEqual(summary["paraphrases_robust"], 1)
             self.assertEqual(summary["verify_rate"], 1.0)
+
+
+class TestCitationContainment(unittest.TestCase):
+    """Citation-controlled paths cannot escape the declared evidence roots."""
+
+    def _assert_escape_is_unverified(self, source: str, workspace: bool) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = pathlib.Path(tmpdir)
+            target = tmp / "target"
+            target.mkdir()
+            workspace_root = tmp / "workspace"
+            workspace_root.mkdir()
+            (tmp / "outside.md").write_text("private marker_outside\n")
+            run_id = make_run(
+                tmp,
+                target,
+                [
+                    {
+                        "run_id": "test-run",
+                        "q_id": "Q01",
+                        "question": "?",
+                        "answer": "",
+                        "citations": [{"source": source}],
+                        "expected_substrings": ["marker_outside"],
+                    }
+                ],
+                workspace=workspace_root if workspace else None,
+            )
+            run_verify(tmp, run_id, target)
+            entry = json.loads(
+                (tmp / "cache" / run_id / "verifications.jsonl").read_text().strip()
+            )
+            self.assertEqual(entry["verdict"], "UNVERIFIED")
+
+    def test_target_parent_traversal_is_rejected(self) -> None:
+        self._assert_escape_is_unverified("../outside.md", workspace=False)
+
+    def test_workspace_parent_traversal_is_rejected(self) -> None:
+        self._assert_escape_is_unverified("wiki/../../outside.md", workspace=True)
 
 
 if __name__ == "__main__":

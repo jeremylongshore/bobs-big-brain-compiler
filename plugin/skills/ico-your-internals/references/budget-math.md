@@ -43,12 +43,15 @@ becomes $7.80 / 1M.
 
 ## Confirmation thresholds
 
-| Estimate      | Action                                                             |
-| ------------- | ------------------------------------------------------------------ |
-| ≤ $0.10       | Proceed silently (most small-corpus runs land here)                |
-| $0.10 – $0.50 | Log the estimate but proceed                                       |
-| $0.50 – $5.00 | Prompt via AskUserQuestion before proceeding                       |
-| > $5.00       | Halt with explicit confirmation required + recommend `--dry` first |
+| Estimate      | Action                                                           |
+| ------------- | ---------------------------------------------------------------- |
+| ≤ $0.10       | Proceed silently (most small-corpus runs land here)              |
+| $0.10 – $0.50 | Log the estimate but proceed                                     |
+| > $0.50       | Prompt via AskUserQuestion; full run requires `--approve-budget` |
+
+`run.sh` enforces the final row before creating its cache directory or making an
+API call. The approval flag records an already-made operator decision; never add
+it speculatively.
 
 ## Calibration
 

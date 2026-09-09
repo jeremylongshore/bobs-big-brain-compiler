@@ -23,6 +23,7 @@ Run from repo root:
 Or directly:
     python3 plugin/skills/ico-your-internals/scripts/tests/test_render_summary.py
 """
+
 import json
 import pathlib
 import subprocess
@@ -30,10 +31,7 @@ import sys
 import tempfile
 import unittest
 
-
-SCRIPT = (
-    pathlib.Path(__file__).resolve().parent.parent / "render-summary.py"
-)
+SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "render-summary.py"
 
 
 def make_render_inputs(
@@ -96,9 +94,7 @@ def run_render(tmp: pathlib.Path, run_id: str) -> dict:
         text=True,
         check=True,
     )
-    metrics_path = (
-        repo_root / "dogfood" / "runs" / run_id / "metrics.json"
-    )
+    metrics_path = repo_root / "dogfood" / "runs" / run_id / "metrics.json"
     return json.loads(metrics_path.read_text())
 
 
@@ -153,7 +149,9 @@ class TestV2ParaphraseMetrics(unittest.TestCase):
                     "citation_idx": 0,
                     "cited_source": "doc.md",
                     "verdict": "VERIFIED",
-                    "hits": [{"substring": "marker_a", "line": 1, "evidence_grep": "L1"}],
+                    "hits": [
+                        {"substring": "marker_a", "line": 1, "evidence_grep": "L1"}
+                    ],
                     "expected_substring_count": 1,
                     "matched_count": 1,
                     "score": 1.0,
@@ -186,9 +184,7 @@ class TestV2ParaphraseMetrics(unittest.TestCase):
             self.assertEqual(metrics["paraphrases_robust"], 1)
 
             # progress.md row should include the new column.
-            progress = (
-                tmp / "repo" / "dogfood" / "progress.md"
-            ).read_text()
+            progress = (tmp / "repo" / "dogfood" / "progress.md").read_text()
             self.assertIn(run_id, progress)
             # The robustness column renders as a percentage; 50.0% from 0.5.
             self.assertIn("50.0%", progress)
@@ -223,7 +219,9 @@ class TestV1ReceiptCompat(unittest.TestCase):
                     "citation_idx": 0,
                     "cited_source": "doc.md",
                     "verdict": "VERIFIED",
-                    "hits": [{"substring": "marker_a", "line": 1, "evidence_grep": "L1"}],
+                    "hits": [
+                        {"substring": "marker_a", "line": 1, "evidence_grep": "L1"}
+                    ],
                     "expected_substring_count": 1,
                     "matched_count": 1,
                     "score": 1.0,
@@ -237,6 +235,57 @@ class TestV1ReceiptCompat(unittest.TestCase):
             self.assertEqual(metrics["paraphrase_robustness"], 1.0)
             self.assertEqual(metrics["paraphrases_run"], 1)
             self.assertEqual(metrics["verify_rate"], 1.0)
+
+
+class TestPublicArtifactBoundary(unittest.TestCase):
+    def test_private_paths_and_credentials_are_not_published(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = pathlib.Path(tmpdir)
+            run_id = make_render_inputs(tmp, [], [])
+            run_dir = tmp / "cache" / run_id
+            (run_dir / "friction.jsonl").write_text(
+                json.dumps(
+                    {
+                        "run_id": run_id,
+                        "stage": "compile",
+                        "severity": "error",
+                        "message": (
+                            "failed under /fake/target; "
+                            "ANTHROPIC_API_KEY=sk-ant-secret123"
+                        ),
+                        "exit_code": 1,
+                        "recommend_bead": True,
+                        "private_extra": "/must/not/publish",
+                    }
+                )
+                + "\n"
+            )
+
+            metrics = run_render(tmp, run_id)
+            public_dir = tmp / "repo" / "dogfood" / "runs" / run_id
+            public_manifest = json.loads((public_dir / "manifest.json").read_text())
+            public_friction = (public_dir / "friction.jsonl").read_text()
+            public_summary = (public_dir / "summary.md").read_text()
+
+            self.assertEqual(metrics["target"], "fake-target")
+            self.assertNotIn("/fake/target", public_summary)
+            self.assertNotIn("/fake/bank.yaml", public_summary)
+            self.assertEqual(
+                set(public_manifest),
+                {
+                    "run_id",
+                    "target_slug",
+                    "bank_version",
+                    "ico_version",
+                    "started_at",
+                    "paraphrases_mode",
+                    "asks_planned",
+                },
+            )
+            self.assertNotIn("/fake/target", public_friction)
+            self.assertNotIn("sk-ant-secret123", public_friction)
+            self.assertNotIn("private_extra", public_friction)
+            self.assertIn("[REDACTED]", public_friction)
 
 
 if __name__ == "__main__":
