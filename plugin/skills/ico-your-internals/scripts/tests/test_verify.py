@@ -21,7 +21,9 @@ import sys
 import tempfile
 import unittest
 
-SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "verify.py"
+SCRIPT = (
+    pathlib.Path(__file__).resolve().parent.parent / "verify.py"
+)
 
 
 def make_run(

@@ -31,7 +31,9 @@ import sys
 import tempfile
 import unittest
 
-SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "render-summary.py"
+SCRIPT = (
+    pathlib.Path(__file__).resolve().parent.parent / "render-summary.py"
+)
 
 
 def make_render_inputs(
