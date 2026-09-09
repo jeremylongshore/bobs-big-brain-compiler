@@ -188,7 +188,7 @@ def main() -> int:
                 # Non-`wiki/` paths fall through to legacy target-tree
                 # resolution for backward compatibility with older runs +
                 # tools that emit raw source paths.
-                if source.startswith("wiki/") or source.startswith("wiki\\"):
+                if source.startswith(("wiki/", "wiki\\")):
                     source_path = (workspace_root / source).resolve()
                     if not source_path.is_file():
                         source_path = None
@@ -287,7 +287,7 @@ def main() -> int:
                 # citations, target tree otherwise). Falls back to the
                 # absolute path when relative_to fails (defensive).
                 try:
-                    if source.startswith("wiki/") or source.startswith("wiki\\"):
+                    if source.startswith(("wiki/", "wiki\\")):
                         cited_relative = str(source_path.relative_to(workspace_root))
                     else:
                         cited_relative = str(source_path.relative_to(target_root))

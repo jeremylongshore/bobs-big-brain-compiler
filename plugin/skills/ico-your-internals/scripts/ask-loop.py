@@ -36,7 +36,7 @@ import time
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from bank import BankSchemaError, iter_prompts, load_bank  # noqa: E402
+from bank import BankSchemaError, iter_prompts, load_bank
 
 
 def _friction(path: pathlib.Path, payload: dict) -> None:
@@ -79,6 +79,7 @@ def main(argv: list[str]) -> int:
                 capture_output=True,
                 text=True,
                 timeout=180,
+                check=False,
             )
         except subprocess.TimeoutExpired:
             _friction(
