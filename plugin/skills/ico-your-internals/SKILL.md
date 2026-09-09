@@ -6,7 +6,7 @@ author: Jeremy Longshore <jeremy@intentsolutions.io>
 license: Apache-2.0
 model: inherit
 effort: medium
-argument-hint: '--target PATH --bank BANK.yaml [--paraphrases primary|all] [--repo-root PATH]'
+argument-hint: '--target PATH --bank BANK.yaml [--paraphrases primary|all] [--repo-root PATH] [--approve-budget] [--dry]'
 allowed-tools: Bash(ico:*), Bash(bash:*), Bash(python3:*), AskUserQuestion
 tags:
   - dogfood

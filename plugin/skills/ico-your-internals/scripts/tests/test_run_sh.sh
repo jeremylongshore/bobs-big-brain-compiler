@@ -220,6 +220,15 @@ EXPENSIVE_BANK="$TMP/expensive-bank.yaml"
     echo "    question: test"
   done
 } > "$EXPENSIVE_BANK"
+EXPENSIVE_ESTIMATE="$("$SCRIPT_DIR/../estimate-budget.sh" "$EXPENSIVE_TARGET" "$EXPENSIVE_BANK")"
+if printf '%s' "$EXPENSIVE_ESTIMATE" | python3 -c '
+import json, sys
+raise SystemExit(0 if float(json.load(sys.stdin)["dollar_est"]) > 0.50 else 1)
+'; then
+  pass "fixture estimate is deterministically above \$0.50"
+else
+  fail "fixture estimate did not cross the \$0.50 gate: $EXPENSIVE_ESTIMATE"
+fi
 set +e
 EXPENSIVE_OUT="$("$RUN_SH" --target "$EXPENSIVE_TARGET" --bank "$EXPENSIVE_BANK" --repo-root "$TMP" 2>&1)"
 EXPENSIVE_CODE=$?

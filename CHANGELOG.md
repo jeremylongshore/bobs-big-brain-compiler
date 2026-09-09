@@ -6,7 +6,7 @@
 
 - Hardened the public `ico-your-internals` plugin skill to v0.3.0: dry runs are
   now write-free and credential-free, estimates above $0.50 fail closed without
-  recorded operator approval, citation resolution cannot escape the declared
+  the `--approve-budget` operator flag, citation resolution cannot escape the declared
   target/workspace roots, and rendered public artifacts allowlist and redact
   private diagnostics. The Claude plugin manifest now follows the current spec.
 - The GitHub repository was renamed from `intentional-cognition-os` to `bobs-big-brain-compiler` on 2026-07-19 (public product name: **Bob's Big Brain Compiler**). GitHub 301-redirects the old URLs. The npm package name `intentional-cognition-os`, the `@ico/*` scope, and the bead prefixes are unchanged.

@@ -847,6 +847,9 @@ class TestCitationContainment(unittest.TestCase):
     def test_workspace_parent_traversal_is_rejected(self) -> None:
         self._assert_escape_is_unverified("wiki/../../outside.md", workspace=True)
 
+    def test_absolute_path_is_rejected(self) -> None:
+        self._assert_escape_is_unverified("/etc/passwd", workspace=False)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
