@@ -20,12 +20,23 @@ exists at all (catches hallucinated filenames).
 Usage:
     verify.py <run-id> [--cache-root PATH] [--target PATH]
 """
+
 import argparse
 import json
 import os
 import pathlib
 import sys
 from typing import Any
+
+
+def resolve_file_within(root: pathlib.Path, relative_path: str) -> pathlib.Path | None:
+    """Resolve a citation without allowing traversal or symlink escape."""
+    candidate = (root / relative_path).resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        return None
+    return candidate if candidate.is_file() else None
 
 
 def main() -> int:
@@ -59,9 +70,13 @@ def main() -> int:
     # NOT in the target tree. Resolve those against `manifest.workspace`.
     # When the manifest predates the workspace field (older runs), fall
     # back to <target>/wiki/ which is wrong but at least defined.
-    workspace_root = pathlib.Path(
-        manifest.get("workspace") or (target_root / "_no_workspace_in_manifest")
-    ).expanduser().resolve()
+    workspace_root = (
+        pathlib.Path(
+            manifest.get("workspace") or (target_root / "_no_workspace_in_manifest")
+        )
+        .expanduser()
+        .resolve()
+    )
 
     verifications_path = run_dir / "verifications.jsonl"
     verifications_path.unlink(missing_ok=True)
@@ -133,9 +148,7 @@ def main() -> int:
                 continue
 
             for idx, cite in enumerate(citations):
-                source = (
-                    cite.get("source") if isinstance(cite, dict) else cite
-                )
+                source = cite.get("source") if isinstance(cite, dict) else cite
                 if not isinstance(source, str) or not source:
                     out.write(
                         json.dumps(
@@ -189,22 +202,26 @@ def main() -> int:
                 # resolution for backward compatibility with older runs +
                 # tools that emit raw source paths.
                 if source.startswith(("wiki/", "wiki\\")):
-                    source_path = (workspace_root / source).resolve()
-                    if not source_path.is_file():
-                        source_path = None
+                    source_path = resolve_file_within(workspace_root, source)
                 else:
-                    source_path = (target_root / source).resolve()
-                    if not source_path.is_file():
-                        source_path = None
+                    source_path = resolve_file_within(target_root, source)
 
                 # Fallback: search target tree by basename (covers
                 # non-wiki citations + legacy paths). Skip high-noise
                 # dirs (Gemini PR #77 perf finding).
                 if source_path is None:
                     PRUNE_PARTS = {
-                        "node_modules", ".git", "dist", "coverage",
-                        ".next", ".nuxt", ".cache", ".venv", "venv",
-                        "__pycache__", ".stryker-tmp",
+                        "node_modules",
+                        ".git",
+                        "dist",
+                        "coverage",
+                        ".next",
+                        ".nuxt",
+                        ".cache",
+                        ".venv",
+                        "venv",
+                        "__pycache__",
+                        ".stryker-tmp",
                     }
                     target_name = pathlib.Path(source).name
                     for candidate in target_root.rglob(target_name):
@@ -243,9 +260,7 @@ def main() -> int:
                     if idx_in_text >= 0:
                         line_start = source_text.rfind("\n", 0, idx_in_text) + 1
                         line_end = source_text.find("\n", idx_in_text)
-                        line_end = (
-                            line_end if line_end >= 0 else len(source_text)
-                        )
+                        line_end = line_end if line_end >= 0 else len(source_text)
                         line_text = source_text[line_start:line_end].strip()
                         line_no = source_text.count("\n", 0, idx_in_text) + 1
 

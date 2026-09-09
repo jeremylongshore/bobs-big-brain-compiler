@@ -20,24 +20,40 @@ Appends one row to <repo>/dogfood/progress.md.
 Usage:
     render-summary.py <run-id> [--cache-root PATH] [--repo-root PATH]
 """
+
 import argparse
 import json
 import os
 import pathlib
+import re
 import sys
 from typing import Any
 
 PROGRESS_HEADER_PATTERN = "| run_id "
+SECRET_PATTERNS = (
+    re.compile(r"sk-ant-[A-Za-z0-9_-]+"),
+    re.compile(r"(?i)(bearer\s+)[A-Za-z0-9._~+/=-]+"),
+    re.compile(r"(?i)((?:api[_ -]?key|token|secret)\s*[=:]\s*)[^\s,;]+"),
+)
 
 
 def safe_jsonl(path: pathlib.Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
-    return [
-        json.loads(line)
-        for line in path.read_text().splitlines()
-        if line.strip()
-    ]
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def public_text(value: Any, private_values: list[str]) -> str:
+    """Redact known private paths and common credential shapes."""
+    text = str(value or "").replace("\r", " ").replace("\n", " ")
+    for private in sorted((p for p in private_values if p), key=len, reverse=True):
+        text = text.replace(private, "<private-path>")
+    for pattern in SECRET_PATTERNS:
+        if pattern.groups:
+            text = pattern.sub(r"\1[REDACTED]", text)
+        else:
+            text = pattern.sub("[REDACTED]", text)
+    return text[:500]
 
 
 def main() -> int:
@@ -55,6 +71,13 @@ def main() -> int:
     public_dir.mkdir(parents=True, exist_ok=True)
 
     manifest = json.loads((run_dir / "manifest.json").read_text())
+    target_slug = str(manifest.get("target_slug") or "unknown-target")
+    private_values = [
+        str(run_dir.resolve()),
+        str(manifest.get("target") or ""),
+        str(manifest.get("bank_path") or ""),
+        str(manifest.get("workspace") or ""),
+    ]
     receipts = safe_jsonl(run_dir / "receipts.jsonl")
     verifications = safe_jsonl(run_dir / "verifications.jsonl")
     cache_friction = safe_jsonl(run_dir / "friction.jsonl")
@@ -64,12 +87,24 @@ def main() -> int:
     seen = set()
     merged_friction: list[dict[str, Any]] = []
     for entry in pub_friction + cache_friction:
-        key = (entry.get("stage"), entry.get("message"))
+        exit_code = entry.get("exit_code")
+        if not isinstance(exit_code, int):
+            exit_code = None
+        public_entry = {
+            "run_id": args.run_id,
+            "stage": public_text(entry.get("stage", "unknown"), []),
+            "severity": public_text(entry.get("severity", "error"), []),
+            "message": public_text(entry.get("message", ""), private_values),
+            "exit_code": exit_code,
+            "recommend_bead": bool(entry.get("recommend_bead", False)),
+        }
+        key = (public_entry["stage"], public_entry["message"])
         if key not in seen:
             seen.add(key)
-            merged_friction.append(entry)
+            merged_friction.append(public_entry)
     (public_dir / "friction.jsonl").write_text(
-        "\n".join(json.dumps(e) for e in merged_friction) + ("\n" if merged_friction else "")
+        "\n".join(json.dumps(e) for e in merged_friction)
+        + ("\n" if merged_friction else "")
     )
 
     # Per-paraphrase summary (counts only — no raw answers).
@@ -145,8 +180,8 @@ def main() -> int:
 
     metrics = {
         "run_id": args.run_id,
-        "target": manifest.get("target"),
-        "target_slug": manifest.get("target_slug"),
+        "target": target_slug,
+        "target_slug": target_slug,
         "bank_version": manifest.get("bank_version"),
         "ico_version": manifest.get("ico_version"),
         "started_at": manifest.get("started_at"),
@@ -168,13 +203,26 @@ def main() -> int:
     }
     (public_dir / "metrics.json").write_text(json.dumps(metrics, indent=2) + "\n")
 
+    public_manifest = {
+        "run_id": args.run_id,
+        "target_slug": target_slug,
+        "bank_version": manifest.get("bank_version"),
+        "ico_version": manifest.get("ico_version"),
+        "started_at": manifest.get("started_at"),
+        "paraphrases_mode": manifest.get("paraphrases_mode"),
+        "asks_planned": manifest.get("asks_planned"),
+    }
+    (public_dir / "manifest.json").write_text(
+        json.dumps(public_manifest, indent=2) + "\n"
+    )
+
     # summary.md (no raw answer content)
     paraphrases_mode = manifest.get("paraphrases_mode") or "legacy"
     lines = [
         f"# Dog-food run summary — {args.run_id}",
         "",
-        f"**Target**: `{manifest.get('target')}`",
-        f"**Bank**: `{manifest.get('bank_path')}` (version {manifest.get('bank_version')})",
+        f"**Target**: `{target_slug}`",
+        f"**Bank version**: `{manifest.get('bank_version')}`",
         f"**ICO version**: {manifest.get('ico_version')}",
         f"**Started**: {manifest.get('started_at')}",
         f"**Paraphrases mode**: `{paraphrases_mode}`",
@@ -254,7 +302,9 @@ def main() -> int:
     else:
         robustness_cell = "—"
     mode_tag = (
-        f" (`--paraphrases {paraphrases_mode}`)" if manifest.get("paraphrases_mode") else ""
+        f" (`--paraphrases {paraphrases_mode}`)"
+        if manifest.get("paraphrases_mode")
+        else ""
     )
     new_row = (
         f"| {args.run_id} | {manifest.get('target_slug', '?')} | "
