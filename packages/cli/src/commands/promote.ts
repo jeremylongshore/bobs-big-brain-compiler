@@ -41,6 +41,11 @@ import {
   formatWarning,
 } from '../lib/output.js';
 import { resolveWorkspace } from '../lib/workspace-resolver.js';
+import {
+  isBrainWriteLockBusyError,
+  warnIfWriteLockDegraded,
+  withBrainWriteLock,
+} from '../lib/write-lock.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -140,11 +145,11 @@ function computeTargetPreview(
  * @param opts       - Command-level options (as, yes, dryRun, workspace).
  * @param globalOpts - Global CLI flags (json, verbose, workspace).
  */
-export function runPromote(
+export async function runPromote(
   sourcePath: string,
   opts: PromoteOptions,
   globalOpts: GlobalOptions,
-): void {
+): Promise<void> {
   // -------------------------------------------------------------------------
   // 1. Validate --as flag
   // -------------------------------------------------------------------------
@@ -233,70 +238,76 @@ export function runPromote(
     return;
   }
 
-  // -------------------------------------------------------------------------
-  // 5. Open database
-  // -------------------------------------------------------------------------
-  const dbResult = initDatabase(dbPath);
-  if (!dbResult.ok) {
-    process.stderr.write(formatError(`Database error: ${dbResult.error.message}`) + '\n');
-    process.exitCode = 1;
+  // Open the database and perform the promotion only after the live command
+  // has passed validation and confirmation. Dry-run/refusal paths never take
+  // the writer lock.
+  const lockResult = await withBrainWriteLock(() => {
+    const dbResult = initDatabase(dbPath);
+    if (!dbResult.ok) {
+      return { ok: false as const, error: new Error(`Database error: ${dbResult.error.message}`) };
+    }
+
+    const db = dbResult.value;
+    try {
+      return promoteArtifact(db, wsPath, {
+        sourcePath,
+        targetType,
+        confirm: true,
+      });
+    } finally {
+      closeDatabase(db);
+    }
+  });
+
+  if (!lockResult.ok) {
+    const busy = isBrainWriteLockBusyError(lockResult.error);
+    process.stderr.write(
+      (busy ? formatWarning(lockResult.error.message) : formatError(lockResult.error.message)) +
+        '\n',
+    );
+    process.exitCode = busy ? 4 : 1;
+    return;
+  }
+  if (!lockResult.value.locked) warnIfWriteLockDegraded(globalOpts.json === true);
+
+  const result = lockResult.value.value;
+  if (!result.ok) {
+    const promotionErr = result.error;
+
+    let exitCode = 1;
+    if (promotionErr instanceof PromotionError) {
+      exitCode = EXIT_CODE_MAP[promotionErr.code] ?? 1;
+    }
+
+    process.stderr.write(formatError(promotionErr.message) + '\n');
+
+    if (promotionErr instanceof PromotionError) {
+      process.stderr.write(dim(`  Error code: ${promotionErr.code}`) + '\n');
+    }
+
+    process.exitCode = exitCode;
     return;
   }
 
-  const db = dbResult.value;
+  const { sourcePath: resolvedSource, targetPath, targetType: promotedType } = result.value;
 
-  try {
-    // -----------------------------------------------------------------------
-    // 6. Call promoteArtifact
-    // -----------------------------------------------------------------------
-    const result = promoteArtifact(db, wsPath, {
-      sourcePath,
-      targetType,
-      confirm: true,
-    });
-
-    if (!result.ok) {
-      const promotionErr = result.error;
-
-      let exitCode = 1;
-      if (promotionErr instanceof PromotionError) {
-        exitCode = EXIT_CODE_MAP[promotionErr.code] ?? 1;
-      }
-
-      process.stderr.write(formatError(promotionErr.message) + '\n');
-
-      if (promotionErr instanceof PromotionError) {
-        process.stderr.write(dim(`  Error code: ${promotionErr.code}`) + '\n');
-      }
-
-      process.exitCode = exitCode;
-      return;
-    }
-
-    const { sourcePath: resolvedSource, targetPath, targetType: promotedType } = result.value;
-
-    // -----------------------------------------------------------------------
-    // 7. Display success
-    // -----------------------------------------------------------------------
-    process.stdout.write('\n');
-    process.stdout.write(
-      formatSuccess(`Promoted: ${bold(resolvedSource)} → ${bold(targetPath)}`) + '\n',
-    );
-    process.stdout.write('\n');
-    process.stdout.write(
-      formatKeyValue([
-        ['Type', promotedType],
-        ['Target', targetPath],
-      ]) + '\n',
-    );
-    process.stdout.write('\n');
-    process.stdout.write(
-      dim(`Tip: Run \`ico lint knowledge\` to verify the promoted page.`) + '\n',
-    );
-    process.stdout.write('\n');
-  } finally {
-    closeDatabase(db);
-  }
+  // -------------------------------------------------------------------------
+  // 7. Display success
+  // -------------------------------------------------------------------------
+  process.stdout.write('\n');
+  process.stdout.write(
+    formatSuccess(`Promoted: ${bold(resolvedSource)} → ${bold(targetPath)}`) + '\n',
+  );
+  process.stdout.write('\n');
+  process.stdout.write(
+    formatKeyValue([
+      ['Type', promotedType],
+      ['Target', targetPath],
+    ]) + '\n',
+  );
+  process.stdout.write('\n');
+  process.stdout.write(dim(`Tip: Run \`ico lint knowledge\` to verify the promoted page.`) + '\n');
+  process.stdout.write('\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -325,9 +336,9 @@ export function register(program: Command): void {
         '  $ ico promote outputs/reports/my-report.md --as concept --dry-run',
       ].join('\n'),
     )
-    .action((path: string, opts: PromoteOptions, cmd: Command) => {
+    .action(async (path: string, opts: PromoteOptions, cmd: Command) => {
       const globalOpts = cmd.optsWithGlobals<GlobalOptions>();
-      runPromote(path, opts, {
+      await runPromote(path, opts, {
         ...(globalOpts.json !== undefined && { json: globalOpts.json }),
         ...(globalOpts.verbose !== undefined && { verbose: globalOpts.verbose }),
         ...(globalOpts.workspace !== undefined && { workspace: globalOpts.workspace }),
