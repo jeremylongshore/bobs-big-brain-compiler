@@ -93,6 +93,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Nightly compile governance and restart regressions
+        run: |
+          bash -n scripts/distiller/teamkb-compile-daily.sh
+          python3 -m unittest discover -s scripts/distiller -p 'test_*.py' -v
+
       - name: Install pnpm
         uses: pnpm/action-setup@v4
 

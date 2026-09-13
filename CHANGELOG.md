@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Nightly compilation uses the configured encrypted MiniMax credential without inheriting
+  expired Claude OAuth, refuses implicit provider changes, and checks a valid per-date
+  outcome plus the live audit before success. Its C8 MCP boundary filters actual capture
+  candidates through the existing disclosure policy; failed or denied captures never reach
+  the native spool. A bounded dispatcher persists missed dates across restarts. Companion
+  [umbrella PR 95](https://github.com/intent-solutions-io/bobs-big-brain-umbrella/pull/95)
+  owns the commit-addressed installer; runtime deployment remains a separate verification step.
+
 ### Changed
 
 - Hardened the public `ico-your-internals` plugin skill to v0.3.0: dry runs are
