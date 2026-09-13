@@ -6,6 +6,7 @@ text. The native server remains the owner of dedupe, promotion and its audit cha
 """
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -37,6 +38,8 @@ def authorize_capture(arguments, gate, receipts):
         return False, "invalid-capture"
     candidate = {"text": json.dumps(arguments, sort_keys=True, ensure_ascii=False)}
     try:
+        receipt_path = Path(receipts)
+        previous_size = receipt_path.stat().st_size if receipt_path.exists() else 0
         result = subprocess.run(
             ["bash", gate, "--receipts", receipts], input=json.dumps(candidate) + "\n",
             text=True, capture_output=True, timeout=20, check=False,
@@ -48,6 +51,16 @@ def authorize_capture(arguments, gate, receipts):
         return False, "policy-unavailable"
     if len(accepted) != 1 or accepted[0].get("text") != candidate["text"]:
         return False, "policy-rejected"
+    try:
+        with receipt_path.open("rb") as stream:
+            stream.seek(previous_size)
+            decisions = [json.loads(line) for line in stream if line.strip()]
+        digest = hashlib.sha256(candidate["text"].encode()).hexdigest()
+        if not any(row.get("decision") == "pass" and row.get("sink") == "brain-ingest" and
+                   row.get("content_sha256") == digest for row in decisions):
+            return False, "policy-receipt-unavailable"
+    except (OSError, ValueError, AttributeError):
+        return False, "policy-receipt-unavailable"
     return True, "accepted"
 
 

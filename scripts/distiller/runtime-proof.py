@@ -146,6 +146,18 @@ def main():
         return 0
     if args.action == "verify" and not completed(args.decisions, args.date, args.mode):
         raise ValueError("missing or invalid compile outcome")
+    # A completed receipt is historical evidence, not a cache to overwrite after
+    # its bound methodology decision changes. Mode graduation is a separate outcome.
+    if args.action == "verify" and args.output and Path(args.output).exists():
+        previous = json.loads(Path(args.output).read_text())
+        if (previous.get("event") != "compile_verified" or previous.get("date") != args.date or
+                (previous.get("mode") == args.mode and
+                 previous.get("decision_sha256") != decision_hash(args.decisions, args.date, args.mode))):
+            raise ValueError("previous verified decision changed; preserve evidence")
+        if previous.get("mode") != args.mode:
+            historical = Path(args.output).with_name(f"verified-{args.date}-{previous.get('mode')}.json")
+            if not historical.exists():
+                historical.write_bytes(Path(args.output).read_bytes())
     audit = mcp_read(args.config, "brain_audit_verify")
     if audit.get("ok") is not True or not isinstance(audit.get("totalEvents"), int):
         raise ValueError("live audit verification failed")

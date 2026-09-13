@@ -54,7 +54,9 @@ for line in sys.stdin:
         self.preflight = self.root / "preflight.sh"
         self.preflight.write_text("#!/bin/sh\nexit 0\n")
         self.gate = self.root / "gate.sh"
-        self.gate.write_text("#!/bin/sh\ncat\n")
+        self.gate.write_text("""#!/usr/bin/env bash
+python3 -c 'import hashlib,json,sys; row=json.loads(sys.stdin.readline()); open(sys.argv[1],"a").write(json.dumps({"decision":"pass","sink":"brain-ingest","content_sha256":hashlib.sha256(row["text"].encode()).hexdigest()})+"\\n"); print(json.dumps(row))' "$2"
+""")
         self.agent = self.root / "agent"
         self.agent.write_text('''#!/usr/bin/env python3
 import datetime,json,os,pathlib
@@ -148,6 +150,29 @@ if os.environ.get("FIXTURE_OUTCOME")=="success":
                                                 str(self.gate), str(self.root / "receipt")), (True, "accepted"))
         self.gate.write_text("#!/bin/sh\nprintf '%s\\n' '{\"text\":\"different\"}'\n")
         self.assertFalse(guard.authorize_capture({"content": "original"}, str(self.gate), str(self.root / "receipt"))[0])
+
+    def test_capture_requires_new_matching_policy_receipt(self):
+        receipt = self.root / "receipt"
+        self.gate.write_text("#!/bin/sh\ncat\n")
+        for prior in (None, {"decision": "pass", "sink": "brain-ingest", "content_sha256": "unrelated"}):
+            if prior:
+                receipt.write_text(json.dumps(prior) + "\n")
+            self.assertEqual(guard.authorize_capture({"content": "fixture"}, str(self.gate), str(receipt)),
+                             (False, "policy-receipt-unavailable"))
+
+    def test_changed_verified_decision_cannot_be_silently_recertified(self):
+        self.env["FIXTURE_OUTCOME"] = "success"
+        self.assertEqual(self.run_wrapper().returncode, 0)
+        receipt = self.root / ".local/state/teamkb-compile-daily/verified-2026-09-08.json"
+        before = receipt.read_bytes()
+        changed = record()
+        changed["govern"]["promoted"] = 2
+        self.decisions.write_text(json.dumps(changed) + "\n")
+        (self.root / "agent-ran").unlink()
+        result = self.run_wrapper()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(receipt.read_bytes(), before)
+        self.assertFalse((self.root / "agent-ran").exists())
 
     def test_tamper_or_stale_index_is_not_a_success_record(self):
         row = record()
