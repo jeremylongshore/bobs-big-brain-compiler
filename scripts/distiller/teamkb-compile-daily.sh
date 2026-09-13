@@ -195,7 +195,7 @@ run_inbox_review() {
          TEAMKB_API_TOKEN="$tok" \
          TEAMKB_REVIEW_AGENT_TOKEN="$tok" \
          CLAUDE_SKILL_DIR="$REVIEW_SKILL_DIR" \
-         /usr/bin/timeout "$REVIEW_TIMEOUT_SECS" script -e -q -a \
+         /usr/bin/timeout --kill-after=10s "$REVIEW_TIMEOUT_SECS" script -e -q -a \
            -c "$review_cmd" \
            "$rlog" >/dev/null 2>&1; then
         review_rc=0
@@ -214,7 +214,7 @@ run_inbox_review() {
          ANTHROPIC_AUTH_TOKEN="" \
          ANTHROPIC_MODEL="$MINIMAX_MODEL" \
          ANTHROPIC_SMALL_FAST_MODEL="$MINIMAX_MODEL" \
-         /usr/bin/timeout "$REVIEW_TIMEOUT_SECS" script -e -q -a \
+         /usr/bin/timeout --kill-after=10s "$REVIEW_TIMEOUT_SECS" script -e -q -a \
            -c "$review_cmd" \
            "$rlog" >/dev/null 2>&1; then
         review_rc=0
@@ -226,7 +226,7 @@ run_inbox_review() {
       review_cmd="claude -p '/teamkb-review $review_flag' --mcp-config '$REVIEW_MCP_CONFIG' --strict-mcp-config --dangerously-skip-permissions"
       log "Invoking: claude -p /teamkb-review ${review_flag:-（live）} (timeout ${REVIEW_TIMEOUT_SECS}s)"
       if TEAMKB_API_URL="$REVIEW_API_URL" TEAMKB_REVIEW_AGENT_TOKEN="$tok" \
-         /usr/bin/timeout "$REVIEW_TIMEOUT_SECS" script -e -q -a \
+         /usr/bin/timeout --kill-after=10s "$REVIEW_TIMEOUT_SECS" script -e -q -a \
            -c "$review_cmd" \
            "$rlog" >/dev/null 2>&1; then
         review_rc=0
@@ -351,11 +351,11 @@ notify_unexpected_exit() {
   [ "$NOTIFIED" -eq 1 ] && return
   log "ABNORMAL EXIT (rc=$rc) before normal notification — sending fail-loud alert"
   local topic; topic=$(cat "$NTFY_TOPIC_FILE" 2>/dev/null)
-  [ -n "$topic" ] && curl -s -H "Title: 🚨 teamkb-compile aborted early" -H "Priority: max" -H "Tags: rotating_light" \
+  [ -n "$topic" ] && curl --connect-timeout 5 --max-time 15 -s -H "Title: 🚨 teamkb-compile aborted early" -H "Priority: max" -H "Tags: rotating_light" \
     -d "${TARGET}: early exit rc=${rc} — brain may not be updated. Check ${LOG}" \
     "https://ntfy.sh/$topic" >/dev/null 2>&1 || true
   if command -v node >/dev/null 2>&1 && [ -f "$EMAIL_SCRIPT" ]; then
-    node "$EMAIL_SCRIPT" --to "$EMAIL_TO" \
+    /usr/bin/timeout --kill-after=5s 90 node "$EMAIL_SCRIPT" --to "$EMAIL_TO" \
       --subject "🚨 teamkb-compile aborted early: ${TARGET} (rc=${rc})" \
       --body "$(printf 'teamkb-compile exited abnormally (rc=%s) BEFORE its normal summary.\nTarget: %s  Mode: %s\n\nLast 30 log lines:\n%s\n' \
         "$rc" "$TARGET" "$MODE" "$(tail -30 "$LOG" 2>/dev/null)")" >/dev/null 2>&1 || true
@@ -560,7 +560,7 @@ $(tail -50 "$LOG" 2>/dev/null)"
 fi
 
 if command -v node >/dev/null 2>&1 && [ -f "$EMAIL_SCRIPT" ]; then
-  node "$EMAIL_SCRIPT" --to "$EMAIL_TO" --subject "$SUBJECT" --body "$BODY" >> "$LOG" 2>&1 \
+  /usr/bin/timeout --kill-after=5s 90 node "$EMAIL_SCRIPT" --to "$EMAIL_TO" --subject "$SUBJECT" --body "$BODY" >> "$LOG" 2>&1 \
     || log "Email send failed — see log"
 fi
 
@@ -569,10 +569,10 @@ NTFY_TOPIC=$(cat "$NTFY_TOPIC_FILE" 2>/dev/null)
 if [ -n "$NTFY_TOPIC" ]; then
   case "$STATUS" in
     OK*) _t="teamkb-compile ${MODE} OK"; [ "$GRADUATED" -eq 1 ] && _t="🎓 teamkb-compile graduated → AUTO"
-         curl -s -H "Title: ${_t}" -H "Priority: default" -H "Tags: brain" \
+         curl --connect-timeout 5 --max-time 15 -s -H "Title: ${_t}" -H "Priority: default" -H "Tags: brain" \
            -d "${TARGET}: ${STATUS}${GRAD_NOTE:+ — ${GRAD_NOTE}}" "https://ntfy.sh/$NTFY_TOPIC" >> "$LOG" 2>&1 || true ;;
     *)   _p="high"; [ "$ESC_PRIO" = "max" ] && _p="max"
-         curl -s -H "Title: ${ESC_PREFIX}teamkb-compile FAILED" -H "Priority: ${_p}" -H "Tags: rotating_light" \
+         curl --connect-timeout 5 --max-time 15 -s -H "Title: ${ESC_PREFIX}teamkb-compile FAILED" -H "Priority: ${_p}" -H "Tags: rotating_light" \
            -d "${TARGET}: ${STATUS} (${CONSEC}-day streak). Log: $LOG" "https://ntfy.sh/$NTFY_TOPIC" >> "$LOG" 2>&1 || true ;;
   esac
 fi

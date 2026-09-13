@@ -5,6 +5,8 @@ import datetime as dt
 import fcntl
 import importlib.util
 import json
+import signal
+import time
 import os
 from pathlib import Path
 import subprocess
@@ -23,6 +25,63 @@ def persist(path, dates):
     os.replace(temporary, path)
 
 
+def process_family(pid):
+    """Snapshot Linux child identities, including descendants with their own session."""
+    found = {}
+    pending = [pid]
+    while pending:
+        current = pending.pop()
+        if current in found:
+            continue
+        try:
+            stat = Path(f"/proc/{current}/stat").read_text().rsplit(") ", 1)[1].split()
+            found[current] = stat[19]  # Linux start-time ticks fence PID reuse.
+            for children in Path(f"/proc/{current}/task").glob("*/children"):
+                pending.extend(int(value) for value in children.read_text().split())
+        except (OSError, ValueError, IndexError):
+            continue  # A process exited between the snapshot reads.
+    return found
+
+
+def signal_family(family, sig):
+    for pid, started in reversed(list(family.items())):
+        try:
+            current = Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()[19]
+            if current == started:
+                os.kill(pid, sig)
+        except (OSError, ValueError, IndexError):
+            continue  # Already exited; never signal a reused PID.
+
+
+def run_bounded(command, env, seconds, kill_grace=10):
+    child = subprocess.Popen(command, env=env, start_new_session=True)
+    try:
+        return child.wait(timeout=seconds)
+    except subprocess.TimeoutExpired:
+        family = process_family(child.pid)
+        try:
+            os.killpg(child.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass  # Exited at the deadline boundary.
+        signal_family(family, signal.SIGTERM)
+        # Keep tracking descendants during graceful exit, including nested PTYs.
+        deadline = time.monotonic() + kill_grace
+        while time.monotonic() < deadline:
+            family.update(process_family(child.pid))
+            if not any(Path(f"/proc/{pid}").exists() for pid in family):
+                break
+            time.sleep(min(0.1, max(0, deadline - time.monotonic())))
+        try:
+            os.killpg(child.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        signal_family(family, signal.SIGKILL)
+        child.wait()
+        print(json.dumps({"event": "compile_run_deadline", "timeout_seconds": seconds,
+                          "kill_grace_seconds": kill_grace}), flush=True)
+        return 124
+
+
 def main():
     os.umask(0o077)
     root = Path(os.environ.get("TEAMKB_COMPILE_LOG_DIR", str(Path.home() / ".local/state/teamkb-compile-daily")))
@@ -32,8 +91,11 @@ def main():
     date = dt.date.fromisoformat(target)
     if target != date.isoformat() or date >= dt.date.today():
         raise ValueError("target must be a completed calendar day")
+    run_timeout = int(os.environ.get("TEAMKB_COMPILE_RUN_TIMEOUT", "3000"))
+    if not 1 <= run_timeout <= 86400:
+        raise ValueError("run deadline must be between one and 86400 seconds")
     if explicit or os.environ.get("TEAMKB_COMPILE_DRYRUN"):
-        os.execv("/bin/bash", ["bash", str(HERE / "teamkb-compile-daily.sh")])
+        return run_bounded(["bash", str(HERE / "teamkb-compile-daily.sh")], os.environ.copy(), run_timeout)
     mode_file = root / "mode"
     mode = os.environ.get("TEAMKB_COMPILE_MODE", mode_file.read_text().strip() if mode_file.exists() else "digest")
     if mode not in ("auto", "digest"):
@@ -68,9 +130,9 @@ def main():
         for item in ordered[:limit]:
             env = os.environ.copy()
             env["TEAMKB_COMPILE_DATE"] = item
-            result = subprocess.run(["bash", str(HERE / "teamkb-compile-daily.sh")], env=env, check=False)
+            exit_code = run_bounded(["bash", str(HERE / "teamkb-compile-daily.sh")], env, run_timeout)
             # Recheck the business outcome, including a wrapper lock-skip with exit zero.
-            if result.returncode != 0 or not proof.verified(decisions, item, mode, root):
+            if exit_code != 0 or not proof.verified(decisions, item, mode, root):
                 failure = True
                 break
             pending.remove(item)
