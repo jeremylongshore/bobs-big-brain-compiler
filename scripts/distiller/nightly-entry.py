@@ -61,7 +61,7 @@ def main():
                 pending.add(item)
         # Bootstrap one week only; already-persisted misses survive arbitrarily long outages.
         pending.update((date - dt.timedelta(days=n)).isoformat() for n in range(7))
-        pending = {item for item in pending if not proof.completed(decisions, item, mode)}
+        pending = {item for item in pending if not proof.verified(decisions, item, mode, root)}
         persist(pending_file, pending)
         ordered = ([target] if target in pending else []) + sorted(pending - {target})
         failure = False
@@ -70,7 +70,7 @@ def main():
             env["TEAMKB_COMPILE_DATE"] = item
             result = subprocess.run(["bash", str(HERE / "teamkb-compile-daily.sh")], env=env, check=False)
             # Recheck the business outcome, including a wrapper lock-skip with exit zero.
-            if result.returncode != 0 or not proof.completed(decisions, item, mode):
+            if result.returncode != 0 or not proof.verified(decisions, item, mode, root):
                 failure = True
                 break
             pending.remove(item)

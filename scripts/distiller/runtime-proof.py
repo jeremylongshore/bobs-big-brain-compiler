@@ -4,6 +4,7 @@
 import argparse
 import datetime as dt
 import importlib.util
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -50,6 +51,24 @@ def valid_record(row, date, mode):
 
 def completed(path, date, mode):
     return any(valid_record(row, date, mode) for row in records(path))
+
+
+def decision_hash(path, date, mode):
+    matching = [row for row in records(path) if valid_record(row, date, mode)]
+    if not matching:
+        return None
+    return hashlib.sha256(json.dumps(matching[-1], sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def verified(path, date, mode, receipts):
+    try:
+        receipt = json.loads((Path(receipts) / f"verified-{date}.json").read_text())
+        digest = decision_hash(path, date, mode)
+        return bool(digest and receipt.get("decision_sha256") == digest and
+                    receipt.get("date") == date and receipt.get("mode") == mode and
+                    receipt.get("event") == "compile_verified" and receipt.get("audit", {}).get("ok") is True)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return False
 
 
 def mcp_read(config, name):
@@ -105,15 +124,18 @@ def mcp_read(config, name):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["completed", "verify", "pending", "audit"])
+    parser.add_argument("action", choices=["completed", "verified", "verify", "pending", "audit"])
     parser.add_argument("--decisions")
     parser.add_argument("--date")
     parser.add_argument("--mode", default="auto", choices=["auto", "digest"])
     parser.add_argument("--config")
     parser.add_argument("--output")
+    parser.add_argument("--receipts-dir")
     args = parser.parse_args()
     if args.action == "completed":
         return 0 if completed(args.decisions, args.date, args.mode) else 1
+    if args.action == "verified":
+        return 0 if verified(args.decisions, args.date, args.mode, args.receipts_dir) else 1
     if args.action == "pending":
         end = dt.date.fromisoformat(args.date)
         # Keep current work first; bounded catch-up then repairs older missed nights.
@@ -128,6 +150,7 @@ def main():
     if audit.get("ok") is not True or not isinstance(audit.get("totalEvents"), int):
         raise ValueError("live audit verification failed")
     receipt = {"event": "compile_verified", "date": args.date, "mode": args.mode,
+               "decision_sha256": decision_hash(args.decisions, args.date, args.mode) if args.decisions else None,
                "verified_at": dt.datetime.now(dt.timezone.utc).isoformat(),
                "audit": {k: audit.get(k) for k in ("ok", "totalEvents", "tamperSignatures", "anchorBreaks", "anchorCount", "chainForks")}}
     if args.output:

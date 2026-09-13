@@ -226,6 +226,37 @@ for line in sys.stdin:
             with (brain / ".write.lock").open("a") as writer:
                 fcntl.flock(writer, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
+    def test_crash_after_decision_before_proof_recovers_without_recapture(self):
+        self.decisions.write_text(json.dumps(record()) + "\n")
+        log_dir = self.root / ".local/state/teamkb-compile-daily"
+        self.assertFalse(proof.verified(self.decisions, "2026-09-08", "auto", log_dir))
+        before = self.decisions.read_bytes()
+        result = self.run_wrapper()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertTrue(proof.verified(self.decisions, "2026-09-08", "auto", log_dir))
+        self.assertFalse((self.root / "agent-ran").exists())
+        self.assertEqual(self.decisions.read_bytes(), before)
+
+    def test_unverified_decision_with_failed_audit_remains_pending(self):
+        self.decisions.write_text(json.dumps(record()) + "\n")
+        self.native.write_text(self.native.read_text().replace('"ok":True', '"ok":False'))
+        result = self.run_wrapper()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / "agent-ran").exists())
+        self.assertFalse(proof.verified(self.decisions, "2026-09-08", "auto",
+                                        self.root / ".local/state/teamkb-compile-daily"))
+
+    def test_verified_receipt_binds_exact_decision_hash_date_and_mode(self):
+        self.env["FIXTURE_OUTCOME"] = "success"
+        self.assertEqual(self.run_wrapper().returncode, 0)
+        log_dir = self.root / ".local/state/teamkb-compile-daily"
+        self.assertTrue(proof.verified(self.decisions, "2026-09-08", "auto", log_dir))
+        modified = record()
+        modified["govern"]["promoted"] = 2
+        self.decisions.write_text(json.dumps(modified) + "\n")
+        self.assertFalse(proof.verified(self.decisions, "2026-09-08", "auto", log_dir))
+        self.assertFalse(proof.verified(self.decisions, "2026-09-08", "digest", log_dir))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -365,10 +365,23 @@ trap notify_unexpected_exit EXIT
 
 # ── Idempotency ──────────────────────────────────────────────────────────────
 # If an audit record for this date already exists, this night already ran — no-op.
-if python3 "$SCRIPT_DIR/runtime-proof.py" completed --decisions "$DECISIONS" --date "$TARGET" --mode "$MODE"; then
+if python3 "$SCRIPT_DIR/runtime-proof.py" verified --decisions "$DECISIONS" --date "$TARGET" --mode "$MODE" --receipts-dir "$LOG_DIR"; then
   log "Audit record already exists for ${TARGET} — skipping (no-op)."
   NOTIFIED=1
   exit 0
+fi
+
+# A crash can leave the model's decision durable before independent verification.
+# Verify/adopt that record without repeating capture or rewriting the old audit row.
+if python3 "$SCRIPT_DIR/runtime-proof.py" completed --decisions "$DECISIONS" --date "$TARGET" --mode "$MODE"; then
+  if python3 "$SCRIPT_DIR/runtime-proof.py" verify --decisions "$DECISIONS" --date "$TARGET" --mode "$MODE" \
+      --config "$MCP_CONFIG" --output "$LOG_DIR/verified-${TARGET}.json" >> "$LOG" 2>&1; then
+    log "Existing decision independently verified for ${TARGET}; no recapture needed."
+    NOTIFIED=1
+    exit 0
+  fi
+  log "FATAL: existing decision lacks independent live verification; retry retained"
+  exit 1
 fi
 
 
@@ -460,6 +473,9 @@ if [ "$AGENT_NAME" = "minimax" ]; then
      CLAUDE_CODE_OAUTH_TOKEN="" \
      ANTHROPIC_MODEL="$MINIMAX_MODEL" \
      ANTHROPIC_SMALL_FAST_MODEL="$MINIMAX_MODEL" \
+     ANTHROPIC_DEFAULT_SONNET_MODEL="$MINIMAX_MODEL" \
+     ANTHROPIC_DEFAULT_OPUS_MODEL="$MINIMAX_MODEL" \
+     ANTHROPIC_DEFAULT_HAIKU_MODEL="$MINIMAX_MODEL" \
      /usr/bin/timeout --kill-after=10s "$TIMEOUT_SECS" script -e -q -a \
        -c "$COMPILE_CMD" \
        "$LOG" >/dev/null 2>&1; then RUN_OK=1; else EXIT=$?; fi
