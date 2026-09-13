@@ -2,6 +2,7 @@
 """Bounded nightly reconciliation over durable pending dates and verified outcomes."""
 
 import datetime as dt
+import ctypes
 import fcntl
 import importlib.util
 import json
@@ -53,33 +54,81 @@ def signal_family(family, sig):
             continue  # Already exited; never signal a reused PID.
 
 
+def subreaper(enabled=None):
+    """Keep orphaned PTY grandchildren owned by this run until they are reaped."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    value = ctypes.c_int()
+    if libc.prctl(37, ctypes.byref(value), 0, 0, 0) != 0:  # PR_GET_CHILD_SUBREAPER
+        raise OSError(ctypes.get_errno(), "cannot read child supervision state")
+    previous = bool(value.value)
+    if enabled is not None and libc.prctl(36, int(enabled), 0, 0, 0) != 0:  # PR_SET_CHILD_SUBREAPER
+        raise OSError(ctypes.get_errno(), "cannot establish child supervision")
+    return previous
+
+
 def run_bounded(command, env, seconds, kill_grace=10):
-    child = subprocess.Popen(command, env=env, start_new_session=True)
+    previous = subreaper(True)
+    baseline = process_family(os.getpid())
+    child = None
     try:
-        return child.wait(timeout=seconds)
-    except subprocess.TimeoutExpired:
-        family = process_family(child.pid)
+        child = subprocess.Popen(command, env=env, start_new_session=True)
+        timed_out = False
         try:
-            os.killpg(child.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass  # Exited at the deadline boundary.
-        signal_family(family, signal.SIGTERM)
-        # Keep tracking descendants during graceful exit, including nested PTYs.
-        deadline = time.monotonic() + kill_grace
-        while time.monotonic() < deadline:
-            family.update(process_family(child.pid))
-            if not any(Path(f"/proc/{pid}").exists() for pid in family):
-                break
-            time.sleep(min(0.1, max(0, deadline - time.monotonic())))
-        try:
-            os.killpg(child.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        signal_family(family, signal.SIGKILL)
-        child.wait()
-        print(json.dumps({"event": "compile_run_deadline", "timeout_seconds": seconds,
-                          "kill_grace_seconds": kill_grace}), flush=True)
-        return 124
+            result = child.wait(timeout=seconds)
+        except subprocess.TimeoutExpired:
+            result, timed_out = 124, True
+
+        def owned():
+            return {pid: started for pid, started in process_family(os.getpid()).items()
+                    if baseline.get(pid) != started}
+
+        # Subreaper adoption includes a grandchild orphaned by an earlier inner
+        # timeout, even when the main wrapper subsequently returns normally.
+        family = owned()
+        if family:
+            if child.returncode is None:
+                try:
+                    os.killpg(child.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+            signal_family(family, signal.SIGTERM)
+            deadline = time.monotonic() + kill_grace
+            while time.monotonic() < deadline:
+                family.update(owned())
+                for pid in family:
+                    if pid == child.pid:
+                        continue
+                    try:
+                        os.waitpid(pid, os.WNOHANG)
+                    except ChildProcessError:
+                        pass  # Still parented inside the owned process tree.
+                if not owned():
+                    break
+                time.sleep(min(0.1, max(0, deadline - time.monotonic())))
+            if child.returncode is None:
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            signal_family(family, signal.SIGKILL)
+            child.wait()
+            # Reap adopted descendants; the main child wait alone cannot reap them.
+            cleanup_until = time.monotonic() + 1
+            while owned() and time.monotonic() < cleanup_until:
+                for pid in owned():
+                    try:
+                        os.waitpid(pid, os.WNOHANG)
+                    except ChildProcessError:
+                        pass
+                time.sleep(0.01)
+        if timed_out:
+            print(json.dumps({"event": "compile_run_deadline", "timeout_seconds": seconds,
+                              "kill_grace_seconds": kill_grace}), flush=True)
+        elif family:
+            print(json.dumps({"event": "compile_orphan_cleanup", "process_count": len(family)}), flush=True)
+        return result
+    finally:
+        subreaper(previous)
 
 
 def main():

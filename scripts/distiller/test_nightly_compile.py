@@ -300,6 +300,30 @@ while True:time.sleep(1)
         stat = Path(f"/proc/{child_file.read_text()}/stat")
         self.assertTrue(not stat.exists() or stat.read_text().rsplit(") ", 1)[1].split()[0] == "Z")
 
+    def test_normal_wrapper_exit_reaps_earlier_orphaned_session(self):
+        lock = self.root / "orphan.lock"
+        ready = self.root / "orphan.pid"
+        stubborn = self.root / "orphan.py"
+        stubborn.write_text("""import fcntl,os,pathlib,signal,sys,time
+f=open(sys.argv[1],"a");fcntl.flock(f,fcntl.LOCK_EX)
+signal.signal(signal.SIGTERM,signal.SIG_IGN)
+pathlib.Path(sys.argv[2]).write_text(str(os.getpid()))
+while True:time.sleep(1)
+""")
+        parent = self.root / "orphan-parent.py"
+        parent.write_text("""import pathlib,subprocess,sys,time
+subprocess.Popen([sys.executable,*sys.argv[1:]],start_new_session=True)
+while not pathlib.Path(sys.argv[-1]).exists():time.sleep(.01)
+""")
+        prior = entry.subreaper()
+        result = entry.run_bounded(["python3", str(parent), str(stubborn), str(lock), str(ready)],
+                                   self.env, seconds=2, kill_grace=0.3)
+        self.assertEqual(result, 0)
+        self.assertEqual(entry.subreaper(), prior)
+        with lock.open("a") as stream:
+            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        self.assertFalse(Path(f"/proc/{ready.read_text()}").exists())
+
     def test_dispatch_deadline_retains_pending_without_verified_receipt(self):
         self.agent.write_text("#!/usr/bin/env python3\nimport time\ntime.sleep(60)\n")
         env = self.env.copy()
