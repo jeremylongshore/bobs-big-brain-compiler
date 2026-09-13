@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Nightly compilation uses the configured encrypted MiniMax credential without inheriting
+  expired Claude OAuth, refuses implicit provider changes, and checks a valid per-date
+  outcome plus the live audit before success. Its C8 MCP boundary filters actual capture
+  candidates through the existing disclosure policy; failed or denied captures never reach
+  the native spool. A bounded dispatcher persists missed dates across restarts. The umbrella
+  installer now consumes a commit-addressed compiler bundle instead of a mutable checkout.
+
 ### Changed
 
 - Hardened the public `ico-your-internals` plugin skill to v0.3.0: dry runs are
