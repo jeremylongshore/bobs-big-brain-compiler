@@ -2,9 +2,12 @@
 """Bounded nightly reconciliation over durable pending dates and verified outcomes."""
 
 import datetime as dt
+import ctypes
 import fcntl
 import importlib.util
 import json
+import signal
+import time
 import os
 from pathlib import Path
 import subprocess
@@ -23,6 +26,111 @@ def persist(path, dates):
     os.replace(temporary, path)
 
 
+def process_family(pid):
+    """Snapshot Linux child identities, including descendants with their own session."""
+    found = {}
+    pending = [pid]
+    while pending:
+        current = pending.pop()
+        if current in found:
+            continue
+        try:
+            stat = Path(f"/proc/{current}/stat").read_text().rsplit(") ", 1)[1].split()
+            found[current] = stat[19]  # Linux start-time ticks fence PID reuse.
+            for children in Path(f"/proc/{current}/task").glob("*/children"):
+                pending.extend(int(value) for value in children.read_text().split())
+        except (OSError, ValueError, IndexError):
+            continue  # A process exited between the snapshot reads.
+    return found
+
+
+def signal_family(family, sig):
+    for pid, started in reversed(list(family.items())):
+        try:
+            current = Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()[19]
+            if current == started:
+                os.kill(pid, sig)
+        except (OSError, ValueError, IndexError):
+            continue  # Already exited; never signal a reused PID.
+
+
+def subreaper(enabled=None):
+    """Keep orphaned PTY grandchildren owned by this run until they are reaped."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    value = ctypes.c_int()
+    if libc.prctl(37, ctypes.byref(value), 0, 0, 0) != 0:  # PR_GET_CHILD_SUBREAPER
+        raise OSError(ctypes.get_errno(), "cannot read child supervision state")
+    previous = bool(value.value)
+    if enabled is not None and libc.prctl(36, int(enabled), 0, 0, 0) != 0:  # PR_SET_CHILD_SUBREAPER
+        raise OSError(ctypes.get_errno(), "cannot establish child supervision")
+    return previous
+
+
+def run_bounded(command, env, seconds, kill_grace=10):
+    previous = subreaper(True)
+    baseline = process_family(os.getpid())
+    child = None
+    try:
+        child = subprocess.Popen(command, env=env, start_new_session=True)
+        timed_out = False
+        try:
+            result = child.wait(timeout=seconds)
+        except subprocess.TimeoutExpired:
+            result, timed_out = 124, True
+
+        def owned():
+            return {pid: started for pid, started in process_family(os.getpid()).items()
+                    if baseline.get(pid) != started}
+
+        # Subreaper adoption includes a grandchild orphaned by an earlier inner
+        # timeout, even when the main wrapper subsequently returns normally.
+        family = owned()
+        if family:
+            if child.returncode is None:
+                try:
+                    os.killpg(child.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+            signal_family(family, signal.SIGTERM)
+            deadline = time.monotonic() + kill_grace
+            while time.monotonic() < deadline:
+                family.update(owned())
+                for pid in family:
+                    if pid == child.pid:
+                        continue
+                    try:
+                        os.waitpid(pid, os.WNOHANG)
+                    except ChildProcessError:
+                        pass  # Still parented inside the owned process tree.
+                if not owned():
+                    break
+                time.sleep(min(0.1, max(0, deadline - time.monotonic())))
+            if child.returncode is None:
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            signal_family(family, signal.SIGKILL)
+            child.wait()
+            # Reap adopted descendants; the main child wait alone cannot reap them.
+            cleanup_until = time.monotonic() + 1
+            while owned() and time.monotonic() < cleanup_until:
+                for pid in owned():
+                    try:
+                        os.waitpid(pid, os.WNOHANG)
+                    except ChildProcessError:
+                        pass
+                time.sleep(0.01)
+        if timed_out:
+            print(json.dumps({"event": "compile_run_deadline", "timeout_seconds": seconds,
+                              "kill_grace_seconds": kill_grace}), flush=True)
+        elif family:
+            print(json.dumps({"event": "compile_orphan_cleanup", "process_count": len(family)}), flush=True)
+        return result
+    finally:
+        subreaper(previous)
+
+
 def main():
     os.umask(0o077)
     root = Path(os.environ.get("TEAMKB_COMPILE_LOG_DIR", str(Path.home() / ".local/state/teamkb-compile-daily")))
@@ -32,8 +140,11 @@ def main():
     date = dt.date.fromisoformat(target)
     if target != date.isoformat() or date >= dt.date.today():
         raise ValueError("target must be a completed calendar day")
+    run_timeout = int(os.environ.get("TEAMKB_COMPILE_RUN_TIMEOUT", "3000"))
+    if not 1 <= run_timeout <= 86400:
+        raise ValueError("run deadline must be between one and 86400 seconds")
     if explicit or os.environ.get("TEAMKB_COMPILE_DRYRUN"):
-        os.execv("/bin/bash", ["bash", str(HERE / "teamkb-compile-daily.sh")])
+        return run_bounded(["bash", str(HERE / "teamkb-compile-daily.sh")], os.environ.copy(), run_timeout)
     mode_file = root / "mode"
     mode = os.environ.get("TEAMKB_COMPILE_MODE", mode_file.read_text().strip() if mode_file.exists() else "digest")
     if mode not in ("auto", "digest"):
@@ -68,9 +179,9 @@ def main():
         for item in ordered[:limit]:
             env = os.environ.copy()
             env["TEAMKB_COMPILE_DATE"] = item
-            result = subprocess.run(["bash", str(HERE / "teamkb-compile-daily.sh")], env=env, check=False)
+            exit_code = run_bounded(["bash", str(HERE / "teamkb-compile-daily.sh")], env, run_timeout)
             # Recheck the business outcome, including a wrapper lock-skip with exit zero.
-            if result.returncode != 0 or not proof.verified(decisions, item, mode, root):
+            if exit_code != 0 or not proof.verified(decisions, item, mode, root):
                 failure = True
                 break
             pending.remove(item)

@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 import unittest
 
 
@@ -22,6 +23,7 @@ def load(name, filename):
 
 proof = load("proof", "runtime-proof.py")
 guard = load("guard", "c8-mcp.py")
+entry = load("entry", "nightly-entry.py")
 
 
 def record(date="2026-09-08"):
@@ -270,6 +272,81 @@ for line in sys.stdin:
         self.assertFalse((self.root / "agent-ran").exists())
         self.assertFalse(proof.verified(self.decisions, "2026-09-08", "auto",
                                         self.root / ".local/state/teamkb-compile-daily"))
+
+    def test_outer_deadline_kills_nested_session_and_releases_lock(self):
+        lock = self.root / "deadline.lock"
+        child_file = self.root / "stubborn-child.pid"
+        stubborn = self.root / "stubborn.py"
+        stubborn.write_text("""import fcntl,os,pathlib,signal,sys,time
+f=open(sys.argv[1],"a");fcntl.flock(f,fcntl.LOCK_EX)
+signal.signal(signal.SIGTERM,signal.SIG_IGN)
+pathlib.Path(sys.argv[2]).write_text(str(os.getpid()))
+while True:time.sleep(1)
+""")
+        parent = self.root / "parent.py"
+        parent.write_text("""import signal,subprocess,sys,time
+signal.signal(signal.SIGTERM,signal.SIG_IGN)
+subprocess.Popen([sys.executable,*sys.argv[1:]],start_new_session=True)
+while True:time.sleep(1)
+""")
+        start = time.monotonic()
+        result = entry.run_bounded(["python3", str(parent), str(stubborn), str(lock), str(child_file)],
+                                   self.env, seconds=0.5, kill_grace=0.3)
+        self.assertEqual(result, 124)
+        self.assertLess(time.monotonic() - start, 3)
+        self.assertTrue(child_file.exists())
+        with lock.open("a") as stream:
+            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        stat = Path(f"/proc/{child_file.read_text()}/stat")
+        self.assertTrue(not stat.exists() or stat.read_text().rsplit(") ", 1)[1].split()[0] == "Z")
+
+    def test_normal_wrapper_exit_reaps_earlier_orphaned_session(self):
+        lock = self.root / "orphan.lock"
+        ready = self.root / "orphan.pid"
+        stubborn = self.root / "orphan.py"
+        stubborn.write_text("""import fcntl,os,pathlib,signal,sys,time
+f=open(sys.argv[1],"a");fcntl.flock(f,fcntl.LOCK_EX)
+signal.signal(signal.SIGTERM,signal.SIG_IGN)
+pathlib.Path(sys.argv[2]).write_text(str(os.getpid()))
+while True:time.sleep(1)
+""")
+        parent = self.root / "orphan-parent.py"
+        parent.write_text("""import pathlib,subprocess,sys,time
+subprocess.Popen([sys.executable,*sys.argv[1:]],start_new_session=True)
+while not pathlib.Path(sys.argv[-1]).exists():time.sleep(.01)
+""")
+        prior = entry.subreaper()
+        result = entry.run_bounded(["python3", str(parent), str(stubborn), str(lock), str(ready)],
+                                   self.env, seconds=2, kill_grace=0.3)
+        self.assertEqual(result, 0)
+        self.assertEqual(entry.subreaper(), prior)
+        with lock.open("a") as stream:
+            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        self.assertFalse(Path(f"/proc/{ready.read_text()}").exists())
+
+    def test_dispatch_deadline_retains_pending_without_verified_receipt(self):
+        self.agent.write_text("#!/usr/bin/env python3\nimport time\ntime.sleep(60)\n")
+        env = self.env.copy()
+        env.pop("TEAMKB_COMPILE_DATE")
+        env.update(TEAMKB_COMPILE_RUN_TIMEOUT="1", TEAMKB_COMPILE_TIMEOUT="60")
+        result = subprocess.run(["python3", str(HERE / "nightly-entry.py")], env=env,
+                                capture_output=True, text=True, timeout=15)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('"event": "compile_run_deadline"', result.stdout)
+        state = self.root / ".local/state/teamkb-compile-daily"
+        self.assertEqual(len(json.loads((state / "pending-dates.json").read_text())["pending"]), 7)
+        self.assertEqual(list(state.glob("verified-*.json")), [])
+        with (self.root / ".teamkb/.compile.lock").open("a") as stream:
+            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+    def test_outer_deadline_preserves_normal_exit_and_rejects_invalid_limit(self):
+        self.assertEqual(entry.run_bounded(["python3", "-c", "raise SystemExit(7)"], self.env, 1), 7)
+        env = self.env.copy()
+        env["TEAMKB_COMPILE_RUN_TIMEOUT"] = "0"
+        result = subprocess.run(["python3", str(HERE / "nightly-entry.py")], env=env,
+                                capture_output=True, text=True, timeout=5)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / "agent-ran").exists())
 
     def test_verified_receipt_binds_exact_decision_hash_date_and_mode(self):
         self.env["FIXTURE_OUTCOME"] = "success"

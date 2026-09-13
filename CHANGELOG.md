@@ -4,6 +4,13 @@
 
 ### Fixed
 
+- Each nightly compile date now has a 3,000-second outer deadline and a 10-second
+  termination grace, covering compile, review, audit, and notification work. Expired runs
+  terminate their process group and tracked descendants, retain the pending date, and
+  return failure. Linux child supervision also adopts and reaps earlier orphaned PTY
+  descendants after a normal wrapper exit. SMTP/ntfy calls and inbox-review termination
+  also have explicit bounds.
+
 - Nightly compilation uses the configured encrypted MiniMax credential without inheriting
   expired Claude OAuth, refuses implicit provider changes, and checks a valid per-date
   outcome plus the live audit before success. Its C8 MCP boundary filters actual capture
