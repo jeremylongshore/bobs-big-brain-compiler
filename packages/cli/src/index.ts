@@ -12,6 +12,7 @@ import { register as registerIngest } from './commands/ingest.js';
 import { register as registerInit } from './commands/init.js';
 import { register as registerInspect } from './commands/inspect.js';
 import { register as registerLint } from './commands/lint.js';
+import { register as registerMaintain } from './commands/maintain.js';
 import { register as registerMount } from './commands/mount.js';
 import { register as registerPromote } from './commands/promote.js';
 import { register as registerRecall } from './commands/recall.js';
@@ -84,6 +85,7 @@ export function buildProgram(): Command {
   registerInit(p);
   registerIngest(p);
   registerMount(p);
+  registerMaintain(p);
   registerCompile(p);
   registerAsk(p);
   registerResearch(p);
