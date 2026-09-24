@@ -1,0 +1,8 @@
+[Unit]
+Description=Bob's Big Brain — receipted ICO mount maintenance
+Documentation=https://github.com/jeremylongshore/bobs-big-brain-compiler/blob/main/000-docs/042-OD-RNBK-scheduled-ico-maintenance.md
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/lib/ico/ico-maintain-daily.sh
+TimeoutStartSec=77min

@@ -1,7 +1,7 @@
 # Receipt schema
 
-The dog-food run produces five JSONL streams. Three live locally only;
-two are sanitized and committed.
+The dog-food run keeps its raw streams and private manifest in the local cache.
+`render-summary.py` creates a separate allowlisted, redacted publication bundle.
 
 ## `~/.cache/ico-your-internals/runs/<run-id>/receipts.jsonl` (local only)
 
@@ -82,10 +82,15 @@ Every verification line in v0.2 carries `intent_id`, `paraphrase_idx`, and
 `paraphrase_robustness` rollup (ADR-030).
 
 Verdicts: `VERIFIED` (≥1 expected_substring hit in source), `CHALLENGED`
-(source exists but no substring matched), `UNVERIFIED` (source not
-findable in target tree).
+(source exists but no substring matched), `UNVERIFIED` (source missing,
+malformed, rejected, or outside the target/workspace containment boundary).
 
-## `dogfood/runs/<run-id>/friction.jsonl` (committed — public)
+## `~/.cache/ico-your-internals/runs/<run-id>/friction.jsonl` (local only)
+
+Raw compiler and question-loop diagnostics. This file may include absolute paths
+or upstream stderr and must never be committed directly.
+
+## `dogfood/runs/<run-id>/friction.jsonl` (redacted public copy)
 
 One line per error / timeout / lint warning. These are bead candidates.
 
@@ -105,6 +110,11 @@ One line per error / timeout / lint warning. These are bead candidates.
 `recommend_bead`: whether the operator should consider filing this as a bead
 on the ICO repo.
 
+The renderer allowlists these fields, replaces known private paths, redacts
+common credential shapes, flattens line breaks, and caps messages at 500
+characters. Review the rendered file before committing because heuristic
+redaction cannot prove arbitrary upstream diagnostics are disclosure-free.
+
 ## `dogfood/runs/<run-id>/metrics.json` (committed — public)
 
 Single JSON document per run. Aggregated counts + per-question rollups.
@@ -113,7 +123,7 @@ Single JSON document per run. Aggregated counts + per-question rollups.
 ```json
 {
   "run_id": "2026-05-20T2100-intent-eval-core-v2",
-  "target": "/home/jeremy/000-projects/intent-eval-platform/intent-eval-core",
+  "target": "intent-eval-core",
   "target_slug": "intent-eval-core",
   "bank_version": "v2",
   "ico_version": "1.3.0",
@@ -164,6 +174,13 @@ v0.2 top-level fields:
 
 `per_question` entries carry `intent_id`, `paraphrase_idx`, `paraphrase_style`,
 and `primary` so consumers can group + render by paraphrase.
+
+## `dogfood/runs/<run-id>/manifest.json` (committed — public)
+
+An allowlist containing only `run_id`, `target_slug`, `bank_version`,
+`ico_version`, `started_at`, `paraphrases_mode`, and `asks_planned`. The private
+cache manifest additionally contains absolute target, bank, and workspace paths;
+never copy that source file into the publication directory.
 
 ## `dogfood/progress.md` (committed — public)
 
