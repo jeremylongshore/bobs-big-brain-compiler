@@ -1,6 +1,6 @@
 # Nightly compile notification routing
 
-**Doc:** 042-AT-ARCH · **Date:** 2026-08-02 · **Track:** ICO l13.15 · **Status:**
+**Doc:** 045-AT-ARCH · **Date:** 2026-08-02 · **Track:** ICO l13.15 · **Status:**
 Authoritative for the compiler caller; the shared notification implementation remains
 owned by Intent OS.
 
