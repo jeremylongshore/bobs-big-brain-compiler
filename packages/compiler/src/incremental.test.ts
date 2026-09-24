@@ -270,4 +270,30 @@ describe('computeAffectedSet — incremental diff', () => {
     expect(result.value.affectedPages).toEqual([]);
     expect(result.value.conservativeSweep).toBe(false);
   });
+
+  it('prices and recompiles only the latest row for each current output path', () => {
+    insertSource(db, { id: 'src-a', path: 'raw/notes/a.md', hash: 'OLD' });
+    insertCompilation(db, {
+      id: 'topic-old',
+      sourceId: null,
+      type: 'topic',
+      outputPath: 'wiki/topics/current.md',
+      compiledAt: '2026-06-01T00:00:00.000Z',
+    });
+    insertCompilation(db, {
+      id: 'topic-current',
+      sourceId: null,
+      type: 'topic',
+      outputPath: 'wiki/topics/current.md',
+      compiledAt: '2026-06-02T00:00:00.000Z',
+    });
+
+    const result = computeAffectedSet(db, [{ path: 'raw/notes/a.md', hash: 'NEW' }]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const topics = result.value.affectedPages.filter((page) => page.type === 'topic');
+    expect(topics).toHaveLength(1);
+    expect(topics[0]?.compilationId).toBe('topic-current');
+  });
 });

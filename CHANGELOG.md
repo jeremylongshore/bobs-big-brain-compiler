@@ -2,9 +2,32 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Each nightly compile date now has a 3,000-second outer deadline and a 10-second
+  termination grace, covering compile, review, audit, and notification work. Expired runs
+  terminate their process group and tracked descendants, retain the pending date, and
+  return failure. Linux child supervision also adopts and reaps earlier orphaned PTY
+  descendants after a normal wrapper exit. SMTP/ntfy calls and inbox-review termination
+  also have explicit bounds.
+
+- Nightly compilation uses the configured encrypted MiniMax credential without inheriting
+  expired Claude OAuth, refuses implicit provider changes, and checks a valid per-date
+  outcome plus the live audit before success. Its C8 MCP boundary filters actual capture
+  candidates through the existing disclosure policy; failed or denied captures never reach
+  the native spool. A bounded dispatcher persists missed dates across restarts. Companion
+  [umbrella PR 95](https://github.com/intent-solutions-io/bobs-big-brain-umbrella/pull/95)
+  owns the commit-addressed installer; runtime deployment remains a separate verification step.
+
 ### Changed
 
+- Hardened the public `ico-your-internals` plugin skill to v0.3.0: dry runs are
+  now write-free and credential-free, estimates above $0.50 fail closed without
+  the `--approve-budget` operator flag, citation resolution cannot escape the declared
+  target/workspace roots, and rendered public artifacts allowlist and redact
+  private diagnostics. The Claude plugin manifest now follows the current spec.
 - The GitHub repository was renamed from `intentional-cognition-os` to `bobs-big-brain-compiler` on 2026-07-19 (public product name: **Bob's Big Brain Compiler**). GitHub 301-redirects the old URLs. The npm package name `intentional-cognition-os`, the `@ico/*` scope, and the bead prefixes are unchanged.
+- Scheduled ICO maintenance is now a separate receipted path from the team distiller. `ico maintain` scans registered mounts case-insensitively, classifies disclosure-blocked files explicitly, and compiles deterministic bounded source-scoped batches under the required writer lock and spend ceiling. `partial` receipts expose processed and remaining counts without claiming freshness, and every receipt names its `mounted-source` scope so the final batch cannot silently expand into an all-corpus rewrite. Provider usage is recorded once per actual API call, so a multi-page response cannot multiply the spend total through duplicated page rows. Incremental affected-set planning now selects only the newest compilation row for each `(type, output_path)`, avoiding obsolete historical rows being recompiled or charged as current work. Commit-addressed CLI installation and user-systemd scheduling are included.
 
 ## [v1.22.0] - 2026-07-18
 

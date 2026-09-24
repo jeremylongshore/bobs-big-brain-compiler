@@ -181,13 +181,32 @@ export function computeAffectedSet(
       `SELECT id, path, hash FROM sources WHERE path = ? ORDER BY ingested_at DESC LIMIT 1`,
     );
     const findSingleSourcePages = db.prepare<[string], CompilationRow>(
-      `SELECT id, output_path, type FROM compilations WHERE source_id = ?`,
+      `SELECT c.id, c.output_path, c.type
+         FROM compilations c
+        WHERE c.source_id = ?
+          AND c.id = (
+            SELECT c2.id
+              FROM compilations c2
+             WHERE c2.source_id = c.source_id
+               AND c2.type = c.type
+               AND c2.output_path = c.output_path
+             ORDER BY c2.compiled_at DESC, c2.id DESC
+             LIMIT 1
+          )`,
     );
     const findCitingPages = db.prepare<[string], CompilationRow>(
       `SELECT c.id AS id, c.output_path AS output_path, c.type AS type
          FROM compilation_sources cs
          JOIN compilations c ON c.id = cs.compilation_id
-        WHERE cs.source_id = ?`,
+        WHERE cs.source_id = ?
+          AND c.id = (
+            SELECT c2.id
+              FROM compilations c2
+             WHERE c2.type = c.type
+               AND c2.output_path = c.output_path
+             ORDER BY c2.compiled_at DESC, c2.id DESC
+             LIMIT 1
+          )`,
     );
     const countJunctionCoverage = db.prepare<[string], { n: number }>(
       `SELECT COUNT(*) AS n FROM compilation_sources WHERE source_id = ?`,
@@ -253,10 +272,21 @@ export function computeAffectedSet(
     if (needConservativeSweep) {
       const placeholders = CROSS_SOURCE_TYPES.map(() => '?').join(', ');
       const crossPages = db
-        .prepare<
-          string[],
-          CompilationRow
-        >(`SELECT id, output_path, type FROM compilations WHERE source_id IS NULL AND type IN (${placeholders})`)
+        .prepare<string[], CompilationRow>(
+          `SELECT c.id, c.output_path, c.type
+             FROM compilations c
+            WHERE c.source_id IS NULL
+              AND c.type IN (${placeholders})
+              AND c.id = (
+                SELECT c2.id
+                  FROM compilations c2
+                 WHERE c2.source_id IS NULL
+                   AND c2.type = c.type
+                   AND c2.output_path = c.output_path
+                 ORDER BY c2.compiled_at DESC, c2.id DESC
+                 LIMIT 1
+              )`,
+        )
         .all(...CROSS_SOURCE_TYPES);
       for (const page of crossPages) {
         upsert({

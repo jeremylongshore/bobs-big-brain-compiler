@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Bob's Big Brain ICO maintenance before backup
+
+[Timer]
+OnCalendar=*-*-* 01:10:00
+RandomizedDelaySec=5min
+Persistent=true
+Unit=ico-maintain.service
+
+[Install]
+WantedBy=timers.target
