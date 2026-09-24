@@ -136,8 +136,11 @@ pick_target() {
     printf '%s/%s\n' "$subdir" "$preferred"
     return 0
   fi
-  find "$WORKSPACE/wiki/$subdir" -maxdepth 1 -type f -name '*.md' -printf '%s/%f\n' "$subdir" \
-    2>/dev/null | sort | head -n 1
+  local first
+  first=$(find "$WORKSPACE/wiki/$subdir" -maxdepth 1 -type f -name '*.md' -printf '%f\n' \
+    2>/dev/null | sort | head -n 1)
+  [ -n "$first" ] && printf '%s/%s\n' "$subdir" "$first"
+  return 0
 }
 
 run_eval() {
