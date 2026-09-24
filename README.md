@@ -18,6 +18,8 @@ A local-first knowledge OS. Point `ico` at a folder of PDFs, markdown notes, and
 [![CI](https://github.com/jeremylongshore/bobs-big-brain-compiler/actions/workflows/ci.yml/badge.svg)](https://github.com/jeremylongshore/bobs-big-brain-compiler/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/jeremylongshore/bobs-big-brain-compiler)](https://github.com/jeremylongshore/bobs-big-brain-compiler/releases)
 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/U5S225PTME)
+
 > **Part of the [Bob's Big Brain](https://github.com/intent-solutions-io/bobs-big-brain-umbrella) stack** — this is the **compile** layer. It pairs with [Bob's Big Brain Registrar](https://github.com/jeremylongshore/bobs-big-brain-registrar) (govern) and [qmd](https://github.com/tobi/qmd) (retrieve) to turn raw corpus into governed, citation-backed memory. → [Ecosystem overview](https://github.com/intent-solutions-io/bobs-big-brain-umbrella)
 
 ---
@@ -145,20 +147,21 @@ The hard constraint, drilled through every component: **the model never directly
 
 ## Commands you'll actually use
 
-|                                   |                                                        |
-| --------------------------------- | ------------------------------------------------------ |
-| `ico init <name>`                 | Create a workspace                                     |
-| `ico mount add <name> <path>`     | Register a source directory                            |
-| `ico ingest <path>`               | Parse PDFs/MD/web-clips into the raw layer             |
-| `ico compile all`                 | Run the six compiler passes (Claude calls happen here) |
-| `ico ask "<question>"`            | Grounded Q&A with citations                            |
-| `ico research "<brief>"`          | Multi-agent research task (5 stages, ~5 min)           |
-| `ico render report --topic <t>`   | Generate a markdown report                             |
-| `ico recall generate --topic <t>` | Build flashcards from compiled wiki                    |
-| `ico recall quiz --topic <t>`     | Interactive quiz; tracks retention                     |
-| `ico recall export --format anki` | Anki-importable TSV                                    |
-| `ico lint`                        | Audit the wiki (schema, staleness, orphans)            |
-| `ico status` / `ico inspect`      | Workspace summary / per-subsystem detail               |
+|                                   |                                                          |
+| --------------------------------- | -------------------------------------------------------- |
+| `ico init <name>`                 | Create a workspace                                       |
+| `ico mount add <name> <path>`     | Register a source directory                              |
+| `ico ingest <path>`               | Parse PDFs/MD/web-clips into the raw layer               |
+| `ico compile all`                 | Run the six compiler passes (provider calls happen here) |
+| `ico maintain`                    | Run bounded, receipted mounted-source compilation        |
+| `ico ask "<question>"`            | Grounded Q&A with citations                              |
+| `ico research "<brief>"`          | Multi-agent research task (5 stages, ~5 min)             |
+| `ico render report --topic <t>`   | Generate a markdown report                               |
+| `ico recall generate --topic <t>` | Build flashcards from compiled wiki                      |
+| `ico recall quiz --topic <t>`     | Interactive quiz; tracks retention                       |
+| `ico recall export --format anki` | Anki-importable TSV                                      |
+| `ico lint`                        | Audit the wiki (schema, staleness, orphans)              |
+| `ico status` / `ico inspect`      | Workspace summary / per-subsystem detail                 |
 
 Global flags on every command: `--workspace <path>`, `--json`, `--verbose`, `--quiet`. Full reference: `ico --help` or any command with `--help`.
 

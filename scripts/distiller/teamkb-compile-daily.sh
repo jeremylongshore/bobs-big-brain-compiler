@@ -16,8 +16,8 @@
 #             x-api-key auth = MINIMAX_API_KEY). This is an OFFLINE compile-time role:
 #             the model only PROPOSES candidates; the deterministic INTKB govern
 #             kernel (dedupe → policy → promotion) still owns admission. Missing
-#             key/binary DEGRADES to grok with a logged WARN — never a crash.
-#   grok    → the previous durable headless runner (kept as the degrade path).
+#             key/binary fails visibly without changing provider implicitly.
+#   grok    → historical runner; refused until its per-run C8 MCP path is verified.
 #   claude  → the original Anthropic path (weekly-rate-limit killed the 2026-07-14
 #             nightly; kept as a manual override).
 #
@@ -49,8 +49,8 @@ MCP_CONFIG="$SKILL_DIR/scripts/brain-mcp-config.json"
 DECISIONS="$SKILL_DIR/methodology/decisions.jsonl"
 EMAIL_SCRIPT=$HOME/.claude/skills/email/scripts/send-email.cjs
 EMAIL_TO=jeremy@intentsolutions.io
-SCRATCH=/tmp/teamkb-compile
-LOG_DIR=$HOME/.local/state/teamkb-compile-daily
+SCRATCH="${TEAMKB_COMPILE_SCRATCH:-/tmp/teamkb-compile}"
+LOG_DIR="${TEAMKB_COMPILE_LOG_DIR:-$HOME/.local/state/teamkb-compile-daily}"
 NTFY_TOPIC_FILE=$HOME/.ntfy-topic
 
 # Agent: minimax (default) | grok | claude. See header.
@@ -64,7 +64,7 @@ CLAUDE_BIN="${CLAUDE_BIN:-$(command -v claude 2>/dev/null || true)}"
 # dotenv (never written to disk, never logged).
 MINIMAX_BASE_URL="${MINIMAX_BASE_URL:-https://api.minimax.io/anthropic}"
 MINIMAX_MODEL="${MINIMAX_MODEL:-MiniMax-M3}"
-MINIMAX_SOPS_FILE="${MINIMAX_SOPS_FILE:-$HOME/000-projects/intent-eval-platform/intent-eval-lab/.env.sops}"
+MINIMAX_SOPS_FILE="${MINIMAX_SOPS_FILE:-$HOME/.config/intentsolutions/api-providers.sops.json}"
 MINIMAX_KEY=""   # resolved by resolve_minimax_key; NEVER log or interpolate into command strings
 
 # Distiller-output eval (l13.9): deterministic groundedness harness, sibling file.
@@ -111,9 +111,9 @@ resolve_minimax_key() {
     return 0
   fi
   if command -v sops >/dev/null 2>&1 && [ -f "$MINIMAX_SOPS_FILE" ]; then
-    # Anchored sed — only the real KEY=VALUE line, never a bare-export dump.
-    MINIMAX_KEY="$(sops -d --input-type dotenv --output-type dotenv "$MINIMAX_SOPS_FILE" 2>/dev/null \
-      | sed -nE 's/^MINIMAX_API_KEY=(.*)$/\1/p' | head -1)"
+    # Current estate owner; decrypt into a pipe, never a file or diagnostic.
+    MINIMAX_KEY="$(sops -d --input-type json --output-type json "$MINIMAX_SOPS_FILE" 2>/dev/null \
+      | python3 -c 'import json,sys; value=json.load(sys.stdin).get("minimax",{}).get("key",""); sys.stdout.write(value if isinstance(value,str) else "")' 2>/dev/null)"
     [ -n "$MINIMAX_KEY" ] && return 0
   fi
   return 1
@@ -126,15 +126,8 @@ resolve_agent() {
       if [ -n "$CLAUDE_BIN" ] && [ -x "$CLAUDE_BIN" ] && resolve_minimax_key; then
         AGENT_NAME=minimax; AGENT_BIN="$CLAUDE_BIN"; return 0
       fi
-      # Env-gated degrade: no key (or no claude binary) → grok, never a crash.
-      log "WARN: TEAMKB_AGENT=minimax but claude binary or MINIMAX_API_KEY unavailable — degrading to grok"
-      if [ -n "$GROK_BIN" ] && [ -x "$GROK_BIN" ]; then
-        AGENT_NAME=grok; AGENT_BIN="$GROK_BIN"; return 0
-      fi
-      if [ -n "$CLAUDE_BIN" ] && [ -x "$CLAUDE_BIN" ]; then
-        log "WARN: grok not on PATH either — falling back to claude (Anthropic)"
-        AGENT_NAME=claude; AGENT_BIN="$CLAUDE_BIN"; return 0
-      fi
+      log "FATAL: configured MiniMax key or Claude binary unavailable; no implicit provider change"
+      return 1
       ;;
     grok|Grok|GROK)
       if [ -n "$GROK_BIN" ] && [ -x "$GROK_BIN" ]; then
@@ -202,7 +195,7 @@ run_inbox_review() {
          TEAMKB_API_TOKEN="$tok" \
          TEAMKB_REVIEW_AGENT_TOKEN="$tok" \
          CLAUDE_SKILL_DIR="$REVIEW_SKILL_DIR" \
-         /usr/bin/timeout "$REVIEW_TIMEOUT_SECS" script -e -q -a \
+         /usr/bin/timeout --kill-after=10s "$REVIEW_TIMEOUT_SECS" script -e -q -a \
            -c "$review_cmd" \
            "$rlog" >/dev/null 2>&1; then
         review_rc=0
@@ -221,7 +214,7 @@ run_inbox_review() {
          ANTHROPIC_AUTH_TOKEN="" \
          ANTHROPIC_MODEL="$MINIMAX_MODEL" \
          ANTHROPIC_SMALL_FAST_MODEL="$MINIMAX_MODEL" \
-         /usr/bin/timeout "$REVIEW_TIMEOUT_SECS" script -e -q -a \
+         /usr/bin/timeout --kill-after=10s "$REVIEW_TIMEOUT_SECS" script -e -q -a \
            -c "$review_cmd" \
            "$rlog" >/dev/null 2>&1; then
         review_rc=0
@@ -233,7 +226,7 @@ run_inbox_review() {
       review_cmd="claude -p '/teamkb-review $review_flag' --mcp-config '$REVIEW_MCP_CONFIG' --strict-mcp-config --dangerously-skip-permissions"
       log "Invoking: claude -p /teamkb-review ${review_flag:-（live）} (timeout ${REVIEW_TIMEOUT_SECS}s)"
       if TEAMKB_API_URL="$REVIEW_API_URL" TEAMKB_REVIEW_AGENT_TOKEN="$tok" \
-         /usr/bin/timeout "$REVIEW_TIMEOUT_SECS" script -e -q -a \
+         /usr/bin/timeout --kill-after=10s "$REVIEW_TIMEOUT_SECS" script -e -q -a \
            -c "$review_cmd" \
            "$rlog" >/dev/null 2>&1; then
         review_rc=0
@@ -358,11 +351,11 @@ notify_unexpected_exit() {
   [ "$NOTIFIED" -eq 1 ] && return
   log "ABNORMAL EXIT (rc=$rc) before normal notification — sending fail-loud alert"
   local topic; topic=$(cat "$NTFY_TOPIC_FILE" 2>/dev/null)
-  [ -n "$topic" ] && curl -s -H "Title: 🚨 teamkb-compile aborted early" -H "Priority: max" -H "Tags: rotating_light" \
+  [ -n "$topic" ] && curl --connect-timeout 5 --max-time 15 -s -H "Title: 🚨 teamkb-compile aborted early" -H "Priority: max" -H "Tags: rotating_light" \
     -d "${TARGET}: early exit rc=${rc} — brain may not be updated. Check ${LOG}" \
     "https://ntfy.sh/$topic" >/dev/null 2>&1 || true
   if command -v node >/dev/null 2>&1 && [ -f "$EMAIL_SCRIPT" ]; then
-    node "$EMAIL_SCRIPT" --to "$EMAIL_TO" \
+    /usr/bin/timeout --kill-after=5s 90 node "$EMAIL_SCRIPT" --to "$EMAIL_TO" \
       --subject "🚨 teamkb-compile aborted early: ${TARGET} (rc=${rc})" \
       --body "$(printf 'teamkb-compile exited abnormally (rc=%s) BEFORE its normal summary.\nTarget: %s  Mode: %s\n\nLast 30 log lines:\n%s\n' \
         "$rc" "$TARGET" "$MODE" "$(tail -30 "$LOG" 2>/dev/null)")" >/dev/null 2>&1 || true
@@ -372,16 +365,29 @@ trap notify_unexpected_exit EXIT
 
 # ── Idempotency ──────────────────────────────────────────────────────────────
 # If an audit record for this date already exists, this night already ran — no-op.
-if [ -f "$DECISIONS" ] && grep -qE "\"date\"[[:space:]]*:[[:space:]]*\"${TARGET}\"" "$DECISIONS" 2>/dev/null; then
+if python3 "$SCRIPT_DIR/runtime-proof.py" verified --decisions "$DECISIONS" --date "$TARGET" --mode "$MODE" --receipts-dir "$LOG_DIR"; then
   log "Audit record already exists for ${TARGET} — skipping (no-op)."
   NOTIFIED=1
   exit 0
 fi
 
+# A crash can leave the model's decision durable before independent verification.
+# Verify/adopt that record without repeating capture or rewriting the old audit row.
+if python3 "$SCRIPT_DIR/runtime-proof.py" completed --decisions "$DECISIONS" --date "$TARGET" --mode "$MODE"; then
+  if python3 "$SCRIPT_DIR/runtime-proof.py" verify --decisions "$DECISIONS" --date "$TARGET" --mode "$MODE" \
+      --config "$MCP_CONFIG" --output "$LOG_DIR/verified-${TARGET}.json" >> "$LOG" 2>&1; then
+    log "Existing decision independently verified for ${TARGET}; no recapture needed."
+    NOTIFIED=1
+    exit 0
+  fi
+  log "FATAL: existing decision lacks independent live verification; retry retained"
+  exit 1
+fi
+
 
 # C8-live preflight (intent-os ops/disclosure-policy/live — D88 Phase 2)
 # Fail closed if C8 is not enforcing — never open a one-way door without the filter.
-C8_LIVE_PREFLIGHT="/home/jeremy/000-projects/intent-os/ops/disclosure-policy/live/preflight.sh"
+C8_LIVE_PREFLIGHT="${TEAMKB_C8_PREFLIGHT:-$HOME/000-projects/intent-os/ops/disclosure-policy/live/preflight.sh}"
 if [ -f "$C8_LIVE_PREFLIGHT" ]; then
   if ! bash "$C8_LIVE_PREFLIGHT" >> "$LOG" 2>&1; then
     log "FATAL: C8-live preflight failed — aborting compile (brain-ingest must not run without C8)"
@@ -396,6 +402,24 @@ fi
 # ── Preflight: brain reachable? ──────────────────────────────────────────────
 if [ ! -f "$MCP_CONFIG" ]; then
   log "FATAL: MCP config missing at $MCP_CONFIG"; exit 1
+fi
+
+NATIVE_MCP_CONFIG="$MCP_CONFIG"
+C8_GATE="${TEAMKB_C8_GATE:-$HOME/000-projects/intent-os/ops/disclosure-policy/live/brain-ingest-gate.sh}"
+MCP_CONFIG="$LOG_DIR/c8-mcp-${TARGET}.json"
+if ! python3 - "$MCP_CONFIG" "$SCRIPT_DIR/c8-mcp.py" "$NATIVE_MCP_CONFIG" "$C8_GATE" "$LOG_DIR/c8-${TARGET}.jsonl" <<'PY_C8'
+import json
+from pathlib import Path
+import sys
+destination, proxy, config, gate, receipts = sys.argv[1:]
+if not Path(proxy).is_file() or not Path(gate).is_file():
+    raise SystemExit(1)
+Path(destination).write_text(json.dumps({"mcpServers": {"governed-brain": {
+    "command": "python3", "args": [proxy, "--config", config, "--gate", gate, "--receipts", receipts]
+}}}) + '\n')
+PY_C8
+then
+  log "FATAL: nightly C8 capture boundary unavailable"; exit 2
 fi
 
 # ── Resolve agent before dry-run / invoke ────────────────────────────────────
@@ -428,10 +452,8 @@ fi
 COMPILE_CMD=""
 case "$AGENT_NAME" in
   grok)
-    COMPILE_CMD="$AGENT_BIN -p '/teamkb-compile $TARGET $NEXT --$MODE' --always-approve --max-turns ${TEAMKB_MAX_TURNS} --cwd '$HOME' --rules 'CLAUDE_SKILL_DIR=$SKILL_DIR. Use absolute path $SKILL_DIR for gather-signals.sh and methodology/decisions.jsonl. Use brain_* MCP tools from governed-brain (local). Emit [phase: name] markers.'"
-    # Ensure local-mode: strip any inherited API URL for the compile pass.
-    unset TEAMKB_API_URL TEAMKB_API_TOKEN 2>/dev/null || true
-    export CLAUDE_SKILL_DIR="$SKILL_DIR"
+    log "FATAL: Grok path has no verified per-run C8 MCP configuration; select minimax or claude"
+    exit 2
     ;;
   minimax|claude)
     COMPILE_CMD="$AGENT_BIN -p '/teamkb-compile $TARGET $NEXT --$MODE' --mcp-config '$MCP_CONFIG' --strict-mcp-config --dangerously-skip-permissions"
@@ -448,14 +470,18 @@ if [ "$AGENT_NAME" = "minimax" ]; then
      ANTHROPIC_BASE_URL="$MINIMAX_BASE_URL" \
      ANTHROPIC_API_KEY="$MINIMAX_KEY" \
      ANTHROPIC_AUTH_TOKEN="" \
+     CLAUDE_CODE_OAUTH_TOKEN="" \
      ANTHROPIC_MODEL="$MINIMAX_MODEL" \
      ANTHROPIC_SMALL_FAST_MODEL="$MINIMAX_MODEL" \
-     /usr/bin/timeout "$TIMEOUT_SECS" script -e -q -a \
+     ANTHROPIC_DEFAULT_SONNET_MODEL="$MINIMAX_MODEL" \
+     ANTHROPIC_DEFAULT_OPUS_MODEL="$MINIMAX_MODEL" \
+     ANTHROPIC_DEFAULT_HAIKU_MODEL="$MINIMAX_MODEL" \
+     /usr/bin/timeout --kill-after=10s "$TIMEOUT_SECS" script -e -q -a \
        -c "$COMPILE_CMD" \
        "$LOG" >/dev/null 2>&1; then RUN_OK=1; else EXIT=$?; fi
 else
   RUN_OK=0
-  if CLAUDE_SKILL_DIR="$SKILL_DIR" /usr/bin/timeout "$TIMEOUT_SECS" script -e -q -a \
+  if CLAUDE_SKILL_DIR="$SKILL_DIR" /usr/bin/timeout --kill-after=10s "$TIMEOUT_SECS" script -e -q -a \
        -c "$COMPILE_CMD" \
        "$LOG" >/dev/null 2>&1; then RUN_OK=1; else EXIT=$?; fi
 fi
@@ -497,10 +523,15 @@ fi
 
 # ── Classify result ──────────────────────────────────────────────────────────
 HAS_RECORD=0
-grep -qE "\"date\"[[:space:]]*:[[:space:]]*\"${TARGET}\"" "$DECISIONS" 2>/dev/null && HAS_RECORD=1
-if [ "$STATUS" = "OK" ] && [ "$HAS_RECORD" -eq 0 ]; then
-  # Clean exit but no audit record → almost always a no-activity no-op.
-  STATUS="OK (no activity — nothing to compile)"
+if python3 "$SCRIPT_DIR/runtime-proof.py" completed --decisions "$DECISIONS" --date "$TARGET" --mode "$MODE"; then
+  HAS_RECORD=1
+fi
+if [ "$STATUS" = "OK" ]; then
+  if ! python3 "$SCRIPT_DIR/runtime-proof.py" verify --decisions "$DECISIONS" --date "$TARGET" --mode "$MODE" \
+      --config "$NATIVE_MCP_CONFIG" --output "$LOG_DIR/verified-${TARGET}.json" >> "$LOG" 2>&1; then
+    STATUS="FAILED (missing or invalid governed outcome)"
+    log "$STATUS — agent exit zero is insufficient"
+  fi
 fi
 
 # ── Distiller-output groundedness eval (l13.9) ───────────────────────────────
@@ -515,7 +546,7 @@ fi
 # ── Review the team's quarantined inbox (jfv.8 / 014-AT-DECR) ─────────────────
 # After compiling my own day, review the team's held proposals. Best-effort — a
 # review failure never changes the compile STATUS (the brain is already updated).
-run_inbox_review
+if [ "$STATUS" = "OK" ]; then run_inbox_review; fi
 
 # ── Consecutive-failure escalation ───────────────────────────────────────────
 CONSEC=0
@@ -556,7 +587,7 @@ $(tail -50 "$LOG" 2>/dev/null)"
 fi
 
 if command -v node >/dev/null 2>&1 && [ -f "$EMAIL_SCRIPT" ]; then
-  node "$EMAIL_SCRIPT" --to "$EMAIL_TO" --subject "$SUBJECT" --body "$BODY" >> "$LOG" 2>&1 \
+  /usr/bin/timeout --kill-after=5s 90 node "$EMAIL_SCRIPT" --to "$EMAIL_TO" --subject "$SUBJECT" --body "$BODY" >> "$LOG" 2>&1 \
     || log "Email send failed — see log"
 fi
 
@@ -565,10 +596,10 @@ NTFY_TOPIC=$(cat "$NTFY_TOPIC_FILE" 2>/dev/null)
 if [ -n "$NTFY_TOPIC" ]; then
   case "$STATUS" in
     OK*) _t="teamkb-compile ${MODE} OK"; [ "$GRADUATED" -eq 1 ] && _t="🎓 teamkb-compile graduated → AUTO"
-         curl -s -H "Title: ${_t}" -H "Priority: default" -H "Tags: brain" \
+         curl --connect-timeout 5 --max-time 15 -s -H "Title: ${_t}" -H "Priority: default" -H "Tags: brain" \
            -d "${TARGET}: ${STATUS}${GRAD_NOTE:+ — ${GRAD_NOTE}}" "https://ntfy.sh/$NTFY_TOPIC" >> "$LOG" 2>&1 || true ;;
     *)   _p="high"; [ "$ESC_PRIO" = "max" ] && _p="max"
-         curl -s -H "Title: ${ESC_PREFIX}teamkb-compile FAILED" -H "Priority: ${_p}" -H "Tags: rotating_light" \
+         curl --connect-timeout 5 --max-time 15 -s -H "Title: ${ESC_PREFIX}teamkb-compile FAILED" -H "Priority: ${_p}" -H "Tags: rotating_light" \
            -d "${TARGET}: ${STATUS} (${CONSEC}-day streak). Log: $LOG" "https://ntfy.sh/$NTFY_TOPIC" >> "$LOG" 2>&1 || true ;;
   esac
 fi

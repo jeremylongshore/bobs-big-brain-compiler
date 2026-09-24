@@ -228,6 +228,17 @@ describe('getUncompiledSources', () => {
     expect(result.value).toHaveLength(1);
     expect(result.value[0]!.id).toBe('s1');
   });
+
+  it('returns only the newest uncompiled version of a source path', () => {
+    insertSource(db, { id: 's-old', path: 'raw/notes/a.md', ingestedAt: T1 });
+    insertSource(db, { id: 's-current', path: 'raw/notes/a.md', ingestedAt: T2 });
+
+    const result = getUncompiledSources(db);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toHaveLength(1);
+    expect(result.value[0]!.id).toBe('s-current');
+  });
 });
 
 describe('markStale', () => {

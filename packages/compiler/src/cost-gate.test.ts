@@ -46,6 +46,34 @@ function insertCompilation(
   );
 }
 
+/** Insert one provider call in the operation ledger (the authoritative spend meter). */
+function insertInferenceOperation(
+  db: Database,
+  opts: {
+    id: string;
+    type: string;
+    inputTokens: number;
+    outputTokens: number;
+    occurredAt: string;
+    model?: string;
+  },
+): void {
+  db.prepare(
+    `INSERT INTO inference_operations
+       (id, run_id, operation_sequence, operation_type, occurred_at,
+        model, input_tokens, output_tokens)
+     VALUES (?, ?, 1, ?, ?, ?, ?, ?)`,
+  ).run(
+    opts.id,
+    `run-${opts.id}`,
+    opts.type,
+    opts.occurredAt,
+    opts.model ?? 'deepseek-chat',
+    opts.inputTokens,
+    opts.outputTokens,
+  );
+}
+
 const NOW = Date.parse('2026-06-30T12:00:00.000Z');
 const TODAY = '2026-06-30';
 
@@ -60,6 +88,29 @@ describe('cost gate — pricing basis (R12: DeepSeek, not Anthropic)', () => {
     expect(resolvePricingModel('DeepSeek-Reasoner')).toBe('deepseek-chat');
     // Non-deepseek passes through (calculateCost then falls back to Sonnet).
     expect(resolvePricingModel('claude-sonnet-4-6')).toBe('claude-sonnet-4-6');
+  });
+
+  it('prices any minimax-family tag at MiniMax-M3 rates, normalizing case', () => {
+    // MODEL_PRICING is keyed on the vendor's mixed-case `MiniMax-M3`, but rows
+    // may be tagged lowercase; an exact-match lookup would miss and silently
+    // fall back to Sonnet (~12x over), which at the $1/day ceiling would start
+    // refusing on-push compiles.
+    expect(resolvePricingModel('MiniMax-M3')).toBe('MiniMax-M3');
+    expect(resolvePricingModel('minimax-m3')).toBe('MiniMax-M3');
+    expect(resolvePricingModel('MiniMax-M2')).toBe('MiniMax-M3');
+  });
+
+  it('keeps MiniMax between DeepSeek and Sonnet — never the Sonnet fallback', () => {
+    const tokens = 1_000_000;
+    const deepseek = costOfTokens(tokens, 'deepseek-chat');
+    const minimax = costOfTokens(tokens, 'MiniMax-M3');
+    const sonnet = costOfTokens(tokens, 'claude-sonnet-4-6');
+    // MiniMax: 0.7M*$0.30 + 0.3M*$1.20 = $0.21 + $0.36 = $0.57
+    expect(minimax).toBeCloseTo(0.57, 3);
+    // Biased HIGH vs DeepSeek (never silently under-priced)...
+    expect(minimax).toBeGreaterThan(deepseek);
+    // ...but nowhere near the Sonnet fallback that an unknown tag would inherit.
+    expect(minimax).toBeLessThan(sonnet / 5);
   });
 
   it('costs ~50x less on DeepSeek than on Anthropic Sonnet for the same tokens', () => {
@@ -118,11 +169,12 @@ describe('cost gate — daily ceiling enforcement', () => {
   it('counts USD already spent TODAY toward the ceiling', () => {
     // A small compile that would pass on its own is deferred because today’s
     // prior spend already sits near the ceiling.
-    insertCompilation(db, {
+    insertInferenceOperation(db, {
       id: 'today-big',
       type: 'topic',
-      tokensUsed: 300_000_000, // huge spend already today (~$96 on DeepSeek)
-      compiledAt: `${TODAY}T02:00:00.000Z`,
+      inputTokens: 210_000_000,
+      outputTokens: 90_000_000,
+      occurredAt: `${TODAY}T02:00:00.000Z`,
     });
 
     const result = evaluateCostGate(
@@ -157,6 +209,41 @@ describe('cost gate — daily ceiling enforcement', () => {
     expect(result.value.projectedDayTotalUsd).toBeLessThanOrEqual(1.0);
   });
 
+  it('prices a multi-page response once from the operation ledger', () => {
+    insertInferenceOperation(db, {
+      id: 'concept-call',
+      type: 'concept',
+      inputTokens: 8_000,
+      outputTokens: 2_000,
+      occurredAt: `${TODAY}T03:00:00.000Z`,
+      model: 'MiniMax-M3',
+    });
+    // One response emitted five pages. Legacy page rows each carry the same
+    // 10k batch total; none may multiply actual spend or future projections.
+    for (let i = 0; i < 5; i++) {
+      insertCompilation(db, {
+        id: `concept-page-${i}`,
+        type: 'concept',
+        tokensUsed: 10_000,
+        compiledAt: `${TODAY}T03:00:01.000Z`,
+        model: 'MiniMax-M3',
+      });
+    }
+
+    const result = evaluateCostGate(
+      db,
+      { affectedTypes: ['concept'], nowMs: NOW, lastCompileAtMs: null },
+      { dailyCeilingUsd: 1, model: 'MiniMax-M3' },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const oneCallCost = (8_000 * 0.3 + 2_000 * 1.2) / 1_000_000;
+    expect(result.value.spentTodayUsd).toBeCloseTo(oneCallCost, 10);
+    expect(result.value.projectedCostUsd).toBeCloseTo(oneCallCost, 10);
+    expect(result.value.lineItems[0]?.count).toBe(1);
+    expect(result.value.lineItems[0]?.fromHistory).toBe(true);
+  });
+
   it('an empty affected set is a no-op proceed at $0', () => {
     const result = evaluateCostGate(
       db,
@@ -169,6 +256,32 @@ describe('cost gate — daily ceiling enforcement', () => {
     expect(result.value.projectedCostUsd).toBe(0);
   });
 
+  it('keeps pricing and usage evidence but does not defer in explicit unmetered mode', () => {
+    insertInferenceOperation(db, {
+      id: 'unmetered-prior-spend',
+      type: 'topic',
+      inputTokens: 210_000_000,
+      outputTokens: 90_000_000,
+      occurredAt: `${TODAY}T02:00:00.000Z`,
+      model: 'MiniMax-M3',
+    });
+
+    const result = evaluateCostGate(
+      db,
+      { affectedTypes: ['summary'], nowMs: NOW, lastCompileAtMs: null },
+      {
+        dailyCeilingUsd: 0.01,
+        enforceDailyCeiling: false,
+        model: 'MiniMax-M3',
+      },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.decision).toBe('proceed');
+    expect(result.value.spentTodayUsd).toBeGreaterThan(0.01);
+    expect(result.value.reason).toMatch(/unmetered/);
+  });
+
   // The today-spend query was changed from `substr(compiled_at,1,10) = ?` to a
   // SARGable half-open range `compiled_at >= dayStart AND < nextDayStart`
   // (Gemini review, PR #154 — index-friendly, same result). Prove the range
@@ -176,25 +289,28 @@ describe('cost gate — daily ceiling enforcement', () => {
   // tomorrow out.
   it('counts EXACTLY today (UTC) toward spend — SARGable range boundary check', () => {
     // Huge spend today at the very start of the UTC day (00:00:00) — must count.
-    insertCompilation(db, {
+    insertInferenceOperation(db, {
       id: 'today-start',
       type: 'topic',
-      tokensUsed: 300_000_000, // ~$96 on DeepSeek → well over a $1 ceiling
-      compiledAt: `${TODAY}T00:00:00.000Z`,
+      inputTokens: 210_000_000,
+      outputTokens: 90_000_000,
+      occurredAt: `${TODAY}T00:00:00.000Z`,
     });
     // Yesterday just before midnight — must NOT count.
-    insertCompilation(db, {
+    insertInferenceOperation(db, {
       id: 'yesterday-late',
       type: 'topic',
-      tokensUsed: 300_000_000,
-      compiledAt: '2026-06-29T23:59:59.999Z',
+      inputTokens: 210_000_000,
+      outputTokens: 90_000_000,
+      occurredAt: '2026-06-29T23:59:59.999Z',
     });
     // Tomorrow just after midnight — must NOT count.
-    insertCompilation(db, {
+    insertInferenceOperation(db, {
       id: 'tomorrow-early',
       type: 'topic',
-      tokensUsed: 300_000_000,
-      compiledAt: '2026-07-01T00:00:00.000Z',
+      inputTokens: 210_000_000,
+      outputTokens: 90_000_000,
+      occurredAt: '2026-07-01T00:00:00.000Z',
     });
 
     const result = evaluateCostGate(
@@ -212,11 +328,12 @@ describe('cost gate — daily ceiling enforcement', () => {
   });
 
   it('spends $0 today when the only prior compile was yesterday (range excludes it)', () => {
-    insertCompilation(db, {
+    insertInferenceOperation(db, {
       id: 'yesterday-only',
       type: 'summary',
-      tokensUsed: 5_000,
-      compiledAt: '2026-06-29T12:00:00.000Z',
+      inputTokens: 3_500,
+      outputTokens: 1_500,
+      occurredAt: '2026-06-29T12:00:00.000Z',
     });
     const result = evaluateCostGate(
       db,
