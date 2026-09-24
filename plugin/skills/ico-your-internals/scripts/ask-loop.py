@@ -18,13 +18,14 @@ script just receives whichever mode was selected and forwards it to
 iter_prompts. Default 'primary' matches v0.1 cost shape.
 
 Usage (called from run.sh, not invoked directly by operators):
-    ask-loop.py <bank_path> <ws> <cache_root> <pub_dir> <run_id> <mode>
+    ask-loop.py <bank_path> <ws> <cache_root> <run_id> <mode>
 
 Exit codes:
     0  — receipts written (possibly with per-prompt friction entries)
     2  — argument shape wrong
     3  — bank failed to load
 """
+
 from __future__ import annotations
 
 import json
@@ -36,7 +37,7 @@ import time
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from bank import BankSchemaError, iter_prompts, load_bank  # noqa: E402
+from bank import BankSchemaError, iter_prompts, load_bank
 
 
 def _friction(path: pathlib.Path, payload: dict) -> None:
@@ -45,14 +46,13 @@ def _friction(path: pathlib.Path, payload: dict) -> None:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 7:
+    if len(argv) != 6:
         print(
-            "usage: ask-loop.py <bank_path> <ws> <cache_root> <pub_dir> "
-            "<run_id> <mode>",
+            "usage: ask-loop.py <bank_path> <ws> <cache_root> <run_id> <mode>",
             file=sys.stderr,
         )
         return 2
-    _, bank_path, ws, cache_root, pub_dir, run_id, mode = argv
+    _, bank_path, ws, cache_root, run_id, mode = argv
 
     try:
         bank = load_bank(bank_path)
@@ -61,7 +61,7 @@ def main(argv: list[str]) -> int:
         return 3
 
     receipts_path = pathlib.Path(cache_root) / "receipts.jsonl"
-    friction_path = pathlib.Path(pub_dir) / "friction.jsonl"
+    friction_path = pathlib.Path(cache_root) / "friction.jsonl"
 
     for prompt in iter_prompts(bank, mode=mode):
         intent_id = prompt["intent_id"]
@@ -79,6 +79,7 @@ def main(argv: list[str]) -> int:
                 capture_output=True,
                 text=True,
                 timeout=180,
+                check=False,
             )
         except subprocess.TimeoutExpired:
             _friction(
@@ -109,7 +110,9 @@ def main(argv: list[str]) -> int:
                     "paraphrase_idx": paraphrase_idx,
                     "stage": "ask",
                     "severity": "error",
-                    "message": stderr_tail[-1] if stderr_tail else "ico ask non-zero exit",
+                    "message": stderr_tail[-1]
+                    if stderr_tail
+                    else "ico ask non-zero exit",
                     "exit_code": result.returncode,
                     "recommend_bead": True,
                 },

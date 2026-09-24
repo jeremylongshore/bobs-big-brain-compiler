@@ -242,6 +242,55 @@ interface OpenAiChatResponse {
   model?: string;
 }
 
+/**
+ * Strip `<think>…</think>` reasoning blocks from an OpenAI-wire completion.
+ *
+ * MiniMax-M3 (the live compile provider) emits its chain-of-thought as a literal
+ * `<think>` block inline in `message.content` while leaving `reasoning_content`
+ * EMPTY — verified against the live API on 2026-07-31. That shape defeats the
+ * usual `content || reasoning_content` fallback: the fallback never fires
+ * because `content` is non-empty, so the think block reaches the caller as if it
+ * were the answer. Every compiler pass parses that text as the answer (usually
+ * as JSON), so an un-stripped block is not cosmetic — it makes the pass output
+ * unparseable and silently compiles 0 pages.
+ *
+ * Implemented as a linear `indexOf` scan rather than a
+ * `/<think>[\s\S]*?<\/think>/g` regex: that is a quantifier applied to untrusted
+ * model output, and this codebase deliberately avoids that shape elsewhere (see
+ * `trimTrailingSlash` in `@ico/types`). A scan has no backtracking to reason
+ * about.
+ *
+ * An UNTERMINATED `<think>` (the model hit its token budget mid-thought) yields
+ * the empty string rather than the raw reasoning — a truncated thought is not an
+ * answer, and passing reasoning prose to a JSON parser is strictly worse than
+ * reporting no output. Returning empty also lets the caller's
+ * `|| reasoning_content` fallback still take its turn.
+ *
+ * Text containing no think block is returned byte-identical, so every other
+ * openai-wire provider (OpenAI, Groq, NVIDIA, DeepSeek, local) is unaffected.
+ */
+export function stripThinkBlocks(text: string): string {
+  const OPEN = '<think>';
+  const CLOSE = '</think>';
+  if (!text.includes(OPEN)) return text;
+
+  let out = '';
+  let cursor = 0;
+  while (cursor < text.length) {
+    const open = text.indexOf(OPEN, cursor);
+    if (open === -1) {
+      out += text.slice(cursor);
+      break;
+    }
+    out += text.slice(cursor, open);
+    const close = text.indexOf(CLOSE, open + OPEN.length);
+    // Unterminated block: everything after it is truncated reasoning — drop it.
+    if (close === -1) break;
+    cursor = close + CLOSE.length;
+  }
+  return out.trim();
+}
+
 /** Is this model id usable by an OpenAI-wire backend (i.e. not an Anthropic model)? */
 function isOpenAiWireModel(model: string): boolean {
   // An Anthropic model name (claude-*) is meaningless to an OpenAI-wire backend;
@@ -323,7 +372,14 @@ function createOpenAiAdapter(provider: ProviderConfig, apiKey: string): Anthropi
           // Prefer `content`; fall back to `reasoning_content` when a reasoning
           // model leaves `content` empty, so an explicitly-configured reasoning
           // model still yields output instead of silently compiling 0 pages.
-          const text = choice?.message?.content || choice?.message?.reasoning_content || '';
+          //
+          // `content` is think-stripped FIRST (MiniMax-M3 inlines
+          // `<think>…</think>` there and leaves `reasoning_content` empty — see
+          // stripThinkBlocks). Stripping before the `||` matters: a response that
+          // is *only* a think block strips to '' and correctly falls through to
+          // `reasoning_content` instead of returning chain-of-thought as output.
+          const rawContent = choice?.message?.content ?? '';
+          const text = stripThinkBlocks(rawContent) || choice?.message?.reasoning_content || '';
           return {
             content: [{ type: 'text', text }],
             usage: {

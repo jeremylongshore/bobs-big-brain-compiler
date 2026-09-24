@@ -2,22 +2,23 @@
 # run.sh — orchestrate a dog-food session.
 #
 # Usage:
-#   run.sh --target <path> --bank <bank.yaml> [--repo-root <path>] [--dry]
+#   run.sh --target <path> --bank <bank.yaml> [--repo-root <path>]
+#          [--paraphrases primary|all] [--approve-budget] [--dry]
 #
 # Creates:
 #   ~/.cache/ico-your-internals/runs/<run-id>/workspace/      (ICO writes here)
 #   ~/.cache/ico-your-internals/runs/<run-id>/receipts.jsonl  (raw Q/A — local only)
 #   ~/.cache/ico-your-internals/runs/<run-id>/friction.jsonl  (errors)
 #
-# The skill's verify.py + render-summary.py turn these into the public
-# artifacts in <repo-root>/dogfood/runs/<run-id>/.
+# The skill's verify.py + render-summary.py turn these into allowlisted,
+# redacted public artifacts in <repo-root>/dogfood/runs/<run-id>/.
 
 set -euo pipefail
 
 usage() {
   cat <<EOF >&2
 usage: $(basename "$0") --target <path> --bank <bank.yaml> [--repo-root <path>]
-                       [--paraphrases primary|all] [--dry]
+                       [--paraphrases primary|all] [--approve-budget] [--dry]
 
   --target        Absolute or ~-relative path to the project being dog-fooded.
   --bank          Path to a question-bank YAML (v1 or v2 schema).
@@ -27,19 +28,22 @@ usage: $(basename "$0") --target <path> --bank <bank.yaml> [--repo-root <path>]
                   paraphrase). Cost-equivalent to v0.1.
                   all — every declared paraphrase per intent. Cost scales
                   with paraphrase count. See ADR-032.
+  --approve-budget  Confirm that the displayed estimate above \$0.50 was
+                    explicitly approved by the operator.
   --dry           Plan + budget estimate only; no Claude calls, no writes.
 EOF
   exit 2
 }
 
 # --- args ---
-TARGET="" BANK="" REPO_ROOT="" DRY=0 PARAPHRASES="primary"
+TARGET="" BANK="" REPO_ROOT="" DRY=0 APPROVE_BUDGET=0 PARAPHRASES="primary"
 while [ $# -gt 0 ]; do
   case "$1" in
     --target)       TARGET="$2"; shift 2 ;;
     --bank)         BANK="$2"; shift 2 ;;
     --repo-root)    REPO_ROOT="$2"; shift 2 ;;
     --paraphrases)  PARAPHRASES="$2"; shift 2 ;;
+    --approve-budget) APPROVE_BUDGET=1; shift ;;
     --dry)          DRY=1; shift ;;
     -h|--help)      usage ;;
     *)              echo "unknown arg: $1" >&2; usage ;;
@@ -63,10 +67,16 @@ BANK="$(realpath "$BANK")" || { echo "bank not found: $BANK" >&2; exit 1; }
 
 # --- preflight ---
 echo "[ico-your-internals] preflight…" >&2
-command -v ico >/dev/null   || { echo "ico not installed. npm install -g intentional-cognition-os" >&2; exit 1; }
 command -v python3 >/dev/null || { echo "python3 required" >&2; exit 1; }
 command -v jq >/dev/null      || { echo "jq required" >&2; exit 1; }
-[ -n "${ANTHROPIC_API_KEY:-}" ] || { echo "ANTHROPIC_API_KEY not set" >&2; exit 1; }
+
+if ! find "$TARGET" -type f -name "*.md" \
+  -not -path "*/node_modules/*" -not -path "*/.git/*" \
+  -not -path "*/dist/*" -not -path "*/coverage/*" \
+  -print -quit 2>/dev/null | grep -q .; then
+  echo "target contains no eligible markdown files: $TARGET" >&2
+  exit 3
+fi
 
 # Bank shape check — must declare a non-empty questions list
 if ! python3 -c "
@@ -105,12 +115,10 @@ CACHE_ROOT="$HOME/.cache/ico-your-internals/runs/$RUN_ID"
 WS="$CACHE_ROOT/$TARGET_SLUG"
 PUB_DIR="$REPO_ROOT/dogfood/runs/$RUN_ID"
 
-mkdir -p "$CACHE_ROOT" "$PUB_DIR"
-
 # --- budget estimate ---
 echo "[ico-your-internals] estimating budget…" >&2
 BUDGET_JSON="$("$SCRIPT_DIR/estimate-budget.sh" "$TARGET" "$BANK" "$PARAPHRASES")"
-echo "$BUDGET_JSON" | tee "$CACHE_ROOT/budget.json" >&2
+echo "$BUDGET_JSON" >&2
 
 # ask-loop.py knows how to count paraphrases under each mode — the plan
 # subcommand reads the same bank.py code path the real run uses, so the
@@ -127,6 +135,25 @@ if [ "$DRY" -eq 1 ]; then
   exit 0
 fi
 
+BUDGET_REQUIRES_APPROVAL="$(printf '%s' "$BUDGET_JSON" | python3 -c '
+import json, sys
+estimate = float(json.load(sys.stdin)["dollar_est"])
+print(1 if estimate > 0.50 else 0)
+')"
+if [ "$BUDGET_REQUIRES_APPROVAL" -eq 1 ] && [ "$APPROVE_BUDGET" -ne 1 ]; then
+  echo "[ico-your-internals] budget approval required: review the estimate, then rerun with --approve-budget" >&2
+  exit 4
+fi
+
+command -v ico >/dev/null || {
+  echo "ico not installed. npm install -g intentional-cognition-os" >&2
+  exit 1
+}
+[ -n "${ANTHROPIC_API_KEY:-}" ] || { echo "ANTHROPIC_API_KEY not set" >&2; exit 1; }
+
+mkdir -p "$CACHE_ROOT"
+printf '%s\n' "$BUDGET_JSON" > "$CACHE_ROOT/budget.json"
+
 # --- manifest ---
 cat > "$CACHE_ROOT/manifest.json" <<EOF
 {
@@ -138,12 +165,10 @@ cat > "$CACHE_ROOT/manifest.json" <<EOF
   "ico_version": "$(ico --version 2>/dev/null || echo unknown)",
   "started_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "workspace": "$WS",
-  "public_dir": "$PUB_DIR",
   "paraphrases_mode": "$PARAPHRASES",
   "asks_planned": $ASKS_PLANNED
 }
 EOF
-cp "$CACHE_ROOT/manifest.json" "$PUB_DIR/manifest.json"
 
 # --- ingest + compile ---
 # IMPORTANT: --workspace is a GLOBAL flag on `ico`, not a subcommand option.
@@ -156,7 +181,7 @@ echo "[ico-your-internals] ico init + mount + ingest…" >&2
 ico init "$TARGET_SLUG" --path "$CACHE_ROOT" || {
   jq -nc --arg msg "ico init failed" --arg stage init --arg run "$RUN_ID" \
     '{run_id:$run, stage:$stage, severity:"error", message:$msg, recommend_bead:true}' \
-    >> "$PUB_DIR/friction.jsonl"
+    >> "$CACHE_ROOT/friction.jsonl"
   exit 1
 }
 
@@ -164,7 +189,7 @@ ico init "$TARGET_SLUG" --path "$CACHE_ROOT" || {
 ico --workspace "$WS" mount add target "$TARGET" || {
   jq -nc --arg msg "ico mount add failed" --arg stage mount --arg run "$RUN_ID" \
     '{run_id:$run, stage:$stage, severity:"error", message:$msg, recommend_bead:true}' \
-    >> "$PUB_DIR/friction.jsonl"
+    >> "$CACHE_ROOT/friction.jsonl"
   exit 1
 }
 
@@ -175,7 +200,7 @@ while IFS= read -r -d '' f; do
   ico --workspace "$WS" ingest "$f" --yes 2>> "$CACHE_ROOT/ingest.stderr" || {
     jq -nc --arg msg "ico ingest failed on $f" --arg stage ingest --arg run "$RUN_ID" --arg file "$f" \
       '{run_id:$run, stage:$stage, severity:"warning", message:$msg, file:$file, recommend_bead:false}' \
-      >> "$PUB_DIR/friction.jsonl"
+      >> "$CACHE_ROOT/friction.jsonl"
   }
 done < <(find "$TARGET" -type f -name "*.md" \
   -not -path "*/node_modules/*" -not -path "*/.git/*" \
@@ -192,7 +217,7 @@ for pass in sources concepts topics links contradictions gaps; do
     msg="$(tail -1 "$CACHE_ROOT/compile.stderr" 2>/dev/null || echo "ico compile $pass failed")"
     jq -nc --arg msg "$msg" --arg stage compile --arg pass "$pass" --arg run "$RUN_ID" \
       '{run_id:$run, stage:$stage, pass:$pass, severity:"error", message:$msg, recommend_bead:true}' \
-      >> "$PUB_DIR/friction.jsonl"
+      >> "$CACHE_ROOT/friction.jsonl"
     exit 1
   }
 done
@@ -205,7 +230,7 @@ done
 # produce one synthetic primary paraphrase per intent (style=legacy).
 echo "[ico-your-internals] ask loop ($ASKS_PLANNED asks, mode=$PARAPHRASES)…" >&2
 
-python3 "$SCRIPT_DIR/ask-loop.py" "$BANK" "$WS" "$CACHE_ROOT" "$PUB_DIR" "$RUN_ID" "$PARAPHRASES" || {
+python3 "$SCRIPT_DIR/ask-loop.py" "$BANK" "$WS" "$CACHE_ROOT" "$RUN_ID" "$PARAPHRASES" || {
   echo "[ico-your-internals] ask-loop.py exited non-zero" >&2
   exit 1
 }
