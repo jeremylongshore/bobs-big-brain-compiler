@@ -37,18 +37,25 @@ PRAGMA synchronous = NORMAL;
 | `busy_timeout` | `5000`   | Waits up to 5 seconds for a write lock before returning SQLITE_BUSY.    |
 | `synchronous`  | `NORMAL` | Balanced durability — safe with WAL mode, avoids fsync on every commit. |
 
-### 2.1 Workspace Lockfile
+### 2.1 Workspace and Brain Writer Locking
 
-SQLite WAL mode handles read/write concurrency within a single process. For multi-process protection (e.g., two `ico` commands running simultaneously), the kernel acquires a lockfile at `workspace/.ico/state.lock` before any write transaction.
+SQLite WAL mode handles read/write concurrency within a single process, while the canonical
+multi-artifact writer protocol protects CLI operations that span the database and filesystem.
+Those operations use `${TEAMKB_HOME}/.write.lock` (default `~/.teamkb/.write.lock`, overridable
+with `TEAMKB_LOCK`) through the kernel's `withWriteLock()` helper. The lock is deliberately
+shared with the backup, plugin, and compile writers; it is not a workspace-local
+`workspace/.ico/state.lock`.
 
-**Protocol:**
+The live mutation paths for `ico ingest` (single and batch), `ico promote --yes`,
+`ico unpromote --yes`, and incremental `ico compile` acquire that lock around their durable
+write phase. Each waits up to 10 seconds, then returns a retryable busy result without invoking
+the mutation callback. If `flock` is unavailable, the callback runs in explicit degraded mode
+and the CLI emits a warning. Dry-runs, previews, and confirmation-refusal paths do not acquire
+the writer lock because they do not mutate durable state. Read-only operations continue to rely
+on WAL snapshots and do not acquire the writer lock.
 
-1. Attempt to acquire exclusive lock on `workspace/.ico/state.lock` using `flock()` (non-blocking).
-2. If lock acquired: proceed with the write transaction, release lock on completion.
-3. If lock not acquired: wait up to 5 seconds with retry, then fail with `ICO_LOCK_TIMEOUT` error.
-4. Read-only operations do not acquire the lockfile — WAL mode handles concurrent reads natively.
-
-This is a cooperative lock. It protects against accidental concurrent writes from the CLI, not against adversarial access.
+This is a cooperative lock. It protects against accidental concurrent writes from the CLI, not
+against adversarial access.
 
 ---
 
