@@ -52,6 +52,24 @@ line in lock-step. `mutation.kill_rate: 55` reflects the locked kernel
 baseline minus the 5-point tolerance band (baseline 60.25%, measured
 2026-05-25, bead 0wy.1).
 
+## Model-output quality evidence
+
+The package unit suite mocks `ClaudeClient` responses. That is intentional:
+it gives deterministic coverage of validation, receipts, provenance, and
+failure handling without making CI depend on a provider or API budget. Those
+tests are not evidence that a live model's summaries or syntheses are useful.
+
+The live signal is the manual `workflow_dispatch` job in
+`.github/workflows/golden-corpus.yml`. It runs MiniMax-M3 through all six
+compiler passes over `tests/fixtures/populated/raw`, scores one source page,
+concept page, and topic page with the compilation-quality eval rubrics, and
+uploads a machine-readable receipt. Missing provider configuration fails the
+run; it is never recorded as a green skip.
+
+See `000-docs/043-AT-EVAL-golden-corpus-quality-run-2026-08-02.md` for the
+operator runbook. Keep deterministic test counts and live rubric scores as
+separate evidence classes.
+
 ## Waived layers
 
 | Layer             | Reason                                                                                                           |
@@ -63,7 +81,7 @@ baseline minus the 5-point tolerance band (baseline 60.25%, measured
 
 ## Installed gates (observational — updated by `/audit-tests` + `/implement-tests`)
 
-State as of 2026-05-19 after the `/implement-tests` install pass.
+State as of 2026-08-02 after the l13.18 audit refresh.
 
 | Layer | Tool                                              | Status    | Wired                                                                           |
 | ----- | ------------------------------------------------- | --------- | ------------------------------------------------------------------------------- |
@@ -84,7 +102,7 @@ State as of 2026-05-19 after the `/implement-tests` install pass.
 | L3    | Stryker (mutation, kernel)                        | installed | `.github/workflows/mutation.yml` (PR + nightly, `mutation-test` job, floor 55%) |
 | L3    | dependency-cruiser (architecture)                 | installed | CI (Architecture Rules job)                                                     |
 | L3    | fast-check (property-based)                       | absent    | n/a — P2 follow-up                                                              |
-| L4    | `tests/integration/**`                            | installed | 1 starter (cross-package-boundary.test.ts)                                      |
+| L4    | `tests/integration/**`                            | installed | cross-package integration suite (25 tests in the current full gate)             |
 | L5    | OSV scanner (SCA)                                 | installed | CI (Security Audit job)                                                         |
 | L5    | CodeQL (SAST)                                     | installed | `.github/workflows/codeql.yml` (PR+weekly)                                      |
 | L5    | `evals/` framework (functional quality)           | installed | manual + CI-eligible                                                            |
@@ -128,11 +146,7 @@ State as of 2026-05-19 after the `/implement-tests` install pass.
 
 ## Last audit
 
-- **Date**: 2026-05-19
-- **Skill**: `/audit-tests` (v5 canonical)
-- **Grade**: B- (76/100)
-- **P0 gaps**: 4
-- **P1 gaps**: 8
-- **P2 gaps**: 2
-- **Escape-scan**: clean
+- **Date**: 2026-08-02
+- **Method**: l13.18 manual refresh against repository gates
 - **Report**: `TEST_AUDIT.md`
+- **Live model-output receipt**: produced only by the manual golden-corpus workflow; no score is assumed before a run

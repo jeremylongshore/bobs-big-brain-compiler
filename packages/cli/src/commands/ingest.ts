@@ -7,8 +7,9 @@
  * @module commands/ingest
  */
 
+import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { basename, extname, join, relative } from 'node:path';
+import { basename, extname, join, relative, resolve, sep } from 'node:path';
 import { createInterface } from 'node:readline';
 
 import type { Command } from 'commander';
@@ -35,6 +36,11 @@ import {
   formatWarning,
 } from '../lib/output.js';
 import { resolveWorkspace } from '../lib/workspace-resolver.js';
+import {
+  isBrainWriteLockBusyError,
+  warnIfWriteLockDegraded,
+  withBrainWriteLock,
+} from '../lib/write-lock.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -98,6 +104,19 @@ export interface BatchIngestSummary {
 /** File extensions accepted by the ingest pipeline. */
 export const SUPPORTED_EXTENSIONS = new Set(['.md', '.mdx', '.pdf', '.html', '.htm', '.txt']);
 
+export interface ScanDirectoryOptions {
+  /** For a Git worktree, enumerate tracked + non-ignored untracked files. */
+  respectGitIgnore?: boolean;
+}
+
+function isEligibleRelativePath(path: string): boolean {
+  const segments = path.split(/[\\/]/);
+  return (
+    !segments.some((segment) => segment.startsWith('.') || segment === 'node_modules') &&
+    SUPPORTED_EXTENSIONS.has(extname(path).toLowerCase())
+  );
+}
+
 /**
  * Recursively scan a directory and return all files whose extensions are in
  * `SUPPORTED_EXTENSIONS`. Hidden entries (starting with `.`) and
@@ -107,7 +126,37 @@ export const SUPPORTED_EXTENSIONS = new Set(['.md', '.mdx', '.pdf', '.html', '.h
  * @param dirPath - Absolute path to the directory to scan.
  * @returns Sorted array of absolute file paths.
  */
-export function scanDirectory(dirPath: string): string[] {
+export function scanDirectory(dirPath: string, options?: ScanDirectoryOptions): string[] {
+  const absoluteRoot = resolve(dirPath);
+  if (options?.respectGitIgnore === true && existsSync(join(absoluteRoot, '.git'))) {
+    const result = spawnSync(
+      'git',
+      [
+        '-C',
+        absoluteRoot,
+        'ls-files',
+        '--cached',
+        '--others',
+        '--exclude-standard',
+        '--deduplicate',
+        '-z',
+      ],
+      { encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 },
+    );
+    if (result.error !== undefined) throw result.error;
+    if (result.status !== 0) {
+      const detail = result.stderr.toString('utf-8').trim() || `git exited ${result.status}`;
+      throw new Error(`Could not enumerate Git mount ${absoluteRoot}: ${detail}`);
+    }
+    return result.stdout
+      .toString('utf-8')
+      .split('\0')
+      .filter((path) => path.length > 0 && isEligibleRelativePath(path))
+      .map((path) => resolve(absoluteRoot, path))
+      .filter((path) => path.startsWith(`${absoluteRoot}${sep}`) && existsSync(path))
+      .sort();
+  }
+
   const results: string[] = [];
 
   function walk(dir: string): void {
@@ -116,7 +165,7 @@ export function scanDirectory(dirPath: string): string[] {
       const fullPath = join(dir, entry.name);
       if (entry.isDirectory()) {
         walk(fullPath);
-      } else if (SUPPORTED_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
+      } else if (isEligibleRelativePath(entry.name)) {
         results.push(fullPath);
       }
     }
@@ -144,11 +193,11 @@ export function scanDirectory(dirPath: string): string[] {
  * @param globalOpts - Global CLI options forwarded to each `runIngest` call.
  * @returns A summary object with counts of ingested, skipped, and errored files.
  */
-export function runBatchIngest(
+export async function runBatchIngest(
   dirPath: string,
   ingestOpts: IngestOptions,
   globalOpts: GlobalOptions,
-): BatchIngestSummary {
+): Promise<BatchIngestSummary> {
   const files = scanDirectory(dirPath);
   const summary: BatchIngestSummary = {
     total: files.length,
@@ -163,7 +212,7 @@ export function runBatchIngest(
   }
 
   for (const file of files) {
-    const result = runIngest(file, ingestOpts, globalOpts);
+    const result = await runIngest(file, ingestOpts, globalOpts);
     if (!result.ok) {
       summary.errors.push({ file, message: result.error.message });
       summary.skipped++;
@@ -237,11 +286,11 @@ export function slugify(filename: string): string {
  * @returns `{ ok: true, value: IngestResult }` on success (including no-ops),
  *          or `{ ok: false, error: Error }` on failure.
  */
-export function runIngest(
+export async function runIngest(
   filePath: string,
   ingestOpts: IngestOptions,
   globalOpts: GlobalOptions,
-): { ok: true; value: IngestResult } | { ok: false; error: Error } {
+): Promise<{ ok: true; value: IngestResult } | { ok: false; error: Error }> {
   // 1. Resolve workspace
   const wsResolveOpts =
     globalOpts.workspace !== undefined ? { workspace: globalOpts.workspace } : {};
@@ -310,6 +359,41 @@ export function runIngest(
       ),
     };
   }
+
+  // The expensive read/disclosure work above is intentionally outside the
+  // critical section. Only the DB + raw/ + trace/audit mutation phase takes
+  // the shared writer lock.
+  const lockResult = await withBrainWriteLock(() =>
+    runIngestMutation({
+      filePath,
+      ingestOpts,
+      globalOpts,
+      wsRoot,
+      dbPath,
+      sourceType,
+      hash,
+    }),
+  );
+  if (!lockResult.ok) return lockResult;
+  if (!lockResult.value.locked) warnIfWriteLockDegraded(globalOpts.json === true);
+  return lockResult.value.value;
+}
+
+interface IngestMutationInput {
+  filePath: string;
+  ingestOpts: IngestOptions;
+  globalOpts: GlobalOptions;
+  wsRoot: string;
+  dbPath: string;
+  sourceType: SourceType;
+  hash: string;
+}
+
+/** Execute the state/filesystem mutation portion of ingest under the writer lock. */
+function runIngestMutation(
+  input: IngestMutationInput,
+): { ok: true; value: IngestResult } | { ok: false; error: Error } {
+  const { filePath, ingestOpts, globalOpts, wsRoot, dbPath, sourceType, hash } = input;
 
   // 6. Build destination path: workspace/raw/<subdir>/<slug>
   const subdir = TYPE_TO_SUBDIR[sourceType];
@@ -551,6 +635,7 @@ export function register(program: Command): void {
         let batchIngested = 0;
         let batchAlreadyIngested = 0;
         let batchSkipped = 0;
+        let batchLockBusy = false;
         const batchErrors: Array<{ file: string; message: string }> = [];
 
         for (const file of files) {
@@ -576,10 +661,11 @@ export function register(program: Command): void {
             process.exit(1);
           }
 
-          const result = runIngest(file, ingestOpts, global);
+          const result = await runIngest(file, ingestOpts, global);
           if (!result.ok) {
             process.stderr.write(formatError(`${basename(file)}: ${result.error.message}`) + '\n');
             batchErrors.push({ file, message: result.error.message });
+            batchLockBusy ||= isBrainWriteLockBusyError(result.error);
             batchSkipped++;
           } else if (result.value.alreadyIngested === true) {
             batchAlreadyIngested++;
@@ -598,7 +684,7 @@ export function register(program: Command): void {
         );
 
         if (batchErrors.length > 0) {
-          process.exit(1);
+          process.exit(batchLockBusy ? 4 : 1);
         }
         return;
       }
@@ -637,10 +723,10 @@ export function register(program: Command): void {
         }
       }
 
-      const result = runIngest(filePath, ingestOpts, global);
+      const result = await runIngest(filePath, ingestOpts, global);
       if (!result.ok) {
         process.stderr.write(formatError(result.error.message) + '\n');
-        process.exit(1);
+        process.exit(isBrainWriteLockBusyError(result.error) ? 4 : 1);
       }
     });
 }

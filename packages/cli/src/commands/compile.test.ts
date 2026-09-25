@@ -125,7 +125,7 @@ function writeSource(relPath: string, content: string): void {
  * `fn` exactly once so callers can still assert mock call counts afterward. The
  * name is retained from the pre-#154 process.exit era; the contract is a throw.
  */
-async function expectExit(code: number, fn: () => Promise<void>): Promise<void> {
+async function expectExit(code: number, fn: () => Promise<unknown>): Promise<void> {
   let thrown: unknown;
   try {
     await fn();
@@ -288,6 +288,20 @@ describe('runSummarize — preserved success / partial-success paths', () => {
     await runSummarize(makeCtx());
 
     expect(stdoutText()).toMatch(/No uncompiled sources found/);
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(summarizeSource).not.toHaveBeenCalled();
+  });
+
+  it('reports a clean selected-source no-op without telling maintenance to ingest', async () => {
+    vi.mocked(getUncompiledSources).mockReturnValue({
+      ok: true,
+      value: [{ id: 's1', path: 'raw/other.md' } as never],
+    });
+
+    await runSummarize(makeCtx(), ['raw/selected.md']);
+
+    expect(stdoutText()).toMatch(/No selected sources need summary compilation/);
+    expect(stdoutText()).not.toMatch(/Run `ico ingest` first/);
     expect(exitSpy).not.toHaveBeenCalled();
     expect(summarizeSource).not.toHaveBeenCalled();
   });

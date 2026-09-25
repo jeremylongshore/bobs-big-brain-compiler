@@ -15,6 +15,7 @@ const ALL_COMMANDS = [
   'init',
   'ingest',
   'mount',
+  'maintain',
   'compile',
   'ask',
   'research',

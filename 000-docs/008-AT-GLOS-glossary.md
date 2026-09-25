@@ -35,12 +35,12 @@ This glossary is the single source of truth for all terminology used in Intentio
 | Term                        | Definition                                                                                                                                                                                                                                   | Source                |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
 | **Layer (L1–L6)**           | One of six data layers in the architecture stack. Each layer has a defined storage path, mutability classification, and lifecycle.                                                                                                           | Blueprint Section 5.1 |
-| **Raw Corpus (L1)**         | Source-of-truth inputs: PDFs, articles, papers, repos, notes, transcripts, datasets. Append-only. Never modified after ingestion. Stored in `workspace/raw/`.                                                                                | Blueprint Section 5.1 |
+| **Raw Corpus (L1)**         | Source-of-truth inputs: PDFs, articles, papers, repos, notes, transcripts, datasets. Protocol-level append-only. Never modified after ingestion. Stored in `workspace/raw/`.                                                                 | Blueprint Section 5.1 |
 | **Semantic Knowledge (L2)** | Compiled markdown derived from L1. Includes source summaries, concept pages, topic pages, entity pages, backlinks, contradiction notes, open questions, and semantic indexes. Recompilable from L1 at any time. Stored in `workspace/wiki/`. | Blueprint Section 5.1 |
 | **Episodic Tasks (L3)**     | Temporary scoped workspaces created for complex questions. Each task has evidence, notes, drafts, critiques, and output directories. Created on demand, archived on completion. Stored in `workspace/tasks/<task-id>/`.                      | Blueprint Section 5.1 |
 | **Artifacts (L4)**          | Durable rendered outputs: markdown reports, Marp slides, charts, briefings, study materials. Promotable to L2 under explicit rules. Stored in `workspace/outputs/`.                                                                          | Blueprint Section 5.1 |
 | **Recall (L5)**             | Human retention materials: flashcards, quizzes, spaced repetition decks, weak-area reports. Generated from L2, adapted based on test results. Stored in `workspace/recall/`.                                                                 | Blueprint Section 5.1 |
-| **Audit & Policy (L6)**     | Deterministic control layer: provenance logs, task traces, policy decisions, promotion history, eval results. Append-only. Stored in `workspace/audit/`.                                                                                     | Blueprint Section 5.1 |
+| **Audit & Policy (L6)**     | Deterministic control layer: provenance logs, task traces, policy decisions, promotion history, eval results. Protocol-level append-only. Stored in `workspace/audit/`.                                                                      | Blueprint Section 5.1 |
 
 ---
 
@@ -48,12 +48,12 @@ This glossary is the single source of truth for all terminology used in Intentio
 
 | Term          | Definition                                                                                                                                                                                 | Source                |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------- |
-| **Canonical** | Data classification for source-of-truth inputs that the system never modifies. Raw corpus files (L1). Lifecycle: append-only, never mutated.                                               | Blueprint Section 5.2 |
+| **Canonical** | Data classification for source-of-truth inputs that the system never modifies. Raw corpus files (L1). Lifecycle: protocol-level append-only, never mutated.                                | Blueprint Section 5.2 |
 | **Compiled**  | Data classification for outputs derived from canonical sources via compilation. Wiki pages, summaries, concept pages (L2). Lifecycle: recompilable from L1.                                | Blueprint Section 5.2 |
 | **Ephemeral** | Data classification for temporary working data scoped to a task. Evidence folders, drafts, critiques (L3). Lifecycle: archived or pruned after task completion.                            | Blueprint Section 5.2 |
 | **Durable**   | Data classification for rendered outputs intended for reuse. Reports, slides, briefings (L4). Lifecycle: permanent unless user deletes.                                                    | Blueprint Section 5.2 |
 | **Adaptive**  | Data classification for content generated from compiled knowledge and modified by feedback. Flashcards, quiz results, retention data (L5). Lifecycle: updated based on recall performance. | Blueprint Section 5.2 |
-| **Audit**     | Data classification for system events and policy decisions. Traces, provenance, promotions (L6). Lifecycle: append-only, never mutated.                                                    | Blueprint Section 5.2 |
+| **Audit**     | Data classification for system events and policy decisions. Traces, provenance, promotions (L6). Lifecycle: protocol-level append-only, never mutated.                                     | Blueprint Section 5.2 |
 
 ---
 
