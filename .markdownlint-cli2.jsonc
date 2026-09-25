@@ -21,7 +21,9 @@
     "000-docs/**/*.md",
     "CLAUDE.md",
     "README.md",
-    "CHANGELOG.md",
+    // CHANGELOG.md is excluded: release-please generates its entries (asterisk
+    // bullets, double blank lines) and rewrites it on every release PR, so its
+    // format is owned by the release tool, not by hand-edits.
     "IDEA-CHANGELOG.md",
     "!node_modules/**",
     "!**/node_modules/**",

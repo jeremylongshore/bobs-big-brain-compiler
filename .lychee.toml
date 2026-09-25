@@ -40,6 +40,9 @@ exclude_path = [
 
 # URL patterns to skip.
 exclude = [
+  # release-please writes compare/vPREV...vNEXT links before the vNEXT tag exists;
+  # they 404 on every release PR and resolve once the release is cut.
+  "^https?://github\\.com/jeremylongshore/bobs-big-brain-compiler/compare/",
   # Local/private hosts that lychee can't resolve in CI.
   "^https?://(localhost|127\\.0\\.0\\.1)",
   "^https?://intentsolutions(\\.io)?/(internal|admin)",
