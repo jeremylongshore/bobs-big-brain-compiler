@@ -57,6 +57,7 @@ import {
   type SpoolMemoryCandidate,
   SpoolMemoryCandidateSchema,
   type SpoolMemoryCategory,
+  type SpoolTrustLevel,
 } from '@ico/types';
 
 import { writeTrace } from './traces.js';
@@ -80,7 +81,7 @@ export interface SpoolBatchReceipt {
   /** Source stamp expected on every emitted candidate. */
   source: 'import' | 'bulk_import';
   /** Trust stamp expected on every emitted candidate. */
-  trustLevel: 'medium' | 'untrusted';
+  trustLevel: SpoolTrustLevel;
   /** Exact number of candidates in the JSONL body. */
   candidateCount: number;
   /** Per-run ceiling applied before the files become visible. */
@@ -103,7 +104,8 @@ export interface SpoolEmitOptions {
    * When true, this is a whole-machine / large digestion (`ico spool emit --bulk`):
    * every candidate is stamped `source: 'bulk_import'` + `trustLevel: 'untrusted'`
    * so INTKB's source-trust policy can gate the flood (5bm.8). Default false — a
-   * normal compile stays `source: 'import'`, `trustLevel: 'medium'`.
+   * normal compile stays `source: 'import'`; trust is derived from compiler
+   * provenance and is normally `medium`.
    */
   bulkImport?: boolean;
   /**
@@ -135,6 +137,7 @@ export interface SpoolSkipReason {
     | 'UNMAPPED_PAGE_TYPE'
     | 'SEMANTIC_INDEX_SKIPPED'
     | 'ALREADY_EMITTED'
+    | 'BOILERPLATE_SKIPPED'
     | 'INVALID_CANDIDATE';
   /** Human-readable detail. */
   detail: string;
@@ -463,6 +466,143 @@ function describeMissingType(page: CompiledPage): string {
 }
 
 // ---------------------------------------------------------------------------
+// Internal: deterministic spool quality gate
+// ---------------------------------------------------------------------------
+
+const MIN_QUALITY_WORDS = 20;
+const SPOOL_TRUST_LEVELS: readonly SpoolTrustLevel[] = ['high', 'medium', 'low', 'untrusted'];
+
+interface SpoolQualitySignals {
+  lowConfidence: boolean;
+  duplicateSuspect: boolean;
+  boilerplateReason: string | null;
+}
+
+function isSpoolTrustLevel(value: unknown): value is SpoolTrustLevel {
+  return typeof value === 'string' && SPOOL_TRUST_LEVELS.includes(value as SpoolTrustLevel);
+}
+
+function hasNonEmptyString(value: unknown): boolean {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+function frontmatterBoolean(page: CompiledPage, keys: readonly string[]): boolean {
+  return keys.some((key) => {
+    const value = page.frontmatter[key];
+    return value === true || value === 'true';
+  });
+}
+
+function pageTitle(page: CompiledPage): string {
+  const title = page.frontmatter['title'];
+  return hasNonEmptyString(title) ? String(title).trim() : basename(page.relPath, '.md');
+}
+
+/** Normalize human titles so punctuation/case differences cannot hide duplicates. */
+function normalizeTitle(title: string): string {
+  return title
+    .normalize('NFKC')
+    .toLocaleLowerCase('en-US')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
+
+function countNormalizedTitles(pages: ReadonlyArray<CompiledPage>): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const page of pages) {
+    const key = normalizeTitle(pageTitle(page));
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function hasCompilationProvenance(page: CompiledPage): boolean {
+  const compiledAt = page.frontmatter['compiled_at'];
+  const hasCompiledAt =
+    hasNonEmptyString(compiledAt) ||
+    (compiledAt instanceof Date && !Number.isNaN(compiledAt.getTime()));
+  return hasCompiledAt && hasNonEmptyString(page.frontmatter['model']);
+}
+
+/**
+ * Derive the trust floor for the whole batch. A single page with incomplete
+ * compiler provenance downgrades the batch so the manifest receipt remains
+ * an exact trust assertion for every JSONL candidate.
+ */
+function deriveBatchTrustLevel(
+  pages: ReadonlyArray<CompiledPage>,
+  bulkImport: boolean,
+): SpoolTrustLevel {
+  if (bulkImport) return 'untrusted';
+  if (pages.length === 0) return 'medium';
+
+  const declaredLevels = pages.map((page): SpoolTrustLevel => {
+    if (!hasCompilationProvenance(page)) return 'low';
+    const declared = page.frontmatter['trustLevel'] ?? page.frontmatter['trust_level'];
+    return isSpoolTrustLevel(declared) ? declared : 'medium';
+  });
+  if (declaredLevels.includes('untrusted')) return 'untrusted';
+  if (declaredLevels.includes('low')) return 'low';
+  if (declaredLevels.every((level) => level === 'high')) return 'high';
+  return 'medium';
+}
+
+function boilerplateReason(page: CompiledPage): string | null {
+  const identity = `${page.relPath} ${pageTitle(page)}`.toLocaleLowerCase('en-US');
+  const body = page.body.toLocaleLowerCase('en-US');
+  const hasLicenseIdentity = /(?:^|[\\/\s_.-])licen[cs]e(?:$|[\\/\s_.-])/.test(identity);
+  const hasContributingIdentity = /(?:^|[\\/\s_.-])contributing(?:$|[\\/\s_.-])/.test(identity);
+  const hasConductIdentity = /code[\\s_.-]*of[\\s_.-]*conduct/.test(identity);
+
+  if (
+    hasLicenseIdentity &&
+    /(permission is hereby granted|redistribution and use|apache license|mit license|gnu general public license)/.test(
+      body,
+    )
+  ) {
+    return 'license boilerplate';
+  }
+  if (
+    hasContributingIdentity &&
+    /(how to contribute|pull request|development setup|bug report)/.test(body)
+  ) {
+    return 'contributing boilerplate';
+  }
+  if (
+    hasConductIdentity &&
+    /(expected behavior|unacceptable behavior|enforcement|be kind|be respectful)/.test(body)
+  ) {
+    return 'code-of-conduct boilerplate';
+  }
+  return null;
+}
+
+function assessPageQuality(
+  page: CompiledPage,
+  duplicateTitleCounts: ReadonlyMap<string, number>,
+): SpoolQualitySignals {
+  const body = page.body.toLocaleLowerCase('en-US');
+  const lowConfidence =
+    frontmatterBoolean(page, [
+      'truncated',
+      'fence_repaired',
+      'fenceRepaired',
+      'frontmatter_repaired',
+      'frontmatterRepaired',
+    ]) ||
+    /(?:\[\.\.\.truncated\]|\[truncated\]|truncated\s*:\s*true)/.test(body) ||
+    /(?:frontmatter|yaml)\s+(?:fence\s+)?repaired/.test(body) ||
+    body.split(/\s+/u).filter(Boolean).length < MIN_QUALITY_WORDS;
+  const duplicateSuspect = (duplicateTitleCounts.get(normalizeTitle(pageTitle(page))) ?? 0) > 1;
+
+  return {
+    lowConfidence,
+    duplicateSuspect,
+    boilerplateReason: boilerplateReason(page),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Internal: candidate builder
 // ---------------------------------------------------------------------------
 
@@ -474,12 +614,10 @@ function buildCandidate(
   tenantId: string,
   workspaceId: string,
   bulkImport: boolean,
+  trustLevel: SpoolTrustLevel,
+  quality: SpoolQualitySignals,
 ): SpoolMemoryCandidate {
-  const titleRaw = page.frontmatter['title'];
-  const title =
-    typeof titleRaw === 'string' && titleRaw.trim() !== ''
-      ? titleRaw.trim()
-      : basename(page.relPath, '.md');
+  const title = pageTitle(page);
   // Prefix open-question titles so the curator sees them as questions.
   const finalTitle = pageType === 'open-question' ? `Open question: ${title}` : title;
   const candidateId = deriveSpoolCandidateId(workspaceId, page.relPath, page.bodySha256);
@@ -493,14 +631,11 @@ function buildCandidate(
     schemaVersion: '1',
     id: candidateId,
     status: 'inbox',
-    // A --bulk (whole-machine / large-digestion) emit stamps a distinct source +
-    // low trust so INTKB's source-trust policy can gate the flood (5bm.8);
-    // otherwise a normal compile stays source:'import', trust:'medium'.
     source: bulkImport ? 'bulk_import' : 'import',
     content: page.body,
     title: finalTitle,
     category,
-    trustLevel: bulkImport ? 'untrusted' : 'medium',
+    trustLevel,
     author: ICO_AUTHOR,
     tenantId,
     metadata: {
@@ -509,12 +644,11 @@ function buildCandidate(
       tags,
     },
     prePolicyFlags: {
-      // Defaults to false. INTKB's curator-stage policy engine is the secret
-      // detection trust anchor (per 035-AT-DECR §2.5(1) and 036-AT-THRT spec
-      // when it lands). ICO does NOT pretend to do secret detection here.
+      // Secret detection remains an INTKB policy responsibility. ICO only
+      // contributes deterministic quality signals visible at the boundary.
       potentialSecret: false,
-      lowConfidence: false,
-      duplicateSuspect: false,
+      lowConfidence: quality.lowConfidence,
+      duplicateSuspect: quality.duplicateSuspect,
     },
     capturedAt: new Date().toISOString(), // Zod 4 datetime requires Z-suffix
   };
@@ -709,6 +843,12 @@ export function emitSpool(
       discovered.push({ page, parent: 'outputs' });
     }
   }
+  const discoveredPages = discovered.map(({ page }) => page);
+  const duplicateTitleCounts = countNormalizedTitles(discoveredPages);
+  const batchTrustLevel = deriveBatchTrustLevel(discoveredPages, opts.bulkImport === true);
+  let lowConfidenceCount = 0;
+  let duplicateSuspectCount = 0;
+  let boilerplateSkippedCount = 0;
 
   // ---------------------------------------------------------------------
   // Stage B: emit start trace
@@ -727,6 +867,8 @@ export function emitSpool(
       full: opts.full === true,
       bulkImport: opts.bulkImport === true,
       maxCandidates: maxResult.value,
+      qualityGate: 'v1',
+      trustLevel: batchTrustLevel,
       outDir: outDirAbs,
     },
     { summary: `spool.emit.start: scope=${opts.scope} discovered=${discovered.length}` },
@@ -779,13 +921,27 @@ export function emitSpool(
       });
       continue;
     }
+    const quality = assessPageQuality(page, duplicateTitleCounts);
+    if (quality.boilerplateReason !== null) {
+      boilerplateSkippedCount += 1;
+      skipped.push({
+        path: page.relPath,
+        code: 'BOILERPLATE_SKIPPED',
+        detail: `${quality.boilerplateReason}; deterministic spool quality gate refused the page`,
+      });
+      continue;
+    }
+    if (quality.lowConfidence) lowConfidenceCount += 1;
+    if (quality.duplicateSuspect) duplicateSuspectCount += 1;
     const candidate = buildCandidate(
       page,
       pageType,
       mapped.category,
       opts.tenantId,
       workspaceId,
-      opts.bulkImport ?? false,
+      opts.bulkImport === true,
+      batchTrustLevel,
+      quality,
     );
     const parsed = SpoolMemoryCandidateSchema.safeParse(candidate);
     if (!parsed.success) {
@@ -855,7 +1011,7 @@ export function emitSpool(
       tenantId: opts.tenantId,
       scope: opts.scope,
       source: opts.bulkImport === true ? 'bulk_import' : 'import',
-      trustLevel: opts.bulkImport === true ? 'untrusted' : 'medium',
+      trustLevel: batchTrustLevel,
       candidateCount: candidates.length,
       maxCandidates: maxResult.value,
     },
@@ -883,9 +1039,14 @@ export function emitSpool(
       emittedCount: candidates.length,
       skippedCount: skipped.length,
       watermarkSkippedCount: skipped.filter((s) => s.code === 'ALREADY_EMITTED').length,
+      boilerplateSkippedCount,
+      lowConfidenceCount,
+      duplicateSuspectCount,
       full: opts.full === true,
       bulkImport: opts.bulkImport === true,
       maxCandidates: maxResult.value,
+      qualityGate: 'v1',
+      trustLevel: batchTrustLevel,
       spoolFile: basename(spoolFile),
       manifestFile: basename(manifestFile),
       spoolFileBytes,
@@ -990,6 +1151,9 @@ export function dryRunSpool(
       discovered.push({ page, parent: 'outputs' });
     }
   }
+  const discoveredPages = discovered.map(({ page }) => page);
+  const duplicateTitleCounts = countNormalizedTitles(discoveredPages);
+  const batchTrustLevel = deriveBatchTrustLevel(discoveredPages, opts.bulkImport === true);
 
   for (const { page, parent } of discovered) {
     const pageType = inferPageType(page, parent);
@@ -1027,13 +1191,24 @@ export function dryRunSpool(
       });
       continue;
     }
+    const quality = assessPageQuality(page, duplicateTitleCounts);
+    if (quality.boilerplateReason !== null) {
+      skipped.push({
+        path: page.relPath,
+        code: 'BOILERPLATE_SKIPPED',
+        detail: `${quality.boilerplateReason}; deterministic spool quality gate refused the page`,
+      });
+      continue;
+    }
     const cand = buildCandidate(
       page,
       pageType,
       mapped.category,
       opts.tenantId,
       workspaceId,
-      opts.bulkImport ?? false,
+      opts.bulkImport === true,
+      batchTrustLevel,
+      quality,
     );
     wouldEmit.push({
       id: cand.id,

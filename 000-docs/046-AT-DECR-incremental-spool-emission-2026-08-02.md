@@ -67,8 +67,31 @@ candidate, then persists the `batchId` in its import ledger.
 
 This contract is implemented by bead `intentional-cognition-os-l13.20`,
 GitHub issue #191, and Plane ICOS-26. Normal incremental emits use
-`source: import` / `trustLevel: medium`; explicit `--bulk` emits use
-`source: bulk_import` / `trustLevel: untrusted`.
+`source: import` / `trustLevel: medium` when compiler provenance is complete;
+the batch trust floor is conservatively downgraded when provenance is missing
+or explicitly lower. Explicit `--bulk` emits use `source: bulk_import` /
+`trustLevel: untrusted`.
+
+## Quality gate contract
+
+The producer applies deterministic defense-in-depth before a candidate crosses
+the spool boundary. Bead `intentional-cognition-os-l13.2`, GitHub issue #158,
+and Plane ICOS-27 implement the following rules:
+
+- Bodies under 20 words, explicit truncation markers, and explicit
+  frontmatter/fence-repair markers set `prePolicyFlags.lowConfidence`.
+- Repeated titles after Unicode normalization, case folding, and punctuation
+  folding set `prePolicyFlags.duplicateSuspect` on every member of the group.
+- A page is skipped only when its path/title identifies it as a license,
+  contributing guide, or code of conduct _and_ its body matches the relevant
+  boilerplate markers. A domain document merely mentioning one of those words
+  is not skipped.
+- The same quality decisions apply to `--dry-run`; complete traces report the
+  quality-gate version and counts of flagged/skipped pages.
+
+The batch receipt's trust level is the conservative floor for all emitted
+candidates, keeping receipt verification exact while preserving page-level
+quality flags for downstream INTKB policy.
 
 ## Data model
 
@@ -80,8 +103,9 @@ changed tenant/mode replaces the row only after a successful emission.
 ## Verification
 
 - Kernel tests cover incremental no-op behavior, deterministic IDs under
-  `--full`, mode changes, the emission ceiling, and database-backed dry-run
-  parity.
+  `--full`, mode changes, the emission ceiling, database-backed dry-run parity,
+  trust-floor derivation, quality flags, duplicate-title detection, and
+  boilerplate refusal.
 - CLI tests cover the new watermark-aware dry-run database handle and preserve
   the existing path, tenant, and exit-code contracts.
 - The full repository gates remain required before merge: build, typecheck,
