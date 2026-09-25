@@ -193,12 +193,25 @@ describe('emitSpool', () => {
       JSON.parse(readFileSync(r1.value.spoolFile, 'utf-8').trim().split('\n')[0]!) as { id: string }
     ).id;
 
-    // Second emit on unchanged page → same candidate ID.
+    // Second default emit on unchanged page is an incremental no-op.
     const r2 = emitSpool(db, workspacePath, { scope: 'wiki', tenantId: 'ico-test' });
     expect(r2.ok).toBe(true);
     if (!r2.ok) return;
+    expect(r2.value.emittedCount).toBe(0);
+    expect(r2.value.skipped[0]?.code).toBe('ALREADY_EMITTED');
+
+    // Explicit full rebuild still emits the same deterministic candidate ID.
+    const r2full = emitSpool(db, workspacePath, {
+      scope: 'wiki',
+      tenantId: 'ico-test',
+      full: true,
+    });
+    expect(r2full.ok).toBe(true);
+    if (!r2full.ok) return;
     const id2 = (
-      JSON.parse(readFileSync(r2.value.spoolFile, 'utf-8').trim().split('\n')[0]!) as { id: string }
+      JSON.parse(readFileSync(r2full.value.spoolFile, 'utf-8').trim().split('\n')[0]!) as {
+        id: string;
+      }
     ).id;
     expect(id2).toBe(id1);
 
@@ -238,6 +251,37 @@ describe('emitSpool', () => {
     expect(r.value.skipped.length).toBe(1);
     expect(r.value.skipped[0]!.code).toBe('CONTENT_TOO_LARGE');
     expect(r.value.skipped[0]!.path).toBe('wiki/topics/big.md');
+  });
+
+  it('fails closed when an emission would exceed the per-run candidate ceiling', () => {
+    seedWikiPage('topic', 'topics', 'a.md', 'A', 'body a');
+    seedWikiPage('topic', 'topics', 'b.md', 'B', 'body b');
+
+    const r = emitSpool(db, workspacePath, {
+      scope: 'wiki',
+      tenantId: 'ico-test',
+      maxCandidates: 1,
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBeInstanceOf(SpoolError);
+    expect((r.error as SpoolError).code).toBe('EMIT_LIMIT_EXCEEDED');
+    const traces = readTraces(db);
+    expect(traces.ok).toBe(true);
+    if (!traces.ok) return;
+    expect(traces.value.some((t) => t.event_type === 'spool.emit.refused')).toBe(true);
+  });
+
+  it('makes a database-backed dry-run agree with the incremental live decision', () => {
+    seedWikiPage('topic', 'topics', 't.md', 'T', 'body');
+    const emitted = emitSpool(db, workspacePath, { scope: 'wiki', tenantId: 'ico-test' });
+    expect(emitted.ok).toBe(true);
+
+    const preview = dryRunSpool(workspacePath, { scope: 'wiki', tenantId: 'ico-test' }, db);
+    expect(preview.ok).toBe(true);
+    if (!preview.ok) return;
+    expect(preview.value.wouldEmit).toHaveLength(0);
+    expect(preview.value.skipped[0]?.code).toBe('ALREADY_EMITTED');
   });
 
   it('skips semantic-index pages with a SEMANTIC_INDEX_SKIPPED reason', () => {
