@@ -25,6 +25,11 @@ import {
   formatWarning,
 } from '../lib/output.js';
 import { resolveWorkspace } from '../lib/workspace-resolver.js';
+import {
+  isBrainWriteLockBusyError,
+  warnIfWriteLockDegraded,
+  withBrainWriteLock,
+} from '../lib/write-lock.js';
 
 // ---------------------------------------------------------------------------
 // Core logic (extracted so tests can call it without spawning a process)
@@ -59,11 +64,11 @@ export interface UnpromoteCommandResult {
  * @param global     - Global CLI options.
  * @returns `{ ok: true, value }` on success, or `{ ok: false, error }` on failure.
  */
-export function runUnpromote(
+export async function runUnpromote(
   targetPath: string,
   opts: UnpromoteCommandOptions,
   global: UnpromoteCommandGlobal,
-): { ok: true; value: UnpromoteCommandResult } | { ok: false; error: Error } {
+): Promise<{ ok: true; value: UnpromoteCommandResult } | { ok: false; error: Error }> {
   // 1. Resolve workspace
   const wsResult = resolveWorkspace(
     global.workspace !== undefined ? { workspace: global.workspace } : {},
@@ -73,19 +78,16 @@ export function runUnpromote(
   }
 
   const { root: workspacePath, dbPath } = wsResult.value;
-  const dbResult = initDatabase(dbPath);
-  if (!dbResult.ok) {
-    return { ok: false, error: dbResult.error };
-  }
+  const dryRun = opts.dryRun === true;
+  const yes = opts.yes === true;
 
-  const db = dbResult.value;
+  // 2. Dry run: read-only preview, deliberately outside the writer lock.
+  if (dryRun) {
+    const dbResult = initDatabase(dbPath);
+    if (!dbResult.ok) return { ok: false, error: dbResult.error };
 
-  try {
-    const dryRun = opts.dryRun === true;
-    const yes = opts.yes === true;
-
-    // 2. Dry run: show preview and return
-    if (dryRun) {
+    const db = dbResult.value;
+    try {
       const previewResult = unpromoteArtifact(db, workspacePath, {
         targetPath,
         dryRun: true,
@@ -112,49 +114,65 @@ export function runUnpromote(
       }
 
       return { ok: true, value: previewResult.value };
+    } finally {
+      closeDatabase(db);
     }
-
-    // 3. Require --yes confirmation
-    if (!yes) {
-      if (global.json !== true) {
-        process.stdout.write('\n');
-        process.stdout.write(
-          formatWarning(`This will permanently remove ${targetPath} from the wiki.`) + '\n',
-        );
-        process.stdout.write('\n');
-        process.stdout.write('  Use --dry-run to preview, or --yes to confirm.\n');
-        process.stdout.write('\n');
-      }
-      return {
-        ok: false,
-        error: new Error('Confirmation required. Use --yes to proceed.'),
-      };
-    }
-
-    // 4. Execute unpromote
-    const unpromoteResult = unpromoteArtifact(db, workspacePath, { targetPath });
-
-    if (!unpromoteResult.ok) {
-      return { ok: false, error: unpromoteResult.error };
-    }
-
-    const { sourcePath, targetType } = unpromoteResult.value;
-
-    if (global.json === true) {
-      process.stdout.write(formatJSON(unpromoteResult.value) + '\n');
-    } else {
-      process.stdout.write('\n');
-      process.stdout.write(formatSuccess(`Removed ${targetPath} from the wiki`) + '\n');
-      process.stdout.write('\n');
-      process.stdout.write(formatInfo(`Source:  ${sourcePath}`) + '\n');
-      process.stdout.write(formatInfo(`Type:    ${targetType}`) + '\n');
-      process.stdout.write('\n');
-    }
-
-    return { ok: true, value: unpromoteResult.value };
-  } finally {
-    closeDatabase(db);
   }
+
+  // 3. Require --yes confirmation before opening a writer connection.
+  if (!yes) {
+    if (global.json !== true) {
+      process.stdout.write('\n');
+      process.stdout.write(
+        formatWarning(`This will permanently remove ${targetPath} from the wiki.`) + '\n',
+      );
+      process.stdout.write('\n');
+      process.stdout.write('  Use --dry-run to preview, or --yes to confirm.\n');
+      process.stdout.write('\n');
+    }
+    return {
+      ok: false,
+      error: new Error('Confirmation required. Use --yes to proceed.'),
+    };
+  }
+
+  // 4. Execute the DB + filesystem mutation under the shared writer lock.
+  const lockResult = await withBrainWriteLock(() => {
+    const dbResult = initDatabase(dbPath);
+    if (!dbResult.ok) return { ok: false as const, error: dbResult.error };
+
+    const db = dbResult.value;
+    try {
+      return unpromoteArtifact(db, workspacePath, { targetPath });
+    } finally {
+      closeDatabase(db);
+    }
+  });
+
+  if (!lockResult.ok) {
+    return { ok: false, error: lockResult.error };
+  }
+  if (!lockResult.value.locked) warnIfWriteLockDegraded(global.json === true);
+
+  const unpromoteResult = lockResult.value.value;
+  if (!unpromoteResult.ok) {
+    return { ok: false, error: unpromoteResult.error };
+  }
+
+  const { sourcePath, targetType } = unpromoteResult.value;
+
+  if (global.json === true) {
+    process.stdout.write(formatJSON(unpromoteResult.value) + '\n');
+  } else {
+    process.stdout.write('\n');
+    process.stdout.write(formatSuccess(`Removed ${targetPath} from the wiki`) + '\n');
+    process.stdout.write('\n');
+    process.stdout.write(formatInfo(`Source:  ${sourcePath}`) + '\n');
+    process.stdout.write(formatInfo(`Type:    ${targetType}`) + '\n');
+    process.stdout.write('\n');
+  }
+
+  return { ok: true, value: unpromoteResult.value };
 }
 
 // ---------------------------------------------------------------------------
@@ -178,7 +196,7 @@ export function register(program: Command): void {
         '  $ ico unpromote wiki/topics/my-topic.md --dry-run\n' +
         '  $ ico unpromote wiki/topics/my-topic.md --yes',
     )
-    .action((targetPath: string, opts: UnpromoteCommandOptions, cmd: Command) => {
+    .action(async (targetPath: string, opts: UnpromoteCommandOptions, cmd: Command) => {
       const globalOpts = cmd.optsWithGlobals<UnpromoteCommandGlobal & UnpromoteCommandOptions>();
 
       const global: UnpromoteCommandGlobal = {
@@ -191,14 +209,14 @@ export function register(program: Command): void {
       // explicitly provided; otherwise treat as-is (workspace-relative).
       const resolvedTarget = resolve(targetPath) === targetPath ? targetPath : targetPath; // already workspace-relative
 
-      const result = runUnpromote(resolvedTarget, opts, global);
+      const result = await runUnpromote(resolvedTarget, opts, global);
 
       if (!result.ok) {
         const isConfirmError = result.error.message.includes('Confirmation required');
         if (!isConfirmError) {
           process.stderr.write(formatError(result.error.message) + '\n');
         }
-        process.exitCode = 1;
+        process.exitCode = isBrainWriteLockBusyError(result.error) ? 4 : 1;
         return;
       }
     });

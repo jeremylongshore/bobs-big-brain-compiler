@@ -71,7 +71,7 @@
 ### E1-B04: Workspace Directory Policy Document
 
 - **Depends on:** Nothing
-- **Produces:** `000-docs/012-AT-WPOL-workspace-policy.md` — Directory tree with data classification (append-only, recompilable, ephemeral, durable, adaptive, audit). Naming conventions per directory. .gitignore rules per directory. Maps each directory to blueprint Section 5.2 classification. Slug sanitization rules for filenames (audit M2). Symlink policy: no symlinks in workspace/raw/, ingest copies content (audit H2). File size limits per source type (audit M1). Read-only policy for raw/ and audit/ after write (audit M3).
+- **Produces:** `000-docs/012-AT-WPOL-workspace-policy.md` — Directory tree with data classification (protocol-level append-only, recompilable, ephemeral, durable, adaptive, audit). Naming conventions per directory. .gitignore rules per directory. Maps each directory to blueprint Section 5.2 classification. Slug sanitization rules for filenames (audit M2). Symlink policy: no symlinks in workspace/raw/, ingest copies content (audit H2). File size limits per source type (audit M1). Read-only policy for raw/ and audit/ after write (audit M3).
 - **Verification:** Every directory in blueprint Section 11 workspace layout covered. Each has explicit mutability classification. Consistent with existing .gitignore entries. Slug rules have do/don't examples. Symlink rejection tested. File size limits stated per source type. Read-only enforcement mechanism specified for raw/ and audit/.
 
 ### E1-B05: TypeScript Coding Standards and Package Conventions

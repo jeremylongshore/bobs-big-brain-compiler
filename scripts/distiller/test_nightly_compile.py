@@ -71,6 +71,9 @@ if os.environ.get("FIXTURE_OUTCOME")=="success":
  with (p/".claude/skills/teamkb-compile/methodology/decisions.jsonl").open("a") as f:f.write(json.dumps(record)+"\\n")
 ''')
         self.agent.chmod(0o755)
+        self.heal = self.root / "bbb-reindex-heal.sh"
+        self.heal.write_text("#!/bin/sh\necho heal-ran >> \"$HOME/heal-ran\"\nexit 0\n")
+        self.heal.chmod(0o755)
         self.env = os.environ.copy()
         self.env.update(HOME=str(self.root), TEAMKB_HOME=str(self.root / ".teamkb"),
                         TEAMKB_COMPILE_DATE="2026-09-08", TEAMKB_COMPILE_MODE="auto",
@@ -78,7 +81,8 @@ if os.environ.get("FIXTURE_OUTCOME")=="success":
                         TEAMKB_C8_PREFLIGHT=str(self.preflight), TEAMKB_C8_GATE=str(self.gate),
                         MINIMAX_API_KEY="fixture-key-never-log", MINIMAX_SOPS_FILE=str(self.root / "absent"),
                         CLAUDE_BIN=str(self.agent), TEAMKB_AGENT="minimax", TEAMKB_COMPILE_TIMEOUT="5",
-                        FIXTURE_RECORD=json.dumps(record()), CLAUDE_CODE_OAUTH_TOKEN="expired-fixture")
+                        FIXTURE_RECORD=json.dumps(record()), CLAUDE_CODE_OAUTH_TOKEN="expired-fixture",
+                        BBB_REINDEX_HEAL_BIN=str(self.heal))
 
     def tearDown(self):
         self.temp.cleanup()
@@ -104,6 +108,30 @@ if os.environ.get("FIXTURE_OUTCOME")=="success":
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertFalse((self.root / "agent-ran").exists())
         self.assertEqual(self.decisions.read_bytes(), before)
+
+    def test_reindex_gate_runs_only_after_verified_outcome(self):
+        result = self.run_wrapper()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / "heal-ran").exists(), result.stdout)
+        self.env["FIXTURE_OUTCOME"] = "success"
+        result = self.run_wrapper()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertTrue((self.root / "heal-ran").exists(), result.stdout)
+        self.assertIn("post-compile retrieval outcome gate PASSED", result.stdout)
+
+    def test_failed_reindex_gate_fails_the_compile(self):
+        self.env["FIXTURE_OUTCOME"] = "success"
+        self.heal.write_text("#!/bin/sh\nexit 3\n")
+        result = self.run_wrapper()
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("post-compile reindex/self-heal gate", result.stdout)
+
+    def test_missing_reindex_gate_fails_closed(self):
+        self.env["FIXTURE_OUTCOME"] = "success"
+        self.env["BBB_REINDEX_HEAL_BIN"] = str(self.root / "absent-heal.sh")
+        result = self.run_wrapper()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("post-compile reindex gate missing or not executable", result.stdout)
 
     def test_expired_oauth_is_not_passed_to_configured_minimax(self):
         self.run_wrapper()

@@ -30,6 +30,10 @@
 - Scheduled ICO maintenance is now a separate receipted path from the team distiller. `ico maintain` scans registered mounts case-insensitively, classifies disclosure-blocked files explicitly, and compiles deterministic bounded source-scoped batches under the required writer lock and spend ceiling. `partial` receipts expose processed and remaining counts without claiming freshness, and every receipt names its `mounted-source` scope so the final batch cannot silently expand into an all-corpus rewrite. Provider usage is recorded once per actual API call, so a multi-page response cannot multiply the spend total through duplicated page rows. Incremental affected-set planning now selects only the newest compilation row for each `(type, output_path)`, avoiding obsolete historical rows being recompiled or charged as current work. Commit-addressed CLI installation and user-systemd scheduling are included.
 - Added a manual MiniMax-M3 golden-corpus workflow that runs all six compiler passes, scores real source/concept/topic output, and uploads a secret-free machine-readable receipt. Refreshed the test audit and provider documentation to keep deterministic test evidence separate from live model-output quality evidence (l13.18).
 
+### Fixed
+
+- `ico ingest`, `ico promote --yes`, and `ico unpromote --yes` now serialize their durable database/filesystem mutations with the canonical brain writer lock, report contention as retryable, and surface degraded mode when `flock` is unavailable. Dry-run and confirmation-refusal paths remain non-mutating and lock-free. (#202)
+
 ## [v1.22.0] - 2026-07-18
 
 ### Changed
