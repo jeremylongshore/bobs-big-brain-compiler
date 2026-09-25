@@ -27,7 +27,7 @@ jobs:
         run: echo "GOLDEN_CORPUS_ROOT=${RUNNER_TEMP}/ico-golden-corpus-${GITHUB_RUN_ID}" >> "$GITHUB_ENV"
 
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install pnpm
         uses: pnpm/action-setup@v6

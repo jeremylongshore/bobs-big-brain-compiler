@@ -38,10 +38,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout ICO (this repo)
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Checkout INTKB (curator-cli + exporter-cli)
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: jeremylongshore/bobs-big-brain-registrar
           path: intkb

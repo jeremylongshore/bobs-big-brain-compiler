@@ -14,7 +14,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install pnpm
         uses: pnpm/action-setup@v6
@@ -38,7 +38,7 @@ jobs:
     name: Typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install pnpm
         uses: pnpm/action-setup@v6
@@ -67,7 +67,7 @@ jobs:
     # directly — no repo-level settings or third-party endpoints.
     # Fails on HIGH/CRITICAL vulnerabilities.
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: OSV Scanner
         uses: google/osv-scanner-action/osv-scanner-action@v2.0.0
@@ -91,7 +91,7 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Nightly compile governance and restart regressions
         run: |
@@ -120,7 +120,7 @@ jobs:
     name: Coverage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # Codecov needs the full history to attribute coverage to commits.
           fetch-depth: 0
@@ -175,7 +175,7 @@ jobs:
     name: Format Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install pnpm
         uses: pnpm/action-setup@v6
       - name: Set up Node.js
@@ -199,7 +199,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
@@ -214,7 +214,7 @@ jobs:
     # Exit 3 (no manifest) is tolerated until the manifest is initialized
     # by the engineer via `scripts/audit-harness init`.
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install pnpm
         uses: pnpm/action-setup@v6
       - name: Set up Node.js
@@ -241,7 +241,7 @@ jobs:
     # citation-verify logic, budget estimator, and Gemini PR #77 fixes
     # (E2BIG handling, PRUNE_PARTS, snippet centering).
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -258,7 +258,7 @@ jobs:
     name: Distiller Wrapper Notification Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install shellcheck
         run: sudo apt-get update && sudo apt-get install -y shellcheck
@@ -273,7 +273,7 @@ jobs:
     name: Architecture Rules
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install pnpm
         uses: pnpm/action-setup@v6
       - name: Set up Node.js
@@ -294,7 +294,7 @@ jobs:
     # Post-build smoke against the actual built binary — catches issues that
     # vitest can't see (missing files in dist/, shebang, exports map).
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install pnpm
         uses: pnpm/action-setup@v6
       - name: Set up Node.js
@@ -327,7 +327,7 @@ jobs:
     # walks the resulting SHA-256 chain to confirm no in-file tampering.
     # Exit 2 from `ico audit verify` means AUDIT_TAMPERED — gate fails.
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install pnpm
         uses: pnpm/action-setup@v6
       - name: Set up Node.js
@@ -407,7 +407,7 @@ jobs:
     name: Plugin Scripts Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python (for ruff)
         uses: actions/setup-python@v6
