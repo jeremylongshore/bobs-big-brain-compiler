@@ -6,6 +6,7 @@
  */
 
 import { existsSync } from 'node:fs';
+import { isAbsolute, relative, resolve } from 'node:path';
 
 import type { Database } from 'better-sqlite3';
 
@@ -99,6 +100,54 @@ export function listMounts(db: Database): Result<Mount[], Error> {
   }
 
   return ok(mounts);
+}
+
+/**
+ * Find the most specific registered mount that contains a filesystem path.
+ *
+ * Matching is path-boundary aware (`/corpus-a` does not contain
+ * `/corpus-archive`) and longest-prefix wins when mounts are nested. The
+ * resolver intentionally does not require the candidate file to exist so it
+ * can be used before an ingest copy completes.
+ */
+export function findContainingMount(db: Database, filePath: string): Result<Mount | null, Error> {
+  const candidate = resolve(filePath);
+  const mountsResult = listMounts(db);
+  if (!mountsResult.ok) return mountsResult;
+
+  const matching = mountsResult.value
+    .filter((mount) => {
+      const rel = relative(resolve(mount.path), candidate);
+      return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+    })
+    .sort((a, b) => {
+      const lengthDelta = resolve(b.path).length - resolve(a.path).length;
+      return lengthDelta !== 0 ? lengthDelta : a.name.localeCompare(b.name);
+    });
+
+  return ok(matching[0] ?? null);
+}
+
+/**
+ * Record that a mount successfully supplied an indexed source.
+ *
+ * The caller invokes this only after the source row has been accepted. A
+ * missing mount is reported as `ok(false)` so callers can distinguish a
+ * deleted/raced mount from a successful timestamp update without throwing.
+ */
+export function markMountIndexedAt(
+  db: Database,
+  mountId: string,
+  indexedAt = new Date().toISOString(),
+): Result<boolean, Error> {
+  try {
+    const result = db
+      .prepare<[string, string], void>('UPDATE mounts SET last_indexed_at = ? WHERE id = ?')
+      .run(indexedAt, mountId);
+    return ok(result.changes > 0);
+  } catch (e) {
+    return err(e instanceof Error ? e : new Error(String(e)));
+  }
 }
 
 /**

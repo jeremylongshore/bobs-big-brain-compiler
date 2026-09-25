@@ -1,11 +1,19 @@
-import { mkdtempSync, rmdirSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { Database } from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { getMount, getMountByName, listMounts, registerMount, removeMount } from './mounts.js';
+import {
+  findContainingMount,
+  getMount,
+  getMountByName,
+  listMounts,
+  markMountIndexedAt,
+  registerMount,
+  removeMount,
+} from './mounts.js';
 import { closeDatabase, initDatabase } from './state.js';
 
 // ---------------------------------------------------------------------------
@@ -39,12 +47,7 @@ describe('mount registry', () => {
 
   afterEach(() => {
     closeDatabase(db);
-    // Best-effort cleanup of the temp directory.
-    try {
-      rmdirSync(tempDir);
-    } catch {
-      /* ignore */
-    }
+    rmSync(tempDir, { recursive: true, force: true });
   });
 
   // -------------------------------------------------------------------------
@@ -106,16 +109,8 @@ describe('mount registry', () => {
       expect(names).toContain('beta');
       expect(result.value.length).toBe(2);
     } finally {
-      try {
-        rmdirSync(dirA);
-      } catch {
-        /* ignore */
-      }
-      try {
-        rmdirSync(dirB);
-      } catch {
-        /* ignore */
-      }
+      rmSync(dirA, { recursive: true, force: true });
+      rmSync(dirB, { recursive: true, force: true });
     }
   });
 
@@ -204,5 +199,48 @@ describe('mount registry', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value).toBe(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // Freshness helpers
+  // -------------------------------------------------------------------------
+
+  it('selects the longest containing mount and respects path boundaries', () => {
+    const parentDir = join(tempDir, 'corpus');
+    const nestedDir = join(parentDir, 'nested');
+    mkdirSync(nestedDir, { recursive: true });
+
+    const parent = registerMount(db, 'parent', parentDir);
+    const nested = registerMount(db, 'nested', nestedDir);
+    expect(parent.ok).toBe(true);
+    expect(nested.ok).toBe(true);
+    if (!nested.ok) return;
+
+    const match = findContainingMount(db, join(nestedDir, 'article.md'));
+    expect(match.ok).toBe(true);
+    if (!match.ok) return;
+    expect(match.value?.id).toBe(nested.value.id);
+
+    const boundary = findContainingMount(db, `${parentDir}-archive/article.md`);
+    expect(boundary.ok).toBe(true);
+    if (!boundary.ok) return;
+    expect(boundary.value).toBeNull();
+  });
+
+  it('records the last successful index time for a mount', () => {
+    const registered = registerMount(db, 'indexed', tempDir);
+    expect(registered.ok).toBe(true);
+    if (!registered.ok) return;
+
+    const indexedAt = '2026-08-02T20:00:00.000Z';
+    const update = markMountIndexedAt(db, registered.value.id, indexedAt);
+    expect(update.ok).toBe(true);
+    if (!update.ok) return;
+    expect(update.value).toBe(true);
+
+    const result = getMount(db, registered.value.id);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value?.last_indexed_at).toBe(indexedAt);
   });
 });

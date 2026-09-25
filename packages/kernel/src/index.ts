@@ -5,7 +5,15 @@ export { initWorkspace, type WorkspaceInfo } from './workspace.js';
 export { initDatabase, runMigrations, closeDatabase, type Database } from './state.js';
 
 // Mounts
-export { registerMount, listMounts, getMount, getMountByName, removeMount } from './mounts.js';
+export {
+  registerMount,
+  listMounts,
+  findContainingMount,
+  markMountIndexedAt,
+  getMount,
+  getMountByName,
+  removeMount,
+} from './mounts.js';
 
 // Sources
 export {
