@@ -445,11 +445,11 @@ try {
 
 ## 11. JSONL Trace Security
 
-Audit traces in `workspace/audit/traces/` are append-only JSONL files. They are the substrate for debugging, learning, and compliance. They must be protected against tampering, injection, and information leakage.
+Audit traces in `workspace/audit/traces/` are protocol-level append-only JSONL files. They are the substrate for debugging, learning, and compliance. They must be protected against tampering, injection, and information leakage.
 
 **Rules:**
 
-1. Traces are append-only. No trace file is ever overwritten, truncated, or deleted by the system.
+1. Traces are protocol-level append-only. No trace file is ever overwritten, truncated, or deleted by the system.
 2. All trace entries pass through `redactSecrets()` before writing.
 3. Trace entries are valid JSON objects, one per line. No multi-line entries.
 4. Trace entries must not contain raw user content exceeding 500 characters. Truncate with `[TRUNCATED]` marker.

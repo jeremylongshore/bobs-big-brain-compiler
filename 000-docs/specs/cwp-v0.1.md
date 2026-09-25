@@ -23,7 +23,7 @@ A CWP workspace is a directory tree rooted at an arbitrary path. The root direct
 workspace/
 ├── .cwp/
 │   └── state.db              # MUST: SQLite state database
-├── raw/                       # MUST: immutable source corpus
+├── raw/                       # MUST: source corpus written once by protocol
 │   ├── articles/
 │   ├── papers/
 │   ├── repos/
@@ -51,7 +51,7 @@ workspace/
 │   ├── slides/
 │   ├── charts/
 │   └── briefings/
-├── audit/                     # MUST: append-only trail
+├── audit/                     # MUST: protocol-level append-only trail
 │   ├── log.md                 # MUST: human-readable log
 │   └── traces/                # SHOULD: JSONL event stream
 └── recall/                    # MAY: spaced repetition materials
@@ -59,7 +59,7 @@ workspace/
 
 **Requirement levels.** MUST directories are required for a conforming workspace. SHOULD directories are expected in most deployments. MAY directories are optional and may be omitted without affecting core operation.
 
-**Mutability rules.** `raw/` and `audit/` are append-only after initial write -- files in these directories are never modified or deleted by the system. `wiki/` is recompilable -- files are overwritten when recompilation occurs. `tasks/` follows a per-task lifecycle. `outputs/` contents are permanent until explicitly removed by the operator.
+**Mutability rules.** `raw/` and `audit/` are protocol-level append-only after initial write -- files in these directories are never modified or deleted by the system. `wiki/` is recompilable -- files are overwritten when recompilation occurs. `tasks/` follows a per-task lifecycle. `outputs/` contents are permanent until explicitly removed by the operator.
 
 **Naming.** The reference implementation uses `.ico/` rather than `.cwp/` for the state directory. A conforming workspace MAY use either name. This spec uses `.cwp/` as the canonical name for portability across implementations.
 
@@ -136,7 +136,7 @@ A CWP workspace progresses through these phases:
 
 1. **Initialize.** Create the directory tree and SQLite database. Seed `audit/log.md` and default policy files.
 
-2. **Ingest.** Copy source files into `raw/`. Register each source in the `sources` table with a content hash for deduplication and staleness detection. Files in `raw/` are immutable after write.
+2. **Ingest.** Copy source files into `raw/`. Register each source in the `sources` table with a content hash for deduplication and staleness detection. Files in `raw/` are written once by protocol; the system does not modify them after write.
 
 3. **Compile.** Run compilation passes over ingested sources to produce semantic knowledge in `wiki/`. The reference implementation runs six passes: summarize, extract (concepts + entities), synthesize (topics), contradict, and gap (open questions). Each pass writes compiled markdown with YAML frontmatter and records provenance in SQLite.
 

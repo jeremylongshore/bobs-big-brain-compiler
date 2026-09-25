@@ -926,7 +926,7 @@ Trace files are never deleted by the system. Retention policy is operator-contro
 
 ### 10.4 Concurrency
 
-In local mode (Phases 1-4), writes are serialized through the kernel. One writer, append-only. No locking required beyond single-process guarantees from Node.js event loop.
+In local mode (Phases 1-4), writes are serialized through the kernel. One writer, protocol-level append-only. No locking required beyond single-process guarantees from Node.js event loop.
 
 In remote mode (Phase 5), write serialization becomes a distributed concern. This is deferred.
 
