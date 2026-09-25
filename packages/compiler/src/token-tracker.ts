@@ -48,8 +48,24 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
   'claude-sonnet-4-6': { inputPerMillion: 3, outputPerMillion: 15 },
   'claude-opus-4-6': { inputPerMillion: 15, outputPerMillion: 75 },
   'claude-haiku-4-5': { inputPerMillion: 0.8, outputPerMillion: 4 },
-  // DeepSeek `deepseek-chat` (deepseek-v3 class) — the live provider.
+  // DeepSeek `deepseek-chat` (deepseek-v3 class) — the previous live provider.
   'deepseek-chat': { inputPerMillion: 0.28, outputPerMillion: 0.42 },
+  // MiniMax-M3 — the live provider since 2026-07-31.
+  //
+  // ⚠️ UNVERIFIED RATE — deliberately biased HIGH, pending confirmation against a
+  // real MiniMax invoice. The estate's only written basis is
+  // `intent-eval-lab/000-docs/110-AT-SPEC`, which prices M3 as "MiniMax-M3 /
+  // DeepSeek-class ... single-digit cents", i.e. an order of magnitude, not a
+  // rate card. Rather than invent a precise figure, this entry sits ABOVE
+  // DeepSeek (~4x its output rate) and far BELOW the Sonnet fallback (~12x
+  // cheaper), which keeps both failure modes bounded:
+  //   * it does NOT inherit the ~50x Sonnet over-estimate that an unknown tag
+  //     would get, which at the $1.00/day ceiling would start REFUSING on-push
+  //     compiles outright;
+  //   * it does NOT under-price, preserving this module's "biased high, never
+  //     low" contract.
+  // Confirm against billing and tighten — see the follow-up bead.
+  'MiniMax-M3': { inputPerMillion: 0.3, outputPerMillion: 1.2 },
 };
 
 // ---------------------------------------------------------------------------

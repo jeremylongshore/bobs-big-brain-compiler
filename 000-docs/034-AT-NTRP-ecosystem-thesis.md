@@ -45,7 +45,8 @@ generative-agent memory designs (Park et al., 2023), and the LLM-as-operating-
 system thesis of MemGPT (Packer et al., 2023), and we connect the deterministic-
 governance pattern to Constitutional AI's separation of model proposal from
 rule-based evaluation (Bai et al., 2022). The paper closes with the regulatory
-case — EU AI Act enforcement beginning August 2026 makes immutable audit trails
+case — EU AI Act enforcement beginning August 2026 makes protocol-level
+append-only, hash-chain-evident (not tamper-proof) audit trails
 a compliance gate, not an engineering nicety — and with an honest catalogue of
 what the reference implementation has yet to prove.
 
@@ -263,7 +264,7 @@ plausible such vocabulary now under active development.
 │  deterministic kernel owns state, provenance, traces                │
 │  multi-agent research produces evidence ▶ critique ▶ integration    │
 │  output: markdown files + YAML frontmatter +                        │
-│          SQLite control plane + append-only JSONL audit log         │
+│          SQLite control plane + protocol-level append-only JSONL audit log         │
 └─────────────────────────┬───────────────────────────────────────────┘
                           │   SPOOL  (markdown + governance metadata)
                           ▼
@@ -467,7 +468,8 @@ boundary sits at the seam between probabilistic content production
 The architectural choices we have described thus far have been justified on
 engineering and operational grounds. There is a second category of
 justification that becomes more salient over the course of 2026 and 2027: the
-emerging regulatory regime around AI systems makes immutable audit trails and
+emerging regulatory regime around AI systems makes protocol-level append-only,
+hash-chain-evident (not tamper-proof) audit trails and
 auditable policy decisions a compliance requirement, not an engineering
 preference. Teams that have to demonstrate to a regulator _what their AI
 system was told_, _what it produced_, and _what was done with the output_ will
@@ -494,7 +496,7 @@ they can reconstruct, for any given output, the inputs that produced it and
 the policies under which it was approved.
 
 The compile-then-govern architecture is naturally well-suited to these
-requirements. The audit JSONL is an append-only log with a SHA-256 integrity
+requirements. The audit JSONL is a protocol-level append-only log with a SHA-256 integrity
 chain — every event carries the hash of the previous event, so any tampering
 is detectable by a downstream verification pass. The provenance records
 attached to each compiled knowledge file identify exactly which sources fed
@@ -539,7 +541,7 @@ inspect, eval, research, and a recall sub-command family). The codebase
 comprises five workspace packages and a test suite of 1,210 passing tests.
 The six-pass compiler is implemented; the deterministic / probabilistic
 boundary is enforced through a kernel API that mediates every write; the
-SQLite control plane and append-only JSONL audit log are implemented with
+SQLite control plane and protocol-level append-only JSONL audit log are implemented with
 SHA-256 integrity chaining; the multi-agent research workflow (collector,
 summariser, sceptic, integrator, orchestrator) is implemented through a
 seven-state task lifecycle (created, collecting, synthesising, critiquing,
@@ -582,7 +584,7 @@ The seven-state task machine in the multi-agent research workflow encodes a
 specific research methodology — gather evidence, synthesise, critique, render
 — and is not workflow-agnostic.
 
-Filesystem permissions on append-only directories (`raw/`, `audit/`) are set
+Filesystem permissions on protocol-level append-only directories (`raw/`, `audit/`) are set
 to mode 0444 by the kernel, but this is enforced by code discipline rather
 than a security boundary. Any process running as the same user can `chmod` and
 overwrite. The original design documentation described these as enforcement
@@ -606,7 +608,7 @@ restating here, because they identify the limitations of which the author is
 most aware:
 
 1. The triple-write pattern — content to the file system, structured state to
-   SQLite, and append-only audit to JSONL — is over-engineered for a
+   SQLite, and a protocol-level append-only audit log to JSONL — is over-engineered for a
    single-operator local deployment. The justification for it (replayability,
    tamper-evident audit, queryability) only kicks in at multi-operator
    scale; until then, the maintenance cost outweighs the benefit. A future

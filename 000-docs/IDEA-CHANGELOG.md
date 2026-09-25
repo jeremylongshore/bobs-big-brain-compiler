@@ -154,7 +154,7 @@ Version numbers follow the blueprint version, not the software release.
 ### Fixed
 
 - **Loop inconsistency** — V1 had three different versions of the operating loop. V2 canonicalizes it as five stages: ingest → compile → reason → render → refine. "Test" is part of refine (via `ico lint` and `ico recall`). "Promote" is part of refine (via `ico promote`).
-- **Layer mutability ambiguity** — V1 didn't specify whether layers were append-only, mutable, or recompilable. V2 defines mutability for each layer: L1 and L6 are append-only, L2 is recompilable, L3 is ephemeral, L4 is permanent, L5 is adaptive.
+- **Layer mutability ambiguity** — V1 didn't specify whether layers were protocol-level append-only, mutable, or recompilable. V2 defines mutability for each layer: L1 and L6 are protocol-level append-only, L2 is recompilable, L3 is ephemeral, L4 is permanent, L5 is adaptive.
 - **Promotion without rules** — V1 mentioned promotion ~8 times without ever defining what it means or when it's appropriate. V2 defines seven explicit rules and three anti-patterns.
 - **Compiler without passes** — V1 said "the system compiles" but never defined the compilation process. V2 specifies six named passes with inputs, outputs, and triggers.
 - **Research tasks without lifecycle** — V1 described multi-agent research conceptually but had no state machine or completion criteria. V2 defines a task lifecycle with explicit transitions.

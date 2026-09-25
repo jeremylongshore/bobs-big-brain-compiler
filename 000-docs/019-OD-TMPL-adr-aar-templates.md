@@ -96,7 +96,7 @@ We will use SQLite via the `better-sqlite3` Node.js binding for all deterministi
 
 ### Neutral
 
-- JSONL remains the format for append-only audit traces (Layer 6) — SQLite handles structured state, JSONL handles sequential logs
+- JSONL remains the format for protocol-level append-only audit traces (Layer 6) — SQLite handles structured state, JSONL handles sequential logs
 
 ## Related ADRs
 
@@ -199,7 +199,7 @@ Epic 1 established the canonical design pack for ICO: master blueprint, architec
 ## 3. Usage Guidelines
 
 1. **Create the directories** when you write the first record: `mkdir -p adr aar` at the repo root.
-2. **ADRs are immutable once accepted.** To reverse a decision, write a new ADR that supersedes the old one and update the old ADR's status to "Superseded by ADR-NNN."
+2. **ADRs are write-once by protocol once accepted.** To reverse a decision, write a new ADR that supersedes the old one and update the old ADR's status to "Superseded by ADR-NNN."
 3. **AARs are written once and never edited.** If new information surfaces, write a follow-up AAR referencing the original.
 4. **Keep both short.** If an ADR exceeds one printed page, the decision is probably too broad — split it. If an AAR exceeds two pages, the scope was too large — break future efforts into smaller reviewable chunks.
 5. **Link from beads.** When closing a bead that involved an architectural decision, reference the ADR number in the close reason.
