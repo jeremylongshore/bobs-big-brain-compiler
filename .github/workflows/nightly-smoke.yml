@@ -47,7 +47,7 @@ jobs:
           path: intkb
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
 
