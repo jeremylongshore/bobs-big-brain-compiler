@@ -20,13 +20,17 @@ jobs:
       ICO_PROVIDER_WIRE: anthropic
       ICO_BASE_URL: https://api.minimax.io/anthropic
       MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
-      GOLDEN_CORPUS_ROOT: ${{ runner.temp }}/ico-golden-corpus-${{ github.run_id }}
     steps:
+      - name: Resolve golden corpus root
+        # The runner context is not available in job-level env, so derive the
+        # run-scoped root from RUNNER_TEMP inside a step.
+        run: echo "GOLDEN_CORPUS_ROOT=${RUNNER_TEMP}/ico-golden-corpus-${GITHUB_RUN_ID}" >> "$GITHUB_ENV"
+
       - name: Check out repository
         uses: actions/checkout@v6
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -47,7 +51,7 @@ jobs:
 
       - name: Upload golden corpus receipt
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: golden-corpus-${{ github.run_id }}
           path: ${{ runner.temp }}/ico-golden-corpus-${{ github.run_id }}/golden-corpus-receipt.json
