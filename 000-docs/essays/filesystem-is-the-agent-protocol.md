@@ -79,13 +79,13 @@ The current default paradigm for AI agent development:
 
 The proposed inversion:
 
-| Concern        | Workspace Approach              |
-| -------------- | ------------------------------- |
-| Working memory | Files on disk                   |
-| Persistence    | Filesystem (it is always there) |
-| Coordination   | Reading and writing files       |
-| Introspection  | `ls`, `cat`, `grep`             |
-| Auditability   | Append-only trace files         |
+| Concern        | Workspace Approach                     |
+| -------------- | -------------------------------------- |
+| Working memory | Files on disk                          |
+| Persistence    | Filesystem (it is always there)        |
+| Coordination   | Reading and writing files              |
+| Introspection  | `ls`, `cat`, `grep`                    |
+| Auditability   | Protocol-level append-only trace files |
 
 This is not as clean as the table makes it look. I need to be honest about the actual implementation: **SQLite is the real coordination substrate, not the filesystem.** The sources table, compilations table, tasks table, and promotions table are what maintain consistent state. The filesystem stores the _content_ of that state --- the markdown files, the raw PDFs, the JSONL traces. The database answers "what has been compiled and what is stale?" The filesystem answers "what does the compiled output actually say?"
 
@@ -110,12 +110,12 @@ The workspace layout has six layers, each with explicit mutability rules:
 
 ```text
 workspace/
-  raw/          # L1: Append-only. Source PDFs, articles, notes.
+  raw/          # L1: Protocol-level append-only. Source PDFs, articles, notes.
   wiki/         # L2: Recompilable. Compiled knowledge as markdown.
   tasks/        # L3: Ephemeral. Scoped research workspaces.
   outputs/      # L4: Durable. Rendered reports, slides.
   recall/       # L5: Adaptive. Flashcards and retention data.
-  audit/        # L6: Append-only. JSONL traces, provenance, promotions.
+  audit/        # L6: Protocol-level append-only. JSONL traces, provenance, promotions.
 ```
 
 The compilation pipeline transforms raw sources into compiled knowledge through six passes:
@@ -146,7 +146,7 @@ Building ICO surfaced several mistakes that are worth documenting for anyone att
 
 **The procfs analogy was premature.** Our original design included a `_proc/` virtual directory that would expose computed views of workspace state --- live task status, compilation progress, staleness reports --- as readable files, inspired by Linux's `/proc` filesystem. This is not implemented, and calling it "procfs" in our design docs was aspirational at best. What we actually have is SQLite queries exposed through CLI commands (`ico status`, `ico inspect`). The idea of computed filesystem views derived from audit trails remains interesting, but claiming we built it would be dishonest.
 
-**The triple-write is over-engineered.** Every significant operation in ICO writes to three places: SQLite (structured state), JSONL trace files (append-only audit), and the filesystem (content). The SQLite + JSONL dual-write for audit data made sense on paper --- SQLite for queryability, JSONL for tamper-evident integrity chains with SHA-256 hashing. In practice, maintaining consistency across three write targets adds complexity without proportional benefit at our current scale (one user, local-only). A single SQLite database with WAL mode would probably suffice for Phase 1. We kept the design because the JSONL traces become valuable when you want to replay operations or train on your own workflow, but we should have deferred this to a later phase.
+**The triple-write is over-engineered.** Every significant operation in ICO writes to three places: SQLite (structured state), JSONL trace files (protocol-level append-only audit), and the filesystem (content). The SQLite + JSONL dual-write for audit data made sense on paper --- SQLite for queryability, JSONL for tamper-evident integrity chains with SHA-256 hashing. In practice, maintaining consistency across three write targets adds complexity without proportional benefit at our current scale (one user, local-only). A single SQLite database with WAL mode would probably suffice for Phase 1. We kept the design because the JSONL traces become valuable when you want to replay operations or train on your own workflow, but we should have deferred this to a later phase.
 
 **The 7-state task machine encodes opinions, not requirements.** Tasks in ICO progress through seven states: `created`, `collecting`, `synthesizing`, `critiquing`, `rendering`, `completed`, `archived`. This state machine reflects one specific research methodology (gather evidence, synthesize, critique, render). Other research workflows --- exploratory brainstorming, adversarial debate, iterative hypothesis refinement --- don't fit this progression. We should have started with three states (`open`, `completed`, `archived`) and let the workflow emerge from the filesystem structure rather than encoding it in the database schema.
 

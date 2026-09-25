@@ -44,7 +44,7 @@ Seven adversarial review panels — each representing a decade of systems engine
 
 ### 1970s — Thompson & Ritchie (Unix Simplicity)
 
-**Approved:** Filesystem layout navigable with ls/cat/grep, append-only JSONL traces, Result<T,E> error handling.
+**Approved:** Filesystem layout navigable with ls/cat/grep, protocol-level append-only JSONL traces, Result<T,E> error handling.
 
 **Rejected:** Triple-write is "core rot" — one operation touches 4 files and makes 3 SQL inserts. The 7-state task machine encodes research opinions (2 states would suffice: open/done). 476-line promotion engine with 11 error codes for what is conceptually a file copy. MUST/SHOULD/MAY spec for one implementation is premature.
 
@@ -52,7 +52,7 @@ Seven adversarial review panels — each representing a decade of systems engine
 
 ### 1980s — Pike & Tanenbaum (Plan 9 / Layering)
 
-**Approved:** Compilation vs indexing distinction, append-only audit with filesystem enforcement, Result<T,E>.
+**Approved:** Compilation vs indexing distinction, protocol-level append-only audit with filesystem enforcement, Result<T,E>.
 
 **Rejected:** The "mount" metaphor is a lie — it's a SQLite row pointing at a directory, not a namespace operation. SQLite is the hidden truth; the filesystem is a secondary projection. `ico inspect` is a reporting tool, not procfs. If the system invokes Plan 9, it should implement FUSE.
 

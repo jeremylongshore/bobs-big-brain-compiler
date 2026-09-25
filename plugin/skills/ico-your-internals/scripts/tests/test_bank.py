@@ -26,7 +26,6 @@ import sys
 import tempfile
 import unittest
 
-
 SCRIPTS_DIR = pathlib.Path(__file__).resolve().parent.parent
 FIXTURES_DIR = pathlib.Path(__file__).resolve().parent / "fixtures"
 

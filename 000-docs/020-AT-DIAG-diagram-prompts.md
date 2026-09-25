@@ -21,7 +21,7 @@ Diagrams are ordered from structural (what the system is) to behavioral (what th
 
 **Generation prompt.**
 
-> Draw a vertical stack diagram in Mermaid showing the six layers of the Intentional Cognition OS architecture. Layer 1 (Raw Corpus) is at the bottom; Layer 6 (Audit & Policy) is at the top. For each layer show: the layer number and name, the storage path under workspace/, and the mutability classification (append-only, recompilable, created/archived per task, promotable, adaptive, or append-only). Use a block diagram or flowchart with top-down orientation. Apply distinct fill colors per layer to distinguish them visually. L1 is the source of truth; L6 is the deterministic control plane.
+> Draw a vertical stack diagram in Mermaid showing the six layers of the Intentional Cognition OS architecture. Layer 1 (Raw Corpus) is at the bottom; Layer 6 (Audit & Policy) is at the top. For each layer show: the layer number and name, the storage path under workspace/, and the mutability classification (protocol-level append-only, recompilable, created/archived per task, promotable, adaptive, or protocol-level append-only). Use a block diagram or flowchart with top-down orientation. Apply distinct fill colors per layer to distinguish them visually. L1 is the source of truth; L6 is the deterministic control plane.
 
 **Diagram.**
 
@@ -32,7 +32,7 @@ flowchart TB
     L6["**L6 — Audit & Policy**
     workspace/audit/
     Classification: Audit
-    Mutability: Append-only
+    Mutability: Protocol-level append-only
     Owns: provenance · traces · policy · promotions · evals"]
 
     L5["**L5 — Recall**
@@ -62,7 +62,7 @@ flowchart TB
     L1["**L1 — Raw Corpus**
     workspace/raw/
     Classification: Canonical
-    Mutability: Append-only — never modified after ingest
+    Mutability: Protocol-level append-only — never modified after ingest
     Owns: articles · papers · repos · notes · datasets"]
 
     %% Stack — L6 at top, L1 at bottom

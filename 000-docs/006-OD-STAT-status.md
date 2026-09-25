@@ -2,9 +2,9 @@
 
 > Compile knowledge for the machine. Distill understanding for the human.
 
-**Last Updated:** 2026-05-16
-**Release:** v0.15.1
-**Phase:** 4 — Hardening + v1.0 (Epic 10 in progress)
+**Last Updated:** 2026-08-02
+**Release:** v1.22.0
+**Phase:** 4 — Hardening + v1.0 (historical status note; current gate evidence is in `TEST_AUDIT.md`)
 
 ---
 
@@ -12,7 +12,7 @@
 
 The system is feature-complete for Phase 1 (local-first MVP). Epics 1–9 shipped between 2026-04 and 2026-05; the system now ingests sources, compiles a semantic wiki, runs grounded Q&A with citations, drives multi-agent research, renders durable artifacts, generates flashcards/quizzes with retention scoring, and executes YAML eval specs. Epic 10 (hardening + release gate) is **5 of 12 beads** shipped at the time of writing; remaining work is documented below.
 
-Every meaningful mutation emits a trace event into an append-only JSONL chain (SHA-256 prev-hash links). Every public kernel/compiler API returns `Result<T,Error>` rather than throwing. File writes use the `.tmp + rename` atomic pattern — verified by the disk-failure simulation test (E10-B05).
+Every meaningful mutation emits a trace event into a protocol-level append-only JSONL chain (SHA-256 prev-hash links). Every public kernel/compiler API returns `Result<T,Error>` rather than throwing. File writes use the `.tmp + rename` atomic pattern — verified by the disk-failure simulation test (E10-B05).
 
 The CLI publishes as **`intentional-cognition-os`** on npm (workspace renamed in E10-B10); the verification script `scripts/verify-npm-pack.sh` confirms the tarball is shippable.
 
@@ -20,25 +20,25 @@ The CLI publishes as **`intentional-cognition-os`** on npm (workspace renamed in
 
 ## Capabilities (operator-visible surface)
 
-| Command                                   | What it does                                                                           | Trace events emitted                                   |
-| ----------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `ico init <name>`                         | Create workspace (`wiki/`, `tasks/`, `outputs/`, `recall/`, `audit/`, `.ico/state.db`) | audit-log only (`workspace.init`)                      |
-| `ico mount add\|list\|remove`             | Manage corpus mount points                                                             | `mount.add` / `mount.remove` in audit log              |
-| `ico ingest <path>`                       | Ingest PDF, Markdown, web-clip into L1 raw corpus                                      | `ingest`                                               |
-| `ico compile sources\|topics\|all`        | Six compiler passes: summarize → extract → synthesize → link → contradict → gap        | `compilation.start` / `compilation.complete` per pass  |
-| `ico ask "<question>"`                    | Retrieval-augmented Q&A with inline citations                                          | `ask.start` / `ask.complete`                           |
-| `ico research "<brief>"`                  | Collector → Summarizer → Skeptic → Integrator → render                                 | `task.created` + per-stage orchestrator + agent traces |
-| `ico research archive <id>`               | Archive a completed research task                                                      | `task.archived`                                        |
-| `ico render report\|slides`               | Render L4 artifacts                                                                    | `render.start` / `render.complete`                     |
-| `ico promote / unpromote`                 | L4 ↔ L2 promotion                                                                      | `promotion`                                            |
-| `ico lint`                                | Schema / staleness / uncompiled / orphan checks                                        | `lint.run` / `lint.result`                             |
-| `ico recall generate --topic <name>`      | Generate flashcards + quiz from compiled wiki                                          | `recall.generate`                                      |
-| `ico recall quiz [--answers-file]`        | Interactive (or scripted) quiz with Claude scoring                                     | `recall.quiz` / `recall.result`                        |
-| `ico recall weak [--report]`              | Lowest-retention concepts + optional full report                                       | — (read-only)                                          |
-| `ico recall export --format anki [--out]` | Anki-importable TSV                                                                    | — (read-only)                                          |
-| `ico eval run [--spec <path>]`            | YAML eval specs from `evals/` (retrieval + smoke handlers)                             | `eval.run` / `eval.result`                             |
-| `ico status`                              | Workspace summary                                                                      | — (read-only)                                          |
-| `ico inspect <subcommand>`                | Subsystem inspector                                                                    | — (read-only)                                          |
+| Command                                   | What it does                                                                             | Trace events emitted                                   |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `ico init <name>`                         | Create workspace (`wiki/`, `tasks/`, `outputs/`, `recall/`, `audit/`, `.ico/state.db`)   | audit-log only (`workspace.init`)                      |
+| `ico mount add\|list\|remove`             | Manage corpus mount points                                                               | `mount.add` / `mount.remove` in audit log              |
+| `ico ingest <path>`                       | Ingest PDF, Markdown, web-clip into L1 raw corpus                                        | `ingest`                                               |
+| `ico compile sources\|topics\|all`        | Six compiler passes: summarize → extract → synthesize → link → contradict → gap          | `compilation.start` / `compilation.complete` per pass  |
+| `ico ask "<question>"`                    | Retrieval-augmented Q&A with inline citations                                            | `ask.start` / `ask.complete`                           |
+| `ico research "<brief>"`                  | Collector → Summarizer → Skeptic → Integrator → render                                   | `task.created` + per-stage orchestrator + agent traces |
+| `ico research archive <id>`               | Archive a completed research task                                                        | `task.archived`                                        |
+| `ico render report\|slides`               | Render L4 artifacts                                                                      | `render.start` / `render.complete`                     |
+| `ico promote / unpromote`                 | L4 ↔ L2 promotion                                                                        | `promotion`                                            |
+| `ico lint`                                | Schema / staleness / uncompiled / orphan checks                                          | `lint.run` / `lint.result`                             |
+| `ico recall generate --topic <name>`      | Generate flashcards + quiz from compiled wiki                                            | `recall.generate`                                      |
+| `ico recall quiz [--answers-file]`        | Interactive (or scripted) quiz with Claude scoring                                       | `recall.quiz` / `recall.result`                        |
+| `ico recall weak [--report]`              | Lowest-retention concepts + optional full report                                         | — (read-only)                                          |
+| `ico recall export --format anki [--out]` | Anki-importable TSV                                                                      | — (read-only)                                          |
+| `ico eval run [--spec <path>]`            | YAML eval specs from `evals/` (retrieval, smoke, compilation, and faithfulness handlers) | `eval.run` / `eval.result`                             |
+| `ico status`                              | Workspace summary                                                                        | — (read-only)                                          |
+| `ico inspect <subcommand>`                | Subsystem inspector                                                                      | — (read-only)                                          |
 
 **Coverage matrix and the per-command audit decision** (which read-only commands deliberately don't trace) live in `023-OD-AUDIT-trace-coverage-2026-05-15.md`.
 
@@ -121,12 +121,12 @@ Six-layer cognition stack with a strict deterministic / probabilistic boundary:
 
 | Layer                 | Path                    | Owner                                                           |
 | --------------------- | ----------------------- | --------------------------------------------------------------- |
-| L1 Raw Corpus         | `workspace/raw/`        | Kernel (append-only)                                            |
+| L1 Raw Corpus         | `workspace/raw/`        | Kernel (protocol-level append-only)                             |
 | L2 Semantic Knowledge | `workspace/wiki/`       | Compiler passes (recompilable)                                  |
 | L3 Episodic Tasks     | `workspace/tasks/<id>/` | Compiler agents (Collector → Summarizer → Skeptic → Integrator) |
 | L4 Artifacts          | `workspace/outputs/`    | Render pipeline (promotable to L2)                              |
 | L5 Recall             | `workspace/recall/`     | Compiler recall module                                          |
-| L6 Audit & Policy     | `workspace/audit/`      | Kernel (append-only, hash-chained)                              |
+| L6 Audit & Policy     | `workspace/audit/`      | Kernel (protocol-level append-only, hash-chained)               |
 
 **The most important constraint** (per blueprint §4.3) — _the model proposes; the deterministic kernel decides_:
 
@@ -157,7 +157,7 @@ The full decision history lives in `IDEA-CHANGELOG.md`. Selected v1-relevant cal
 | ----------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
 | `cli/src` coverage at 55.9% vs 70% target                         | Medium   | E10-B09 closes ask/compile/research gaps with `ClaudeClient`-boundary mocks                                               | Open (B09)                  |
 | `kernel/src` coverage at 83.2% vs 90% target                      | Medium   | E10-B09 fills branch coverage on `procfs`, `unpromote`, eval handlers                                                     | Open (B09)                  |
-| No compilation-quality or retrieval evals yet                     | Medium   | E10-B02 + E10-B03 add suites on top of B01's framework                                                                    | Open (B02, B03)             |
+| Live compilation-quality evidence is provider-backed              | Medium   | E10-B02 specs are checked in; l13.18 adds a manual MiniMax-M3 golden-corpus run with a machine-readable receipt           | Managed (workflow_dispatch) |
 | No perf benchmarks against documented targets                     | Medium   | E10-B06 — 500+ source corpus generator, benchmark recorder                                                                | Open (B06)                  |
 | Mount commands don't emit trace events (only audit-log entries)   | Low      | `mount` event types not yet in `011-AT-TRSC` §6. Audit log suffices; spec amendment is a doc-only follow-up               | Documented (`023-OD-AUDIT`) |
 | Workspace.init / unpromote events not enumerated in trace spec §6 | Low      | Code emits them; spec drift only. Patch §6 doc                                                                            | Documented                  |
@@ -210,4 +210,4 @@ The system improves over time at three layers (blueprint §5.6):
 | **Context refinement** | Operator reads trace JSONL, identifies prompt/ingest patterns producing weak outputs, refines         | Per-session — see CLAUDE.md "Trace-based context refinement"        |
 | **Retention loop**     | `recall_results` rows + retention aggregator surface weak concepts; future generation re-targets them | Per-quiz — `ico recall weak --report`                               |
 
-The substrate is the append-only trace chain. Tampering is detectable (SHA-256 prev_hash); the `audit-chain-intact` smoke eval walks it on every `ico eval run`.
+The substrate is the protocol-level append-only trace chain. Tampering is detectable (SHA-256 prev_hash); the `audit-chain-intact` smoke eval walks it on every `ico eval run`.
