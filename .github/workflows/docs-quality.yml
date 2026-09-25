@@ -25,7 +25,7 @@ jobs:
     name: markdownlint-cli2
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       # Invoke markdownlint-cli2 directly rather than via the
       # DavidAnson/markdownlint-cli2-action@v17 wrapper. The action's
       # `globs:` input layers a default `*.{md,markdown}` on top of the
@@ -45,7 +45,7 @@ jobs:
     name: Vale prose lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Run Vale
         uses: errata-ai/vale-action@reviewdog
         with:
@@ -66,7 +66,7 @@ jobs:
     name: lychee link check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Run lychee
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
@@ -84,7 +84,7 @@ jobs:
     name: Frontmatter validator
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -98,7 +98,7 @@ jobs:
     name: Forbidden-word honesty lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Run regression tests
         run: bash scripts/test-lint-forbidden-words.sh
       - name: Lint curated documentation

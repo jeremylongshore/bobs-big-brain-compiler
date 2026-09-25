@@ -41,7 +41,7 @@ jobs:
       # --- Publish only when a release was just created (release PR merged) ---
       - name: Checkout the released commit
         if: ${{ steps.release.outputs.release_created }}
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
