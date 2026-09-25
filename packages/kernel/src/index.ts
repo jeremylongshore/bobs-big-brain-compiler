@@ -110,7 +110,9 @@ export { listArtifacts, type ArtifactInfo } from './artifacts.js';
 export {
   emitSpool,
   dryRunSpool,
+  DEFAULT_SPOOL_EMIT_MAX_CANDIDATES,
   SpoolError,
+  type SpoolBatchReceipt,
   type SpoolEmitOptions,
   type SpoolEmitResult,
   type SpoolEmitScope,

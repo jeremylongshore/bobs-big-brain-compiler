@@ -69,6 +69,24 @@ import { deriveSpoolCandidateId, uuidV5 } from './uuid.js';
 /** Subset of compiled artifacts the emitter operates over. */
 export type SpoolEmitScope = 'wiki' | 'outputs' | 'all';
 
+/** Producer receipt carried in every spool manifest. */
+export interface SpoolBatchReceipt {
+  /** Stable identity for this producer emission run. */
+  batchId: string;
+  /** Tenant boundary asserted on every emitted candidate. */
+  tenantId: string;
+  /** Discovery scope used for this emission. */
+  scope: SpoolEmitScope;
+  /** Source stamp expected on every emitted candidate. */
+  source: 'import' | 'bulk_import';
+  /** Trust stamp expected on every emitted candidate. */
+  trustLevel: 'medium' | 'untrusted';
+  /** Exact number of candidates in the JSONL body. */
+  candidateCount: number;
+  /** Per-run ceiling applied before the files become visible. */
+  maxCandidates: number;
+}
+
 /** Options accepted by `emitSpool`. */
 export interface SpoolEmitOptions {
   /**
@@ -89,6 +107,14 @@ export interface SpoolEmitOptions {
    */
   bulkImport?: boolean;
   /**
+   * Re-emit every eligible page, including pages whose body hash has already
+   * crossed the spool boundary. This is an explicit recovery/rebuild escape
+   * hatch; normal runs use the state DB watermark.
+   */
+  full?: boolean;
+  /** Maximum number of candidates a single run may write. */
+  maxCandidates?: number;
+  /**
    * Tenant identifier emitted on every candidate. REQUIRED — there is no
    * default. The CLI layer enforces this (refuses to emit if absent from
    * workspace config). Per CISO seat in 035-AT-DECR §2.5 + agent BLOCK fix #2.
@@ -108,6 +134,7 @@ export interface SpoolSkipReason {
     | 'MISSING_TYPE'
     | 'UNMAPPED_PAGE_TYPE'
     | 'SEMANTIC_INDEX_SKIPPED'
+    | 'ALREADY_EMITTED'
     | 'INVALID_CANDIDATE';
   /** Human-readable detail. */
   detail: string;
@@ -129,6 +156,9 @@ export interface SpoolEmitResult {
   spoolFileBytes: number;
 }
 
+/** Default guardrail against accidentally re-emitting a whole corpus. */
+export const DEFAULT_SPOOL_EMIT_MAX_CANDIDATES = 5000;
+
 // ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
@@ -144,11 +174,115 @@ export class SpoolError extends Error {
       | 'WRITE_FAILED'
       | 'MANIFEST_FAILED'
       | 'TRACE_FAILED'
-      | 'NO_TENANT_ID',
+      | 'NO_TENANT_ID'
+      | 'STATE_FAILED'
+      | 'INVALID_MAX_CANDIDATES'
+      | 'EMIT_LIMIT_EXCEEDED',
   ) {
     super(message);
     this.name = 'SpoolError';
   }
+}
+
+interface SpoolEmissionRow {
+  page_path: string;
+  body_sha256: string;
+  tenant_id: string;
+  bulk_import: number;
+}
+
+function resolveMaxCandidates(opts: SpoolEmitOptions): Result<number, Error> {
+  const maxCandidates = opts.maxCandidates ?? DEFAULT_SPOOL_EMIT_MAX_CANDIDATES;
+  if (!Number.isSafeInteger(maxCandidates) || maxCandidates < 1) {
+    return err(
+      new SpoolError(
+        `maxCandidates must be a positive safe integer; received ${String(maxCandidates)}`,
+        'INVALID_MAX_CANDIDATES',
+      ),
+    );
+  }
+  return ok(maxCandidates);
+}
+
+function readSpoolEmissions(db: Database): Result<Map<string, SpoolEmissionRow>, Error> {
+  try {
+    const rows = db
+      .prepare<
+        [],
+        SpoolEmissionRow
+      >('SELECT page_path, body_sha256, tenant_id, bulk_import FROM spool_emissions')
+      .all();
+    return ok(new Map(rows.map((row) => [row.page_path, row])));
+  } catch (e) {
+    return err(
+      new SpoolError(
+        `Failed to read spool emission watermark: ${e instanceof Error ? e.message : String(e)}`,
+        'STATE_FAILED',
+      ),
+    );
+  }
+}
+
+function recordSpoolEmissions(
+  db: Database,
+  pages: ReadonlyArray<{ page: CompiledPage; tenantId: string; bulkImport: boolean }>,
+  scope: SpoolEmitScope,
+  emittedAt: string,
+  spoolFile: string,
+): Result<void, Error> {
+  if (pages.length === 0) return ok(undefined);
+  try {
+    const upsert = db.prepare<
+      [string, string, string, number, SpoolEmitScope, string, string],
+      void
+    >(
+      `INSERT INTO spool_emissions
+         (page_path, body_sha256, tenant_id, bulk_import, scope, emitted_at, spool_file)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(page_path) DO UPDATE SET
+         body_sha256 = excluded.body_sha256,
+         tenant_id = excluded.tenant_id,
+         bulk_import = excluded.bulk_import,
+         scope = excluded.scope,
+         emitted_at = excluded.emitted_at,
+         spool_file = excluded.spool_file`,
+    );
+    const writeAll = db.transaction(() => {
+      for (const { page, tenantId, bulkImport } of pages) {
+        upsert.run(
+          page.relPath,
+          page.bodySha256,
+          tenantId,
+          bulkImport ? 1 : 0,
+          scope,
+          emittedAt,
+          spoolFile,
+        );
+      }
+    });
+    writeAll();
+    return ok(undefined);
+  } catch (e) {
+    return err(
+      new SpoolError(
+        `Failed to record spool emission watermark: ${e instanceof Error ? e.message : String(e)}`,
+        'STATE_FAILED',
+      ),
+    );
+  }
+}
+
+function matchesSpoolWatermark(
+  row: SpoolEmissionRow | undefined,
+  page: CompiledPage,
+  opts: SpoolEmitOptions,
+): boolean {
+  return (
+    row !== undefined &&
+    row.body_sha256 === page.bodySha256 &&
+    row.tenant_id === opts.tenantId &&
+    row.bulk_import === (opts.bulkImport === true ? 1 : 0)
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -415,6 +549,7 @@ function atomicWriteSpool(
   filename: string,
   jsonlBody: string,
   candidateIds: string[],
+  batchReceipt: SpoolBatchReceipt,
   emittedAt: string,
   schemaVersion: string,
 ): Result<WriteOutcome, Error> {
@@ -438,7 +573,6 @@ function atomicWriteSpool(
     const bytes = fstatSync(spoolFd).size;
     closeSync(spoolFd);
     spoolFd = -1;
-    renameSync(spoolTmp, spoolFile);
 
     const sha256 = createHash('sha256').update(jsonlBody, 'utf-8').digest('hex');
     const manifest = {
@@ -449,12 +583,17 @@ function atomicWriteSpool(
       spoolFileBytes: bytes,
       spoolFileSha256: sha256,
       candidateIds,
+      batchReceipt,
     };
     manifestFd = openSync(manifestTmp, O_FLAGS, MODE);
     writeSync(manifestFd, JSON.stringify(manifest, null, 2) + '\n', null, 'utf-8');
     closeSync(manifestFd);
     manifestFd = -1;
     renameSync(manifestTmp, manifestFile);
+    // Publish the spool body last. A crash can leave an orphan manifest, which
+    // the audit surface reports, but cannot leave a visible candidate file
+    // without its receipt and hash sidecar (l13.4).
+    renameSync(spoolTmp, spoolFile);
 
     return ok({ spoolFile, manifestFile, spoolFileSha256: sha256, spoolFileBytes: bytes });
   } catch (e) {
@@ -492,9 +631,8 @@ function atomicWriteSpool(
  * `spool.emit.start` / `spool.emit.complete` trace events with the file's
  * SHA-256 in the complete payload.
  *
- * Per agent review consolidated notes, this kernel function has NO
- * `dryRun` parameter — dry-run is a CLI-layer concern (the kernel's job
- * is to emit or not emit).
+ * The separate `dryRunSpool` helper shares the discovery, watermark, and
+ * ceiling rules without writing spool files or traces.
  *
  * @param db            - Open better-sqlite3 database with migrations applied.
  * @param workspacePath - Absolute path to the workspace root.
@@ -517,6 +655,14 @@ export function emitSpool(
       ),
     );
   }
+
+  const maxResult = resolveMaxCandidates(opts);
+  if (!maxResult.ok) return maxResult;
+  const watermarkResult = opts.full
+    ? ok(new Map<string, SpoolEmissionRow>())
+    : readSpoolEmissions(db);
+  if (!watermarkResult.ok) return watermarkResult;
+  const watermark = watermarkResult.value;
 
   // Resolve output directory.
   const outDirAbs = opts.outDir
@@ -544,6 +690,7 @@ export function emitSpool(
   const workspaceId = basename(resolve(workspacePath));
   const skipped: SpoolSkipReason[] = [];
   const candidates: SpoolMemoryCandidate[] = [];
+  const emittedPages: Array<{ page: CompiledPage; tenantId: string; bulkImport: boolean }> = [];
 
   // ---------------------------------------------------------------------
   // Stage A: discover compiled pages per requested scope
@@ -577,6 +724,9 @@ export function emitSpool(
       scope: opts.scope,
       tenantId: opts.tenantId,
       discoveredCount: discovered.length,
+      full: opts.full === true,
+      bulkImport: opts.bulkImport === true,
+      maxCandidates: maxResult.value,
       outDir: outDirAbs,
     },
     { summary: `spool.emit.start: scope=${opts.scope} discovered=${discovered.length}` },
@@ -621,6 +771,14 @@ export function emitSpool(
       });
       continue;
     }
+    if (!opts.full && matchesSpoolWatermark(watermark.get(page.relPath), page, opts)) {
+      skipped.push({
+        path: page.relPath,
+        code: 'ALREADY_EMITTED',
+        detail: 'body hash, tenant, and emission mode match the last successful spool emission',
+      });
+      continue;
+    }
     const candidate = buildCandidate(
       page,
       pageType,
@@ -639,6 +797,46 @@ export function emitSpool(
       continue;
     }
     candidates.push(parsed.data);
+    emittedPages.push({
+      page,
+      tenantId: opts.tenantId,
+      bulkImport: opts.bulkImport === true,
+    });
+    if (candidates.length > maxResult.value) {
+      const refusalTrace = writeTrace(
+        db,
+        workspacePath,
+        'spool.emit.refused',
+        {
+          batchId,
+          scope: opts.scope,
+          tenantId: opts.tenantId,
+          full: opts.full === true,
+          bulkImport: opts.bulkImport === true,
+          discoveredCount: discovered.length,
+          candidateCount: candidates.length,
+          maxCandidates: maxResult.value,
+        },
+        {
+          summary: `spool.emit.refused: candidate count ${candidates.length} exceeds max ${maxResult.value}`,
+        },
+      );
+      if (!refusalTrace.ok) {
+        return err(
+          new SpoolError(
+            `Failed to write emission-limit trace: ${refusalTrace.error.message}`,
+            'TRACE_FAILED',
+          ),
+        );
+      }
+      return err(
+        new SpoolError(
+          `Spool emission refused: ${candidates.length} eligible candidates exceeds the per-run limit of ${maxResult.value}. ` +
+            'Use an incremental run, or explicitly raise --max-candidates for a deliberate rebuild.',
+          'EMIT_LIMIT_EXCEEDED',
+        ),
+      );
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -652,6 +850,15 @@ export function emitSpool(
     filename,
     jsonlBody,
     candidates.map((c) => c.id),
+    {
+      batchId,
+      tenantId: opts.tenantId,
+      scope: opts.scope,
+      source: opts.bulkImport === true ? 'bulk_import' : 'import',
+      trustLevel: opts.bulkImport === true ? 'untrusted' : 'medium',
+      candidateCount: candidates.length,
+      maxCandidates: maxResult.value,
+    },
     startedAt,
     '1',
   );
@@ -675,6 +882,10 @@ export function emitSpool(
       tenantId: opts.tenantId,
       emittedCount: candidates.length,
       skippedCount: skipped.length,
+      watermarkSkippedCount: skipped.filter((s) => s.code === 'ALREADY_EMITTED').length,
+      full: opts.full === true,
+      bulkImport: opts.bulkImport === true,
+      maxCandidates: maxResult.value,
       spoolFile: basename(spoolFile),
       manifestFile: basename(manifestFile),
       spoolFileBytes,
@@ -693,6 +904,15 @@ export function emitSpool(
     );
   }
 
+  const recordResult = recordSpoolEmissions(
+    db,
+    emittedPages,
+    opts.scope,
+    startedAt,
+    basename(spoolFile),
+  );
+  if (!recordResult.ok) return recordResult;
+
   return ok({
     spoolFile,
     manifestFile,
@@ -704,10 +924,11 @@ export function emitSpool(
 }
 
 /**
- * Same as `emitSpool` but does NOT write to disk — used by the CLI dry-run
+ * Same as `emitSpool` but does NOT write spool files or traces — used by the CLI dry-run
  * path. Returns a structure-only summary suitable for printing; never reveals
  * candidate `content` (per agent BLOCK fix #2: dry-run prints structure
- * only to avoid streaming secrets to CI logs).
+ * only to avoid streaming secrets to CI logs). When a database is supplied,
+ * the preview applies the same emission watermark as a live run.
  */
 export interface SpoolDryRunSummary {
   scope: SpoolEmitScope;
@@ -726,6 +947,7 @@ export interface SpoolDryRunSummary {
 export function dryRunSpool(
   workspacePath: string,
   opts: SpoolEmitOptions,
+  db?: Database,
 ): Result<SpoolDryRunSummary, Error> {
   if (!existsSync(workspacePath)) {
     return err(new SpoolError(`Workspace not found at ${workspacePath}`, 'WORKSPACE_NOT_FOUND'));
@@ -738,6 +960,15 @@ export function dryRunSpool(
       ),
     );
   }
+
+  const maxResult = resolveMaxCandidates(opts);
+  if (!maxResult.ok) return maxResult;
+  const watermarkResult =
+    opts.full || db === undefined
+      ? ok(new Map<string, SpoolEmissionRow>())
+      : readSpoolEmissions(db);
+  if (!watermarkResult.ok) return watermarkResult;
+  const watermark = watermarkResult.value;
 
   const outDirAbs = opts.outDir
     ? resolve(workspacePath, opts.outDir)
@@ -788,6 +1019,14 @@ export function dryRunSpool(
       });
       continue;
     }
+    if (!opts.full && matchesSpoolWatermark(watermark.get(page.relPath), page, opts)) {
+      skipped.push({
+        path: page.relPath,
+        code: 'ALREADY_EMITTED',
+        detail: 'body hash, tenant, and emission mode match the last successful spool emission',
+      });
+      continue;
+    }
     const cand = buildCandidate(
       page,
       pageType,
@@ -803,6 +1042,15 @@ export function dryRunSpool(
       sourcePath: page.relPath,
       contentBytes: bytes,
     });
+    if (wouldEmit.length > maxResult.value) {
+      return err(
+        new SpoolError(
+          `Dry-run refused: ${wouldEmit.length} eligible candidates exceeds the per-run limit of ${maxResult.value}. ` +
+            'Use an incremental run, or explicitly raise --max-candidates for a deliberate rebuild.',
+          'EMIT_LIMIT_EXCEEDED',
+        ),
+      );
+    }
   }
 
   return ok({ scope: opts.scope, tenantId: opts.tenantId, outDir: outDirAbs, wouldEmit, skipped });
