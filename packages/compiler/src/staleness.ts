@@ -217,8 +217,8 @@ export function markSupersededCompilationsStale(
 }
 
 /**
- * Get all uncompiled sources — sources that have no `summary` compilation
- * record yet.
+ * Get current uncompiled sources — the newest source version for each path
+ * when that version has no `summary` compilation record yet.
  *
  * These are not technically "stale" (they were never compiled), but they
  * represent work that needs to be done before any downstream compilation
@@ -244,7 +244,13 @@ export function getUncompiledSources(
         `SELECT s.id, s.path, s.type
          FROM sources s
          LEFT JOIN compilations c ON c.source_id = s.id AND c.type = 'summary'
-         WHERE c.id IS NULL`,
+         WHERE c.id IS NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM sources newer
+              WHERE newer.path = s.path
+                AND (newer.ingested_at > s.ingested_at
+                  OR (newer.ingested_at = s.ingested_at AND newer.id > s.id))
+           )`,
       )
       .all();
   } catch (e) {
