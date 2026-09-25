@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.23.0](https://github.com/jeremylongshore/bobs-big-brain-compiler/compare/v1.22.0...v1.23.0) (2026-09-25)
+
+
+### Features
+
+* **compile:** gate model output, attribute sources, and extend audit verification (l13.1/.5/.7/.8) ([#181](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/181)) ([7927204](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/79272047ffaa7fb22483060b9080a8d0a0f5cf2a))
+* **compile:** gate successful runs on retrieval self-heal ([#187](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/187)) ([3179ac8](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/3179ac819135cf012525020f568f2237bc584ebd))
+* **maintain:** add explicit receipted unmetered mode ([#207](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/207)) ([8b8adce](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/8b8adce486bc1452e86d6240f4abdf9a5e03df30))
+* MiniMax-M3 distiller with groundedness eval + scheduled faithfulness floor (l13.9/l13.10) ([#180](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/180)) ([fb96c06](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/fb96c0669a1e12bf54b4051627637e23bf2d5c44))
+* receipts-precede-visibility floor (G1) + cross-day trace chaining (G3) ([#176](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/176)) ([a4b7922](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/a4b79225fa849a5880ce77b537a33cff65c8f683))
+* **spool:** add deterministic quality gate ([#193](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/193)) ([543877b](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/543877b9588d3f837ac05659cf0bcdd049725b38))
+* **spool:** bound incremental emission ([#190](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/190)) ([ab61f2f](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/ab61f2fd86fb0ddd9c295c3099ee112834d4e062))
+* **spool:** emit verified batch receipts in manifests ([#192](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/192)) ([86917c6](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/86917c6d8dd53481ab04006ae358ebee002b2801))
+
+
+### Bug Fixes
+
+* **ci:** make the golden-corpus workflow valid and move it off node20 actions ([#221](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/221)) ([1b57728](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/1b57728fcea141f046642b6c7e193cc8c20b6546))
+* **ci:** repair plugin script Ruff baseline ([d93816b](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/d93816b81c01af69518646b368e1c2913cd41d2a))
+* **ci:** repair plugin script Ruff baseline ([666daac](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/666daac6600f3d95604f7e0dfbe6c29142be91aa))
+* **cli:** serialize live writes with brain lock ([#203](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/203)) ([1831517](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/1831517f100f36b6fa5a2236bec44bc29004c292))
+* **distiller:** bound each complete nightly run and terminate descendants ([#214](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/214)) ([1a6a5f4](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/1a6a5f474c64b3c6edc3790e9da261030bc0ad6a))
+* **distiller:** verify governed outcomes and recover missed nights ([#213](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/213)) ([723d243](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/723d243cd1478b03876675dc3158f1ce5b0d570b))
+* **docs-ci:** stop Docs Quality from failing on release-please's generated changelog ([#222](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/222)) ([84777b8](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/84777b8a189e65d3e924bfcaa648ab0d55a7ceff))
+* **evidence:** unpin the kernel from 0.1.x and make bundle validation fail closed ([#182](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/182)) ([f968bf3](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/f968bf34258e43b8688739eb995ecd49b105a15f))
+* **hooks:** chain beads through Husky ([#185](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/185)) ([35c821f](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/35c821fc7fa81a8ea53aeb730f15d1c684ab22c9))
+* **ingest:** persist stale dependencies and mount freshness ([#201](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/201)) ([26764a5](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/26764a5c0ad9b6002944120a8d259c242d84c438))
+* **maintain:** bind resume checkpoints to source hash ([#209](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/209)) ([cdcd905](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/cdcd9055fd55a40bfa5b01b7125ba55e7f0deafa))
+* **maintain:** compile only current source versions ([#210](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/210)) ([feb34d0](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/feb34d01f80108c6097f47a1766bcc4b060eb353))
+* **maintain:** recompile changed mounted sources ([#208](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/208)) ([c0e6fa5](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/c0e6fa5aadec53da68149e3b0cbda848dff8068f))
+* **ops:** make ICO maintenance receipted ([#206](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/206)) ([3cb2f88](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/3cb2f88ebf7e3c4ae6e03ebc173437db9210dd41))
+* **ops:** route nightly compile through governed Buzz ([#205](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/205)) ([cb88096](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/cb8809654d8f904bdf7849e92daa66aaef8881d4))
+* **plugin:** harden ico-your-internals for skills.sh ([#212](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/212)) ([e79cf18](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/e79cf181033d3d4c91da8e463260cfcabafb0cc7))
+* **provider:** make the MiniMax-M3 compile path actually usable — strip inline &lt;think&gt; and price it ([#183](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/183)) ([cddb2fe](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/cddb2fe0e16c9e793483b5635c85e7f284f9f748))
+
 ## [Unreleased]
 
 ### Fixed
