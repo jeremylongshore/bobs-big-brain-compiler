@@ -183,11 +183,11 @@ describe('runIngest', () => {
     }
   });
 
-  it('does not mark prior compilations stale when the content hash is unchanged', () => {
+  it('does not mark prior compilations stale when the content hash is unchanged', async () => {
     const srcFile = join(tempBase, 'stable-with-compilation.txt');
     writeFile(srcFile, 'stable content');
 
-    const first = runIngest(srcFile, ingestOpts(), globalOpts());
+    const first = await runIngest(srcFile, ingestOpts(), globalOpts());
     expect(first.ok).toBe(true);
     if (!first.ok) return;
 
@@ -209,7 +209,7 @@ describe('runIngest', () => {
       );
     closeDatabase(beforeNoOp.value);
 
-    const second = runIngest(srcFile, ingestOpts(), globalOpts());
+    const second = await runIngest(srcFile, ingestOpts(), globalOpts());
     expect(second.ok).toBe(true);
     if (!second.ok) return;
     expect(second.value.alreadyIngested).toBe(true);
@@ -226,11 +226,11 @@ describe('runIngest', () => {
     }
   });
 
-  it('marks superseded direct and cross-source compilations stale on changed ingest', () => {
+  it('marks superseded direct and cross-source compilations stale on changed ingest', async () => {
     const srcFile = join(tempBase, 'stale-chain.txt');
     writeFile(srcFile, 'version one');
 
-    const first = runIngest(srcFile, ingestOpts(), globalOpts());
+    const first = await runIngest(srcFile, ingestOpts(), globalOpts());
     expect(first.ok).toBe(true);
     if (!first.ok) return;
 
@@ -269,7 +269,7 @@ describe('runIngest', () => {
     closeDatabase(beforeChange.value);
 
     writeFile(srcFile, 'version two');
-    const second = runIngest(srcFile, ingestOpts(), globalOpts());
+    const second = await runIngest(srcFile, ingestOpts(), globalOpts());
     expect(second.ok).toBe(true);
     if (!second.ok) return;
     expect(second.value.id).not.toBe(first.value.id);
@@ -292,7 +292,7 @@ describe('runIngest', () => {
     }
   });
 
-  it('records mount provenance and advances last_indexed_at after successful ingest', () => {
+  it('records mount provenance and advances last_indexed_at after successful ingest', async () => {
     const mountRoot = join(tempBase, 'mounted-corpus');
     mkdirSync(mountRoot, { recursive: true });
 
@@ -304,7 +304,7 @@ describe('runIngest', () => {
 
     const srcFile = join(mountRoot, 'mounted-note.txt');
     writeFile(srcFile, 'mounted content');
-    const result = runIngest(srcFile, ingestOpts(), globalOpts());
+    const result = await runIngest(srcFile, ingestOpts(), globalOpts());
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 

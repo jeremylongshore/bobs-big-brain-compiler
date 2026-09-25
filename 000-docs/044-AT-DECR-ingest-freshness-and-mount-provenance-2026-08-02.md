@@ -4,7 +4,7 @@
 
 ## Decision
 
-ICO keeps source rows append-only. When a file at an existing workspace-relative
+ICO keeps source rows append-only by protocol (rows are never updated or deleted in place). When a file at an existing workspace-relative
 path changes, ingest creates a new source row and then marks every compilation
 that depends on superseded versions stale:
 
