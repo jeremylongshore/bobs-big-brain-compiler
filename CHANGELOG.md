@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.23.1](https://github.com/jeremylongshore/bobs-big-brain-compiler/compare/v1.23.0...v1.23.1) (2026-10-01)
+
+
+### Bug Fixes
+
+* **spool:** clean up and tolerate crashed spool writes, with per-step crash tests ([#230](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/230)) ([f68b0d6](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/f68b0d6a0224df3d0e6e695d6f77ba94864198ae))
+
 ## [1.23.0](https://github.com/jeremylongshore/bobs-big-brain-compiler/compare/v1.22.0...v1.23.0) (2026-09-25)
 
 
