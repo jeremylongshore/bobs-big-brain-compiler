@@ -39,6 +39,7 @@ import {
   readdirSync,
   readFileSync,
   renameSync,
+  rmSync,
   writeSync,
 } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
@@ -701,7 +702,15 @@ function atomicWriteSpool(
   const MODE = 0o600;
   let spoolFd = -1;
   let manifestFd = -1;
+  let manifestPublished = false;
   try {
+    // A process killed mid-write (no catch block runs) leaves `.tmp` files
+    // behind; O_EXCL would then fail every retry that lands on the same
+    // second-granularity filename. Only this function ever creates these
+    // names, so clear them first (rmSync removes a symlink itself, never its
+    // target, so the O_EXCL anti-TOCTOU property is preserved).
+    rmSync(spoolTmp, { force: true });
+    rmSync(manifestTmp, { force: true });
     spoolFd = openSync(spoolTmp, O_FLAGS, MODE);
     writeSync(spoolFd, jsonlBody, null, 'utf-8');
     const bytes = fstatSync(spoolFd).size;
@@ -724,6 +733,7 @@ function atomicWriteSpool(
     closeSync(manifestFd);
     manifestFd = -1;
     renameSync(manifestTmp, manifestFile);
+    manifestPublished = true;
     // Publish the spool body last. A crash can leave an orphan manifest, which
     // the audit surface reports, but cannot leave a visible candidate file
     // without its receipt and hash sidecar (l13.4).
@@ -744,6 +754,18 @@ function atomicWriteSpool(
     if (manifestFd !== -1) {
       try {
         closeSync(manifestFd);
+      } catch {
+        /* swallow — original error wins */
+      }
+    }
+    // Best-effort cleanup so a failed emit leaves no staged or half-published
+    // artifacts. The spool body is never visible here (it is renamed last), so
+    // removing the published manifest cannot orphan a live spool.
+    for (const stale of manifestPublished
+      ? [spoolTmp, manifestTmp, manifestFile]
+      : [spoolTmp, manifestTmp]) {
+      try {
+        rmSync(stale, { force: true });
       } catch {
         /* swallow — original error wins */
       }
