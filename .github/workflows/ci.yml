@@ -150,7 +150,10 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info
-          fail_ci_if_error: true
+          # Dependabot-triggered runs receive no repo Actions secrets, so the upload
+          # cannot authenticate on a protected branch. Coverage thresholds are still
+          # enforced by `pnpm test:coverage` above; only the upload is tolerated.
+          fail_ci_if_error: ${{ github.actor != 'dependabot[bot]' }}
           verbose: true
 
       - name: Upload test results to Codecov Test Analytics
