@@ -32,6 +32,6 @@
     "@types/turndown": "^5.0.6",
     "tsup": "^8.4.0",
     "typescript": "^5.8.0",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.11"
   }
 }

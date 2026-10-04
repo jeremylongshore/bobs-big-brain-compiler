@@ -1,0 +1,106 @@
+{
+  "results": [
+    {
+      "source": {
+        "path": "pnpm-lock.yaml",
+        "type": "lockfile"
+      },
+      "packages": [
+        {
+          "package": {
+            "name": "@anthropic-ai/sdk",
+            "version": "0.82.0",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-p7fg-763f-g4gf"],
+              "aliases": ["CVE-2026-41686", "GHSA-p7fg-763f-g4gf"],
+              "max_severity": "4.8"
+            }
+          ]
+        },
+        {
+          "package": {
+            "name": "@babel/core",
+            "version": "7.29.0",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-4x5r-pxfx-6jf8"],
+              "aliases": ["CVE-2026-49356", "GHSA-4x5r-pxfx-6jf8"],
+              "max_severity": "3.2"
+            }
+          ]
+        },
+        {
+          "package": {
+            "name": "@humanfs/node",
+            "version": "0.16.7",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-p498-v437-472g"],
+              "aliases": ["GHSA-p498-v437-472g"],
+              "max_severity": "5.7"
+            }
+          ]
+        },
+        {
+          "package": {
+            "name": "esbuild",
+            "version": "0.27.7",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-g7r4-m6w7-qqqr"],
+              "aliases": ["GHSA-g7r4-m6w7-qqqr"],
+              "max_severity": "2.5"
+            }
+          ]
+        },
+        {
+          "package": {
+            "name": "esbuild",
+            "version": "0.28.0",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-g7r4-m6w7-qqqr"],
+              "aliases": ["GHSA-g7r4-m6w7-qqqr"],
+              "max_severity": "2.5"
+            }
+          ]
+        },
+        {
+          "package": {
+            "name": "qs",
+            "version": "6.15.1",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-4mjr-xmp4-gh2g"],
+              "aliases": ["CVE-2026-82417", "GHSA-4mjr-xmp4-gh2g"],
+              "max_severity": "6.3"
+            },
+            {
+              "ids": ["GHSA-q8mj-m7cp-5q26"],
+              "aliases": ["CVE-2026-8723", "GHSA-q8mj-m7cp-5q26"],
+              "max_severity": "6.3"
+            },
+            {
+              "ids": ["GHSA-x5fp-wj9c-mxmx"],
+              "aliases": ["CVE-2026-82562", "GHSA-x5fp-wj9c-mxmx"],
+              "max_severity": "6.3"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

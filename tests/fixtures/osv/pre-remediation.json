@@ -1,0 +1,400 @@
+{
+  "results": [
+    {
+      "source": {
+        "path": "pnpm-lock.yaml",
+        "type": "lockfile"
+      },
+      "packages": [
+        {
+          "package": {
+            "name": "@anthropic-ai/sdk",
+            "version": "0.82.0",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-p7fg-763f-g4gf"],
+              "aliases": ["CVE-2026-41686", "GHSA-p7fg-763f-g4gf"],
+              "max_severity": "4.8"
+            }
+          ]
+        },
+        {
+          "package": {
+            "name": "@babel/core",
+            "version": "7.29.0",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-4x5r-pxfx-6jf8"],
+              "aliases": ["CVE-2026-49356", "GHSA-4x5r-pxfx-6jf8"],
+              "max_severity": "3.2"
+            }
+          ]
+        },
+        {
+          "package": {
+            "name": "@humanfs/node",
+            "version": "0.16.7",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-p498-v437-472g"],
+              "aliases": ["GHSA-p498-v437-472g"],
+              "max_severity": "5.7"
+            }
+          ]
+        },
+        {
+          "package": {
+            "name": "@vitest/mocker",
+            "version": "4.1.2",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-82fw-gwwq-j7x9"],
+              "aliases": ["CVE-2026-84373", "GHSA-82fw-gwwq-j7x9"],
+              "max_severity": "5.9"
+            }
+          ]
+        },
+        {
+          "package": {
+            "name": "baseline-browser-mapping",
+            "version": "2.10.31",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-w5vr-8v7q-w6rv"],
+              "aliases": ["CVE-2026-45819", "GHSA-w5vr-8v7q-w6rv"],
+              "max_severity": "6.6"
+            }
+          ]
+        },
+        {
+          "package": {
+            "name": "brace-expansion",
+            "version": "5.0.5",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-3jxr-9vmj-r5cp"],
+              "aliases": ["CVE-2026-13149", "GHSA-3jxr-9vmj-r5cp"],
+              "max_severity": "7.7"
+            },
+            {
+              "ids": ["GHSA-6j4f-fj2g-mc7p"],
+              "aliases": ["CVE-2026-102276", "GHSA-6j4f-fj2g-mc7p"],
+              "max_severity": "7.5"
+            },
+            {
+              "ids": ["GHSA-jxxr-4gwj-5jf2"],
+              "aliases": ["CVE-2026-45149", "GHSA-jxxr-4gwj-5jf2"],
+              "max_severity": "6.5"
+            },
+            {
+              "ids": ["GHSA-mh99-v99m-4gvg"],
+              "aliases": ["CVE-2026-14257", "GHSA-mh99-v99m-4gvg"],
+              "max_severity": "7.5"
+            },
+            {
+              "ids": ["GHSA-q2hr-2g5m-vwhr"],
+              "aliases": ["CVE-2026-102277", "GHSA-q2hr-2g5m-vwhr"],
+              "max_severity": "5.3"
+            },
+            {
+              "ids": ["GHSA-qhr7-859c-m2p7"],
+              "aliases": ["CVE-2026-102278", "GHSA-qhr7-859c-m2p7"],
+              "max_severity": "7.5"
+            },
+            {
+              "ids": ["GHSA-rgw5-rvv9-x895"],
+              "aliases": ["CVE-2026-69152", "GHSA-rgw5-rvv9-x895"],
+              "max_severity": "7.5"
+            }
+          ]
+        },
+        {
+          "package": {
+            "name": "browserslist",
+            "version": "4.28.2",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-73wf-gq98-2v4g"],
+              "aliases": ["CVE-2026-73088", "GHSA-73wf-gq98-2v4g"],
+              "max_severity": "7.5"
+            },
+            {
+              "ids": ["GHSA-c83g-rgw3-j3cx"],
+              "aliases": ["CVE-2026-73089", "GHSA-c83g-rgw3-j3cx"],
+              "max_severity": "7.5"
+            }
+          ]
+        },
+        {
+          "package": {
+            "name": "esbuild",
+            "version": "0.27.7",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-g7r4-m6w7-qqqr"],
+              "aliases": ["GHSA-g7r4-m6w7-qqqr"],
+              "max_severity": "2.5"
+            }
+          ]
+        },
+        {
+          "package": {
+            "name": "esbuild",
+            "version": "0.28.0",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-g7r4-m6w7-qqqr"],
+              "aliases": ["GHSA-g7r4-m6w7-qqqr"],
+              "max_severity": "2.5"
+            }
+          ]
+        },
+        {
+          "package": {
+            "name": "fast-uri",
+            "version": "3.1.2",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-4c8g-83qw-93j6"],
+              "aliases": ["CVE-2026-13676", "GHSA-4c8g-83qw-93j6"],
+              "max_severity": "7.5"
+            },
+            {
+              "ids": ["GHSA-7p8r-x3mc-p8w7"],
+              "aliases": ["CVE-2026-18446", "GHSA-7p8r-x3mc-p8w7"],
+              "max_severity": "7.5"
+            },
+            {
+              "ids": ["GHSA-f65p-4m7j-42xc"],
+              "aliases": ["CVE-2026-75975", "GHSA-f65p-4m7j-42xc"],
+              "max_severity": "7.5"
+            },
+            {
+              "ids": ["GHSA-fph4-wmhf-6fwf"],
+              "aliases": ["CVE-2026-75899", "GHSA-fph4-wmhf-6fwf"],
+              "max_severity": "7.5"
+            },
+            {
+              "ids": ["GHSA-hrr3-gc8f-f4qj"],
+              "aliases": ["CVE-2026-86472", "GHSA-hrr3-gc8f-f4qj"],
+              "max_severity": "4.8"
+            },
+            {
+              "ids": ["GHSA-jqff-g426-hqxp"],
+              "aliases": ["CVE-2026-76172", "GHSA-jqff-g426-hqxp"],
+              "max_severity": "7.5"
+            },
+            {
+              "ids": ["GHSA-qw65-cvwx-89v3"],
+              "aliases": ["CVE-2026-84292", "GHSA-qw65-cvwx-89v3"],
+              "max_severity": "7.5"
+            },
+            {
+              "ids": ["GHSA-v2hh-gcrm-f6hx"],
+              "aliases": ["CVE-2026-16221", "GHSA-v2hh-gcrm-f6hx"],
+              "max_severity": "7.5"
+            }
+          ]
+        },
+        {
+          "package": {
+            "name": "js-yaml",
+            "version": "3.14.2",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-2883-xcg3-v3hh"],
+              "aliases": ["CVE-2026-84375", "GHSA-2883-xcg3-v3hh"],
+              "max_severity": "7.5"
+            },
+            {
+              "ids": ["GHSA-52cp-r559-cp3m"],
+              "aliases": ["CVE-2026-59869", "GHSA-52cp-r559-cp3m"],
+              "max_severity": "7.5"
+            },
+            {
+              "ids": ["GHSA-5p4m-2wfm-xmqj"],
+              "aliases": ["GHSA-5p4m-2wfm-xmqj"],
+              "max_severity": "7.5"
+            },
+            {
+              "ids": ["GHSA-h67p-54hq-rp68"],
+              "aliases": ["CVE-2026-53550", "GHSA-h67p-54hq-rp68"],
+              "max_severity": "5.3"
+            }
+          ]
+        },
+        {
+          "package": {
+            "name": "js-yaml",
+            "version": "4.1.1",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-2883-xcg3-v3hh"],
+              "aliases": ["CVE-2026-84375", "GHSA-2883-xcg3-v3hh"],
+              "max_severity": "7.5"
+            },
+            {
+              "ids": ["GHSA-52cp-r559-cp3m"],
+              "aliases": ["CVE-2026-59869", "GHSA-52cp-r559-cp3m"],
+              "max_severity": "7.5"
+            },
+            {
+              "ids": ["GHSA-5p4m-2wfm-xmqj"],
+              "aliases": ["GHSA-5p4m-2wfm-xmqj"],
+              "max_severity": "7.5"
+            },
+            {
+              "ids": ["GHSA-h67p-54hq-rp68"],
+              "aliases": ["CVE-2026-53550", "GHSA-h67p-54hq-rp68"],
+              "max_severity": "5.3"
+            }
+          ]
+        },
+        {
+          "package": {
+            "name": "nanoid",
+            "version": "3.3.11",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-28wg-ghj8-5hjv"],
+              "aliases": ["CVE-2026-67214", "GHSA-28wg-ghj8-5hjv"],
+              "max_severity": "8.2"
+            },
+            {
+              "ids": ["GHSA-2v37-7h3g-55p8"],
+              "aliases": ["CVE-2026-67213", "GHSA-2v37-7h3g-55p8"],
+              "max_severity": "8.2"
+            },
+            {
+              "ids": ["GHSA-xwg4-73v4-xw9w"],
+              "aliases": ["CVE-2026-73086", "GHSA-xwg4-73v4-xw9w"],
+              "max_severity": "7.4"
+            }
+          ]
+        },
+        {
+          "package": {
+            "name": "postcss",
+            "version": "8.5.10",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-6g55-p6wh-862q"],
+              "aliases": ["CVE-2026-45623", "GHSA-6g55-p6wh-862q"],
+              "max_severity": "7.5"
+            },
+            {
+              "ids": ["GHSA-fxqj-rqcc-2cmp"],
+              "aliases": ["CVE-2026-69153", "GHSA-fxqj-rqcc-2cmp"],
+              "max_severity": "6.3"
+            },
+            {
+              "ids": ["GHSA-r28c-9q8g-f849"],
+              "aliases": ["CVE-2026-73646", "GHSA-r28c-9q8g-f849"],
+              "max_severity": "7.5"
+            }
+          ]
+        },
+        {
+          "package": {
+            "name": "qs",
+            "version": "6.15.1",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-4mjr-xmp4-gh2g"],
+              "aliases": ["CVE-2026-82417", "GHSA-4mjr-xmp4-gh2g"],
+              "max_severity": "6.3"
+            },
+            {
+              "ids": ["GHSA-q8mj-m7cp-5q26"],
+              "aliases": ["CVE-2026-8723", "GHSA-q8mj-m7cp-5q26"],
+              "max_severity": "6.3"
+            },
+            {
+              "ids": ["GHSA-x5fp-wj9c-mxmx"],
+              "aliases": ["CVE-2026-82562", "GHSA-x5fp-wj9c-mxmx"],
+              "max_severity": "6.3"
+            }
+          ]
+        },
+        {
+          "package": {
+            "name": "vite",
+            "version": "7.3.1",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-4w7w-66w2-5vf9"],
+              "aliases": ["CVE-2026-39365", "GHSA-4w7w-66w2-5vf9"],
+              "max_severity": "6.3"
+            },
+            {
+              "ids": ["GHSA-fx2h-pf6j-xcff"],
+              "aliases": ["CVE-2026-53571", "GHSA-fx2h-pf6j-xcff"],
+              "max_severity": "8.2"
+            },
+            {
+              "ids": ["GHSA-p9ff-h696-f583"],
+              "aliases": ["CVE-2026-39363", "GHSA-p9ff-h696-f583"],
+              "max_severity": "8.2"
+            },
+            {
+              "ids": ["GHSA-v2wj-q39q-566r"],
+              "aliases": ["CVE-2026-39364", "GHSA-v2wj-q39q-566r"],
+              "max_severity": "8.2"
+            },
+            {
+              "ids": ["GHSA-v6wh-96g9-6wx3"],
+              "aliases": ["CVE-2026-53632", "GHSA-v6wh-96g9-6wx3"],
+              "max_severity": "5.5"
+            }
+          ]
+        },
+        {
+          "package": {
+            "name": "vitest",
+            "version": "4.1.2",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": ["GHSA-82fw-gwwq-j7x9"],
+              "aliases": ["CVE-2026-84373", "GHSA-82fw-gwwq-j7x9"],
+              "max_severity": "5.9"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
