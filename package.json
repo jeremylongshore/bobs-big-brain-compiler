@@ -51,6 +51,12 @@
       "esbuild",
       "better-sqlite3"
     ],
+    "overrides": {
+      "brace-expansion": "^5.0.12",
+      "browserslist": "^4.28.7",
+      "fast-uri": "^3.1.8",
+      "js-yaml@<4": "^3.15.2"
+    },
     "peerDependencyRules": {
       "allowAny": [
         "vite"
@@ -64,7 +70,7 @@
     "@intentsolutions/audit-harness": "^1.4.0",
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/vitest-runner": "^9.6.1",
-    "@vitest/coverage-v8": "^4.1.2",
+    "@vitest/coverage-v8": "^4.1.11",
     "dependency-cruiser": "^17.4.0",
     "eslint": "^10.2.0",
     "eslint-plugin-simple-import-sort": "^13.0.0",
@@ -73,6 +79,7 @@
     "lint-staged": "^17.0.5",
     "prettier": "^3.8.3",
     "typescript-eslint": "^8.58.2",
-    "vitest": "^4.1.2"
+    "vite": "^7.3.6",
+    "vitest": "^4.1.11"
   }
 }

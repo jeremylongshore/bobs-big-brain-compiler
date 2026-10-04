@@ -65,17 +65,30 @@ jobs:
     # when npm retired https://registry.npmjs.org/-/npm/v1/security/audits
     # (HTTP 410). OSV.dev is Google-run, free, and reads pnpm-lock.yaml
     # directly — no repo-level settings or third-party endpoints.
-    # Fails on HIGH/CRITICAL vulnerabilities.
+    # Fails on HIGH/CRITICAL (CVSS >= 7.0) vulnerabilities.
+    #
+    # osv-scanner 2.x has no severity flag: `--fail-on-vuln` and
+    # `--min-severity` are rejected as unknown flags (the scan silently never
+    # ran while those were passed), and the scanner exits 1 on ANY finding.
+    # So the scanner step only writes a JSON report, and scripts/osv-gate.mjs
+    # applies the HIGH threshold. The gate exits 2 if the report is missing or
+    # malformed, so a scanner that fails to run cannot read as a pass.
+    # Gate tests: tests/integration/osv-gate.test.ts.
     steps:
       - uses: actions/checkout@v7
 
-      - name: OSV Scanner
-        uses: google/osv-scanner-action/osv-scanner-action@v2.0.0
+      - name: OSV Scanner (write JSON report)
+        # Exit 1 = findings exist; the gate step below decides severity.
+        continue-on-error: true
+        uses: google/osv-scanner-action/osv-scanner-action@a345acffa64b0eaede81a3d9aae6141214d9c8fc # v2.6.0
         with:
           scan-args: |-
             --lockfile=./pnpm-lock.yaml
-            --fail-on-vuln
-            --min-severity=HIGH
+            --format=json
+            --output-file=osv-report.json
+
+      - name: Gate on HIGH+ vulnerabilities
+        run: node scripts/osv-gate.mjs osv-report.json
 
       - name: Check for committed .env files
         if: always()
