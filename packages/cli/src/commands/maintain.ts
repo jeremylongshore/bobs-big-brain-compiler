@@ -106,7 +106,10 @@ export interface MaintenanceScan {
     removed: number;
     /** Removed origins an operator already retired; they no longer block maintenance. */
     retired: number;
-    /** Retired origins that came back byte-identical; maintenance revives them. */
+    /**
+     * Retired origins that came back byte-identical. A normal run revives them;
+     * a scan-only run reports them as pending work and changes nothing.
+     */
     revived: number;
   };
   removedOrigins: string[];
@@ -1003,6 +1006,15 @@ export async function runMaintenance(
           path: candidate.rawPath,
           hash: candidate.hash,
         }));
+
+        if (opts.scanOnly === true && scan.revivedSourceIds.length > 0) {
+          finalReceipt = fail(
+            'scan_found_pending_work',
+            `Scan-only run found ${scan.revivedSourceIds.length} retired source(s) to revive`,
+          );
+          writeMaintenanceReceipt(workspacePath, finalReceipt);
+          return;
+        }
 
         if (changed.length === 0) {
           const terminalReceipt: MaintenanceReceipt = {

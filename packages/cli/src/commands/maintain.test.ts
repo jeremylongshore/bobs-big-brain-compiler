@@ -1035,8 +1035,21 @@ describe('ico maintain planning', () => {
       expect(unblocked.scan.counts.retired).toBe(1);
       expect(quiet.calls()).toBe(0);
 
-      // The file comes back byte-identical: revived, no provider call.
+      // The file comes back byte-identical. A scan-only run reports the
+      // revival as pending work and leaves the source retired.
       writeFileSync(join(mounted, 'gone.md'), '# Gone\nA durable gone decision.\n', 'utf-8');
+      const scanOnly = await runMaintenance(workspace, dbPath(), {
+        scanOnly: true,
+        lockWaitSeconds: '1',
+      });
+      expect(scanOnly.status).toBe('failure');
+      expect(scanOnly.errorCode).toBe('scan_found_pending_work');
+      expect(scanOnly.scan.counts.revived).toBe(1);
+      expect(readFileSync(join(workspace, 'audit', 'log.md'), 'utf-8')).not.toContain(
+        'source.revive',
+      );
+
+      // A normal run revives it with no provider call.
       const back = summaryClient();
       const revived = await maintain(back.client);
       expect(revived.error).toBeNull();
@@ -1088,6 +1101,19 @@ describe('ico maintain planning', () => {
     });
 
     it('retires every removed origin with --all-removed', async () => {
+      const preview = await retireRemovedSources(workspace, dbPath(), {
+        reason,
+        allRemoved: true,
+        dryRun: true,
+        lockWaitSeconds: '1',
+      });
+      expect(preview.receiptPath).toBeNull();
+      expect(preview.receipt.dryRun).toBe(true);
+      expect(preview.receipt.retired.map((item) => item.relativePath)).toEqual(['gone.md']);
+      expect((await maintain(summaryClient().client)).errorCode).toBe(
+        'removed_source_requires_retirement',
+      );
+
       const { receipt } = await retireRemovedSources(workspace, dbPath(), {
         reason,
         allRemoved: true,
