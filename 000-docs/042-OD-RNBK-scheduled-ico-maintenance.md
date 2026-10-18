@@ -28,7 +28,7 @@ The `inference_operations` ledger records exact input and output usage once per 
 
 `--billing-mode unmetered` is an explicit operator decision for an account whose marginal provider usage is not billed per token. It bypasses only the USD stop. Record that decision in the owning Bead or deployment change record; each maintenance receipt then records the mode that was actually applied. The receipt contains `billingMode: "unmetered"`, a null `dailyCeilingUsd`, exact operations and tokens, and the same retail-equivalent cost estimate for observability. The write lock, timeout, deterministic candidate ordering, and `--max-candidates` run bound remain enforced. The wrapper remains metered by default. Set `ICO_BILLING_MODE=unmetered` in the local service environment only after recording the operator decision; use `ICO_DAILY_CEILING_USD` to change the USD 1 ceiling in metered mode.
 
-Historical schema-v2 receipts remain readable: a missing `billingMode` means `metered`, and the numeric `dailyCeilingUsd` is the ceiling that run enforced. Readers that validate receipt versions must accept both v2 and v3 while history is retained.
+Historical schema-v2 receipts remain readable: a missing `billingMode` means `metered`, and the numeric `dailyCeilingUsd` is the ceiling that run enforced. Schema v4 adds `scan.counts.retired`, `scan.counts.revived` and `scan.revivedSourceIds` (see § Retiring removed sources). Readers that validate receipt versions must accept v2, v3 and v4 while history is retained.
 
 ## Production mounts
 
@@ -45,6 +45,25 @@ ico --workspace ~/.teamkb/brain mount add intent-os ~/000-projects/intent-os
 The scanner is recursive, skips hidden directories and `node_modules`, accepts supported extensions case-insensitively, and assigns a stable collision-resistant raw path from mount identity plus relative path. Git mounts enumerate tracked files plus non-ignored untracked files, so ignored caches and permission-restricted scratch backups are outside the knowledge surface instead of becoming silent scan gaps. A Git enumeration failure still fails the run. Content hashes, not mtimes, decide freshness. Direct repository mounts disable the input-age gate by default because an unchanged repository can be healthy. Set `ICO_MAX_INPUT_AGE_DAYS` only for a derived feed that has an explicit delivery SLA; the receipt still records each mount's newest observed mtime.
 
 Removing a tracked source is fail-closed. Maintenance reports `removed_source_requires_retirement`; it does not erase compiled knowledge or pretend the deletion was governed.
+
+## Retiring removed sources
+
+When a mounted file that maintenance already tracks disappears, every run fails with `removed_source_requires_retirement` until an operator says why. The receipt lists the affected origins as `<mount id>:<relative path>` in `scan.removedOrigins`. Decide per origin whether the removal was intended: a file deleted or moved on the branch you mean to mount. If the mount is a working tree that another session switched to a different branch, fix the checkout instead of retiring.
+
+Preview, then retire with a reason that names where the content went:
+
+```bash
+ico --workspace ~/.teamkb/brain maintain retire --all-removed --dry-run \
+  --reason "Moved into 000-docs/legal (private, git-excluded) on 2026-09-28"
+ico --workspace ~/.teamkb/brain maintain retire --origin intent-os:legal/README.md \
+  --reason "Moved into 000-docs/legal (private, git-excluded) on 2026-09-28"
+```
+
+`--origin` takes `<mount name or id>:<relative path>` and is repeatable; `--all-removed` takes every origin the scan currently reports. Retirement refuses the whole request when any named origin is not currently reported as removed (a live file or a typo), when a mount is missing (every file in it would look removed), or when the reason is under 10 characters.
+
+Retirement deletes nothing. `raw/` stays append-only and compiled pages stay on disk. Under the brain write lock it records `retiredAt`, `retiredReason` and `retiredRunId` in each source row's `metadata.maintenance`, marks that source's compilations stale so they no longer feed concept extraction, and writes a `source.retire` trace event, an audit-log line and a receipt at `.ico/maintenance/retirements/<run id>.json`. Retired origins then count under `scan.counts.retired` and stop blocking maintenance.
+
+If a retired file comes back byte-identical, the next run revives it: the content hash proves the retired summary came from those exact bytes, so maintenance clears the retirement, marks the compilations current again, and writes a `source.revive` trace and audit line without a provider call. A file that comes back with different content is an ordinary change and is recompiled.
 
 ## Install and schedule
 

@@ -36,6 +36,7 @@ import {
   resolvePricingModel,
 } from '@ico/compiler';
 import {
+  appendAuditLog,
   closeDatabase,
   type Database,
   initDatabase,
@@ -44,6 +45,7 @@ import {
   loadConfig,
   scanForDisclosure,
   withWriteLock,
+  writeTrace,
 } from '@ico/kernel';
 import { err, type Mount, type Result, type Source } from '@ico/types';
 
@@ -57,7 +59,8 @@ import {
 } from './compile.js';
 import { scanDirectory } from './ingest.js';
 
-const RECEIPT_SCHEMA_VERSION = 3;
+const RECEIPT_SCHEMA_VERSION = 4;
+const RETIREMENT_RECEIPT_SCHEMA_VERSION = 1;
 const INFERENCE_BUDGET_EXCEEDED = 'INFERENCE_BUDGET_EXCEEDED';
 
 export type MaintenanceStatus = 'compiled' | 'partial' | 'verified_noop' | 'failure';
@@ -101,8 +104,14 @@ export interface MaintenanceScan {
     changed: number;
     pending: number;
     removed: number;
+    /** Removed origins an operator already retired; they no longer block maintenance. */
+    retired: number;
+    /** Retired origins that came back byte-identical; maintenance revives them. */
+    revived: number;
   };
   removedOrigins: string[];
+  /** Source ids of retired origins that reappeared with their completed hash. */
+  revivedSourceIds: string[];
   staleMounts: string[];
   missingMounts: string[];
 }
@@ -153,6 +162,7 @@ interface MaintenanceOrigin {
   originPath?: unknown;
   completedHash?: unknown;
   excludedReason?: unknown;
+  retiredAt?: unknown;
 }
 
 interface OriginMetadata {
@@ -227,6 +237,7 @@ function parseOrigin(source: Source): MaintenanceOrigin | null {
       ...(value['originPath'] !== undefined && { originPath: value['originPath'] }),
       ...(value['completedHash'] !== undefined && { completedHash: value['completedHash'] }),
       ...(value['excludedReason'] !== undefined && { excludedReason: value['excludedReason'] }),
+      ...(value['retiredAt'] !== undefined && { retiredAt: value['retiredAt'] }),
     };
   } catch {
     return null;
@@ -295,6 +306,7 @@ export function scanMountedSources(
   const nowMs = options?.nowMs ?? Date.now();
   const maxAge = options?.maxInputAgeDays ?? 0;
   const seenOrigins = new Set<string>();
+  const revivedSourceIds: string[] = [];
   const evidence: MountScanEvidence[] = [];
   const candidates: MaintenanceCandidate[] = [];
   const counts = {
@@ -308,6 +320,8 @@ export function scanMountedSources(
     changed: 0,
     pending: 0,
     removed: 0,
+    retired: 0,
+    revived: 0,
   };
 
   for (const mount of mounts) {
@@ -344,6 +358,18 @@ export function scanMountedSources(
       const tracked = trackedByOrigin.get(key);
       if (tracked !== undefined) {
         const origin = parseOrigin(tracked);
+        // A retired origin that reappears byte-identical is revived: its
+        // content hash proves the retired summary was derived from these
+        // exact bytes. Changed bytes fall through to a normal recompile.
+        if (
+          tracked.hash === hash &&
+          origin?.completedHash === hash &&
+          typeof origin.retiredAt === 'string'
+        ) {
+          counts.revived++;
+          revivedSourceIds.push(tracked.id);
+          continue;
+        }
         if (tracked.hash === hash && origin?.completedHash === hash) {
           if (compiledSourceIds.has(tracked.id)) {
             counts.unchanged++;
@@ -418,7 +444,8 @@ export function scanMountedSources(
       currentMountIds.has(origin.mountId) &&
       !seenOrigins.has(key)
     ) {
-      removedOrigins.push(key.replace('\0', ':'));
+      if (typeof origin.retiredAt === 'string') counts.retired++;
+      else removedOrigins.push(key.replace('\0', ':'));
     }
   }
   removedOrigins.sort();
@@ -429,6 +456,7 @@ export function scanMountedSources(
     candidates: candidates.sort((a, b) => a.rawPath.localeCompare(b.rawPath)),
     counts,
     removedOrigins,
+    revivedSourceIds: revivedSourceIds.sort(),
     staleMounts: evidence.filter((item) => item.stale).map((item) => item.name),
     missingMounts: evidence.filter((item) => item.missing).map((item) => item.name),
   };
@@ -439,6 +467,7 @@ function receiptScan(scan: MaintenanceScan): Omit<MaintenanceScan, 'candidates'>
     mounts: scan.mounts,
     counts: scan.counts,
     removedOrigins: scan.removedOrigins,
+    revivedSourceIds: scan.revivedSourceIds,
     staleMounts: scan.staleMounts,
     missingMounts: scan.missingMounts,
   };
@@ -693,10 +722,67 @@ function markMaintenanceComplete(
     completedHash: candidate.hash,
     completedAt,
   };
+  // Recompiling a source that came back ends its retirement.
+  delete maintenance['retiredAt'];
+  delete maintenance['retiredReason'];
+  delete maintenance['retiredRunId'];
   if (excludedReason === undefined) delete maintenance['excludedReason'];
   else maintenance['excludedReason'] = excludedReason;
   metadata['maintenance'] = maintenance;
   db.prepare('UPDATE sources SET metadata = ? WHERE id = ?').run(JSON.stringify(metadata), row.id);
+}
+
+/**
+ * End the retirement of sources whose files came back byte-identical: clear
+ * the retirement fields and mark their compilations current again, with a
+ * trace event and an audit-log line. No provider call is needed.
+ */
+function reviveRetiredSources(
+  db: Database,
+  workspacePath: string,
+  sourceIds: readonly string[],
+  runId: string,
+): Result<void, Error> {
+  try {
+    const read = db.prepare<[string], { metadata: string | null }>(
+      'SELECT metadata FROM sources WHERE id = ?',
+    );
+    const update = db.prepare<[string, string], void>(
+      'UPDATE sources SET metadata = ? WHERE id = ?',
+    );
+    const current = db.prepare<[string], void>(
+      'UPDATE compilations SET stale = 0 WHERE source_id = ?',
+    );
+    db.transaction(() => {
+      for (const id of sourceIds) {
+        const metadata = JSON.parse(read.get(id)?.metadata ?? '{}') as Record<string, unknown>;
+        const maintenance = { ...(metadata['maintenance'] as Record<string, unknown>) };
+        delete maintenance['retiredAt'];
+        delete maintenance['retiredReason'];
+        delete maintenance['retiredRunId'];
+        metadata['maintenance'] = maintenance;
+        update.run(JSON.stringify(metadata), id);
+        current.run(id);
+      }
+      const trace = writeTrace(
+        db,
+        workspacePath,
+        'source.revive',
+        { runId, sourceIds: [...sourceIds] },
+        { summary: `Revived ${sourceIds.length} retired source(s) that reappeared unchanged` },
+      );
+      if (!trace.ok) throw trace.error;
+    })();
+    const audit = appendAuditLog(
+      workspacePath,
+      'source.revive',
+      `Revived ${sourceIds.length} retired source(s) that reappeared unchanged (run ${runId})`,
+    );
+    if (!audit.ok) return err(audit.error);
+    return { ok: true, value: undefined };
+  } catch (error) {
+    return err(error instanceof Error ? error : new Error(String(error)));
+  }
 }
 
 function emptyAffected(): AffectedSet {
@@ -723,8 +809,11 @@ function emptyReceiptScan(): Omit<MaintenanceScan, 'candidates'> {
       changed: 0,
       pending: 0,
       removed: 0,
+      retired: 0,
+      revived: 0,
     },
     removedOrigins: [],
+    revivedSourceIds: [],
     staleMounts: [],
     missingMounts: [],
   };
@@ -900,6 +989,14 @@ export async function runMaintenance(
           );
           writeMaintenanceReceipt(workspacePath, finalReceipt);
           return;
+        }
+        if (scan.revivedSourceIds.length > 0 && opts.scanOnly !== true) {
+          const revived = reviveRetiredSources(db, workspacePath, scan.revivedSourceIds, runId);
+          if (!revived.ok) {
+            finalReceipt = fail('revive_failed', revived.error.message);
+            writeMaintenanceReceipt(workspacePath, finalReceipt);
+            return;
+          }
         }
 
         const changed: ChangedFile[] = selectedCandidates.map((candidate) => ({
@@ -1199,8 +1296,256 @@ export async function runMaintenance(
   return finalReceipt;
 }
 
+// ---------------------------------------------------------------------------
+// Source retirement
+// ---------------------------------------------------------------------------
+
+export interface RetireOptions {
+  /** Why the sources were removed. Required; it is the governed record. */
+  reason?: string;
+  /** Origins to retire, as `<mount name or id>:<relative path>`. */
+  origins?: string[];
+  /** Retire every origin the scan currently reports as removed. */
+  allRemoved?: boolean;
+  dryRun?: boolean;
+  lockWaitSeconds?: string;
+}
+
+export interface RetiredOrigin {
+  origin: string;
+  mountName: string;
+  relativePath: string;
+  sourceIds: string[];
+  summariesMarkedStale: number;
+}
+
+export interface RetirementReceipt {
+  schemaVersion: number;
+  kind: 'source-retirement';
+  runId: string;
+  startedAt: string;
+  finishedAt: string;
+  workspace: string;
+  dryRun: boolean;
+  reason: string;
+  retired: RetiredOrigin[];
+  traceEventId: string | null;
+}
+
+function writeRetirementReceipt(workspacePath: string, receipt: RetirementReceipt): string {
+  const directory = join(receiptDirectory(workspacePath), 'retirements');
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  chmodSync(directory, 0o700);
+  const target = join(directory, `${receipt.runId}.json`);
+  const temporary = `${target}.tmp-${process.pid}-${randomUUID()}`;
+  try {
+    writeFileSync(temporary, `${JSON.stringify(receipt, null, 2)}\n`, {
+      encoding: 'utf-8',
+      mode: 0o600,
+    });
+    renameSync(temporary, target);
+  } finally {
+    if (existsSync(temporary)) unlinkSync(temporary);
+  }
+  return target;
+}
+
+/**
+ * Retire mounted sources whose files were deliberately removed.
+ *
+ * Retirement is the governed answer to `removed_source_requires_retirement`.
+ * It never deletes anything: `raw/` stays append-only and compiled pages stay
+ * on disk. It records the operator's reason on every source row of the
+ * origin, marks that origin's compilations stale, and writes a hash-chained
+ * trace event, an audit-log line and a retirement receipt. Only origins the
+ * scan currently reports as removed can be retired, and any unknown request
+ * refuses the whole operation, so a typo cannot retire a live file.
+ */
+export async function retireRemovedSources(
+  workspacePath: string,
+  dbPath: string,
+  opts: RetireOptions,
+): Promise<{ receipt: RetirementReceipt; receiptPath: string | null }> {
+  const reason = opts.reason?.trim() ?? '';
+  if (reason.length < 10) {
+    throw new Error('--reason is required and must say why the sources were removed');
+  }
+  const requested = opts.origins ?? [];
+  if ((opts.allRemoved === true) === requested.length > 0) {
+    throw new Error('Pass either --all-removed or one or more --origin values, not both');
+  }
+  const lockWaitSeconds = finiteNonNegative(opts.lockWaitSeconds, 10, '--lock-wait-seconds');
+  const runId = new Date().toISOString().replace(/[:.]/g, '-');
+  const startedAt = new Date().toISOString();
+  let outcome: { receipt: RetirementReceipt; receiptPath: string | null } | null = null;
+
+  const lockResult = await withWriteLock(
+    () => {
+      const dbResult = initDatabase(dbPath);
+      if (!dbResult.ok) throw dbResult.error;
+      const db = dbResult.value;
+      try {
+        const scan = scanMountedSources(db, workspacePath);
+        // A missing mount makes every one of its files look removed. Never
+        // retire a whole mount because a directory was briefly unavailable.
+        if (scan.missingMounts.length > 0) {
+          throw new Error(
+            `Refusing to retire while mounts are missing: ${scan.missingMounts.join(', ')}`,
+          );
+        }
+        const mountsResult = listMounts(db);
+        if (!mountsResult.ok) throw mountsResult.error;
+        const mountNameById = new Map(mountsResult.value.map((m) => [m.id, m.name]));
+        const mountIdByName = new Map(mountsResult.value.map((m) => [m.name, m.id]));
+        const removed = new Set(scan.removedOrigins);
+
+        let selected: string[];
+        if (opts.allRemoved === true) {
+          selected = [...scan.removedOrigins];
+        } else {
+          const unknown: string[] = [];
+          selected = [];
+          for (const raw of requested) {
+            const separator = raw.indexOf(':');
+            const mountRef = separator > 0 ? raw.slice(0, separator) : '';
+            const relativePath = separator > 0 ? raw.slice(separator + 1) : '';
+            const mountId = mountIdByName.get(mountRef) ?? mountRef;
+            const key = `${mountId}:${relativePath}`;
+            if (removed.has(key)) selected.push(key);
+            else unknown.push(raw);
+          }
+          if (unknown.length > 0) {
+            throw new Error(
+              `Not currently reported as removed, nothing retired: ${unknown.join(', ')}`,
+            );
+          }
+          selected = [...new Set(selected)].sort();
+        }
+        if (selected.length === 0) {
+          throw new Error('The scan reports no removed sources; nothing to retire');
+        }
+
+        const sourcesResult = listSources(db);
+        if (!sourcesResult.ok) throw sourcesResult.error;
+        const rowsByOrigin = new Map<string, Source[]>();
+        for (const source of sourcesResult.value) {
+          const origin = parseOrigin(source);
+          if (origin === null) continue;
+          const key = `${origin.mountId}:${origin.relativePath}`;
+          const rows = rowsByOrigin.get(key) ?? [];
+          rows.push(source);
+          rowsByOrigin.set(key, rows);
+        }
+
+        const retiredAt = new Date().toISOString();
+        const countStale = db.prepare<[string], { n: number }>(
+          'SELECT COUNT(*) AS n FROM compilations WHERE source_id = ? AND stale = 0',
+        );
+        const markStale = db.prepare<[string], void>(
+          'UPDATE compilations SET stale = 1 WHERE source_id = ?',
+        );
+        const updateMetadata = db.prepare<[string, string], void>(
+          'UPDATE sources SET metadata = ? WHERE id = ?',
+        );
+        const retired: RetiredOrigin[] = selected.map((key) => {
+          const separator = key.indexOf(':');
+          const mountId = key.slice(0, separator);
+          const rows = rowsByOrigin.get(key) ?? [];
+          return {
+            origin: key,
+            mountName: mountNameById.get(mountId) ?? mountId,
+            relativePath: key.slice(separator + 1),
+            sourceIds: rows.map((row) => row.id).sort(),
+            summariesMarkedStale: rows.reduce(
+              (total, row) => total + (countStale.get(row.id)?.n ?? 0),
+              0,
+            ),
+          };
+        });
+
+        if (opts.dryRun === true) {
+          outcome = {
+            receipt: {
+              schemaVersion: RETIREMENT_RECEIPT_SCHEMA_VERSION,
+              kind: 'source-retirement',
+              runId,
+              startedAt,
+              finishedAt: new Date().toISOString(),
+              workspace: workspacePath,
+              dryRun: true,
+              reason,
+              retired,
+              traceEventId: null,
+            },
+            receiptPath: null,
+          };
+          return;
+        }
+
+        const apply = db.transaction((): string => {
+          for (const item of retired) {
+            for (const row of rowsByOrigin.get(item.origin) ?? []) {
+              const metadata = JSON.parse(row.metadata ?? '{}') as Record<string, unknown>;
+              const maintenance = metadata['maintenance'] as Record<string, unknown>;
+              metadata['maintenance'] = {
+                ...maintenance,
+                retiredAt,
+                retiredReason: reason,
+                retiredRunId: runId,
+              };
+              updateMetadata.run(JSON.stringify(metadata), row.id);
+              markStale.run(row.id);
+            }
+          }
+          const trace = writeTrace(
+            db,
+            workspacePath,
+            'source.retire',
+            { runId, reason, origins: retired.map((item) => item.origin) },
+            { summary: `Retired ${retired.length} removed mounted source(s): ${reason}` },
+          );
+          if (!trace.ok) throw trace.error;
+          return trace.value.event_id;
+        });
+        const traceEventId = apply();
+
+        const audit = appendAuditLog(
+          workspacePath,
+          'source.retire',
+          `Retired ${retired.length} removed mounted source(s) (run ${runId}): ${reason}`,
+        );
+        if (!audit.ok) throw audit.error;
+
+        const receipt: RetirementReceipt = {
+          schemaVersion: RETIREMENT_RECEIPT_SCHEMA_VERSION,
+          kind: 'source-retirement',
+          runId,
+          startedAt,
+          finishedAt: new Date().toISOString(),
+          workspace: workspacePath,
+          dryRun: false,
+          reason,
+          retired,
+          traceEventId,
+        };
+        outcome = { receipt, receiptPath: writeRetirementReceipt(workspacePath, receipt) };
+      } finally {
+        closeDatabase(db);
+      }
+    },
+    { waitSeconds: lockWaitSeconds, requireLock: true },
+  );
+
+  if (!lockResult.ok) throw lockResult.error;
+  if (!lockResult.value.ran) {
+    throw new Error('Another brain writer held the lock for the full wait window');
+  }
+  if (outcome === null) throw new Error('Retirement finished without a result');
+  return outcome;
+}
+
 export function register(program: Command): void {
-  program
+  const maintain = program
     .command('maintain')
     .description('Scan mounted sources and run a receipted incremental compile')
     .option('--scan-only', 'Scan and write a receipt without ingesting or compiling')
@@ -1238,6 +1583,56 @@ export function register(program: Command): void {
         const receipt = await runMaintenance(resolved.value.root, resolved.value.dbPath, opts);
         printReceipt(receipt, global.json === true);
         if (receipt.status === 'failure') process.exitCode = 1;
+      } catch (error) {
+        process.stderr.write(
+          `${formatError(error instanceof Error ? error.message : String(error))}\n`,
+        );
+        process.exitCode = 1;
+      }
+    });
+
+  maintain
+    .command('retire')
+    .description('Retire mounted sources that were deliberately removed, with a receipt')
+    .requiredOption('--reason <text>', 'Why the sources were removed (recorded in the receipt)')
+    .option(
+      '--origin <mount:path>',
+      'A removed origin as <mount name or id>:<relative path>; repeatable',
+      (value: string, previous: string[] = []) => [...previous, value],
+    )
+    .option('--all-removed', 'Retire every origin the scan reports as removed')
+    .option('--dry-run', 'Show what would be retired without writing anything')
+    .option('--lock-wait-seconds <n>', 'Seconds to wait for the required brain write lock', '10')
+    .action(async (opts: Omit<RetireOptions, 'origins'> & { origin?: string[] }, cmd: Command) => {
+      const global = cmd.optsWithGlobals<GlobalOptions>();
+      const resolved = resolveWorkspace(
+        global.workspace !== undefined ? { workspace: global.workspace } : undefined,
+      );
+      if (!resolved.ok) {
+        process.stderr.write(`${formatError(resolved.error.message)}\n`);
+        process.exitCode = 1;
+        return;
+      }
+      try {
+        const { receipt, receiptPath } = await retireRemovedSources(
+          resolved.value.root,
+          resolved.value.dbPath,
+          { ...opts, origins: opts.origin ?? [] },
+        );
+        if (global.json === true) {
+          process.stdout.write(`${formatJSON(receipt)}\n`);
+          return;
+        }
+        const verb = receipt.dryRun ? 'Would retire' : 'Retired';
+        process.stdout.write(
+          formatSuccess(`${verb} ${receipt.retired.length} removed source(s)`) + '\n',
+        );
+        for (const item of receipt.retired) {
+          process.stdout.write(`  ${item.mountName}:${item.relativePath}\n`);
+        }
+        if (receiptPath !== null) {
+          process.stdout.write(formatInfo(`Receipt: ${receiptPath}`) + '\n');
+        }
       } catch (error) {
         process.stderr.write(
           `${formatError(error instanceof Error ? error.message : String(error))}\n`,
