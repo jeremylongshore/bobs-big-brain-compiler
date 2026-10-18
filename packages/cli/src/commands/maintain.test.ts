@@ -1143,6 +1143,14 @@ describe('ico maintain planning', () => {
         /Not currently reported as removed/,
       );
 
+      // An unwritable audit log refuses before anything is committed.
+      chmodSync(join(workspace, 'audit', 'log.md'), 0o400);
+      try {
+        await expect(attempt({ reason, allRemoved: true })).rejects.toThrow(/EACCES|permission/i);
+      } finally {
+        chmodSync(join(workspace, 'audit', 'log.md'), 0o600);
+      }
+
       // A missing mount would make every file look removed; never retire then.
       const parked = `${mounted}-parked`;
       renameSync(mounted, parked);

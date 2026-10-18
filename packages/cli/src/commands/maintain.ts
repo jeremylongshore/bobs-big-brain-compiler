@@ -10,7 +10,9 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 import {
+  accessSync,
   chmodSync,
+  constants as fsConstants,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -1344,10 +1346,15 @@ export interface RetirementReceipt {
   traceEventId: string | null;
 }
 
-function writeRetirementReceipt(workspacePath: string, receipt: RetirementReceipt): string {
+function retirementDirectory(workspacePath: string): string {
   const directory = join(receiptDirectory(workspacePath), 'retirements');
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   chmodSync(directory, 0o700);
+  return directory;
+}
+
+function writeRetirementReceipt(workspacePath: string, receipt: RetirementReceipt): string {
+  const directory = retirementDirectory(workspacePath);
   const target = join(directory, `${receipt.runId}.json`);
   const temporary = `${target}.tmp-${process.pid}-${randomUUID()}`;
   try {
@@ -1494,6 +1501,12 @@ export async function retireRemovedSources(
           return;
         }
 
+        // The audit line and the receipt are written after the DB commit.
+        // Prove both destinations are writable first so a predictable
+        // failure cannot leave a committed retirement without them.
+        accessSync(retirementDirectory(workspacePath), fsConstants.W_OK);
+        accessSync(join(workspacePath, 'audit', 'log.md'), fsConstants.W_OK);
+
         const apply = db.transaction((): string => {
           for (const item of retired) {
             for (const row of rowsByOrigin.get(item.origin) ?? []) {
@@ -1520,13 +1533,20 @@ export async function retireRemovedSources(
           return trace.value.event_id;
         });
         const traceEventId = apply();
+        const afterCommit = (error: unknown): Error =>
+          new Error(
+            `Retirement run ${runId} is committed (trace ${traceEventId}) but its ` +
+              `audit line or receipt could not be written: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+          );
 
         const audit = appendAuditLog(
           workspacePath,
           'source.retire',
           `Retired ${retired.length} removed mounted source(s) (run ${runId}): ${reason}`,
         );
-        if (!audit.ok) throw audit.error;
+        if (!audit.ok) throw afterCommit(audit.error);
 
         const receipt: RetirementReceipt = {
           schemaVersion: RETIREMENT_RECEIPT_SCHEMA_VERSION,
@@ -1540,7 +1560,11 @@ export async function retireRemovedSources(
           retired,
           traceEventId,
         };
-        outcome = { receipt, receiptPath: writeRetirementReceipt(workspacePath, receipt) };
+        try {
+          outcome = { receipt, receiptPath: writeRetirementReceipt(workspacePath, receipt) };
+        } catch (error) {
+          throw afterCommit(error);
+        }
       } finally {
         closeDatabase(db);
       }
