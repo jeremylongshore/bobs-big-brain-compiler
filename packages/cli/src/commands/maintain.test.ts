@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   utimesSync,
@@ -24,10 +25,16 @@ import {
   createMeteredMaintenanceClient,
   type MaintenanceReceipt,
   readLatestMaintenanceReceipt,
+  retireRemovedSources,
   runMaintenance,
   scanMountedSources,
   writeMaintenanceReceipt,
 } from './maintain.js';
+
+function maintenanceOf(metadata: string | undefined): Record<string, unknown> {
+  const parsed = JSON.parse(metadata ?? '{}') as { maintenance?: Record<string, unknown> };
+  return parsed.maintenance ?? {};
+}
 
 function hash(content: string): string {
   return createHash('sha256').update(content).digest('hex');
@@ -213,7 +220,7 @@ describe('ico maintain planning', () => {
 
   it('writes latest and history receipts atomically', () => {
     const receipt: MaintenanceReceipt = {
-      schemaVersion: 3,
+      schemaVersion: 4,
       compileScope: 'mounted-source',
       runId: '2026-08-16T00-00-00-000Z',
       startedAt: '2026-08-16T00:00:00.000Z',
@@ -234,8 +241,11 @@ describe('ico maintain planning', () => {
           changed: 0,
           pending: 0,
           removed: 0,
+          retired: 0,
+          revived: 0,
         },
         removedOrigins: [],
+        revivedSourceIds: [],
         staleMounts: [],
         missingMounts: [],
       },
@@ -891,5 +901,271 @@ describe('ico maintain planning', () => {
     } finally {
       chmodSync(mounted, 0o700);
     }
+  });
+
+  describe('retiring removed sources', () => {
+    const dbPath = (): string => join(workspace, '.ico', 'state.db');
+    const summaryClient = (): { client: ClaudeClient; calls: () => number } => {
+      let calls = 0;
+      const client: ClaudeClient = {
+        createCompletion: vi.fn(() => {
+          calls++;
+          const content = `---\ntype: source-summary\nid: 11111111-1111-4111-8111-111111111111\ntitle: Retire Source\nsource_id: 22222222-2222-4222-8222-222222222222\nsource_path: raw/notes/source.md\ncompiled_at: 2026-10-18T00:00:00.000Z\nmodel: MiniMax-M3\ncontent_hash: abc123\n---\n\n## Summary\n\nThis source records a durable decision with enough grounded detail for deterministic validation.`;
+          return Promise.resolve(
+            ok({
+              content,
+              inputTokens: 100,
+              outputTokens: 50,
+              model: 'MiniMax-M3',
+              stopReason: 'stop',
+            }),
+          );
+        }),
+      };
+      return { client, calls: () => calls };
+    };
+    const maintain = (client: ClaudeClient): Promise<MaintenanceReceipt> =>
+      runMaintenance(
+        workspace,
+        dbPath(),
+        { maxCandidates: '10', dailyCeilingUsd: '10', debounceSeconds: '0', lockWaitSeconds: '1' },
+        { createClient: () => client },
+      );
+    const reason = 'Moved into the private legal library; removal was intended';
+
+    beforeEach(async () => {
+      mkdirSync(join(workspace, 'audit'), { recursive: true });
+      writeFileSync(
+        join(workspace, 'audit', 'log.md'),
+        '# ICO Audit Log\n\n| Timestamp | Operation | Summary |\n|-----------|-----------|---------|\n',
+        'utf-8',
+      );
+      const dbResult = initDatabase(dbPath());
+      expect(dbResult.ok).toBe(true);
+      if (!dbResult.ok) return;
+      try {
+        expect(registerMount(dbResult.value, 'live-repo', mounted).ok).toBe(true);
+      } finally {
+        closeDatabase(dbResult.value);
+      }
+      writeFileSync(join(mounted, 'kept.md'), '# Kept\nA durable kept decision.\n', 'utf-8');
+      writeFileSync(join(mounted, 'gone.md'), '# Gone\nA durable gone decision.\n', 'utf-8');
+      expect((await maintain(summaryClient().client)).status).toBe('compiled');
+      rmSync(join(mounted, 'gone.md'));
+    });
+
+    it('unblocks maintenance with a receipted retirement and recompiles a source that returns', async () => {
+      const blocked = await maintain(summaryClient().client);
+      expect(blocked.errorCode).toBe('removed_source_requires_retirement');
+      expect(blocked.scan.removedOrigins).toHaveLength(1);
+      expect(blocked.scan.removedOrigins[0]).toMatch(/:gone\.md$/);
+
+      const preview = await retireRemovedSources(workspace, dbPath(), {
+        reason,
+        origins: ['live-repo:gone.md'],
+        dryRun: true,
+        lockWaitSeconds: '1',
+      });
+      expect(preview.receiptPath).toBeNull();
+      expect(preview.receipt.retired[0]?.summariesMarkedStale).toBe(1);
+      expect((await maintain(summaryClient().client)).errorCode).toBe(
+        'removed_source_requires_retirement',
+      );
+
+      const { receipt, receiptPath } = await retireRemovedSources(workspace, dbPath(), {
+        reason,
+        origins: ['live-repo:gone.md'],
+        lockWaitSeconds: '1',
+      });
+      expect(receipt.dryRun).toBe(false);
+      expect(receipt.retired).toHaveLength(1);
+      expect(receipt.retired[0]).toMatchObject({
+        mountName: 'live-repo',
+        relativePath: 'gone.md',
+        summariesMarkedStale: 1,
+      });
+      expect(receipt.traceEventId).not.toBeNull();
+      expect(receiptPath).not.toBeNull();
+      expect(JSON.parse(readFileSync(receiptPath ?? '', 'utf-8'))).toEqual(receipt);
+      expect(statSync(receiptPath ?? '').mode & 0o777).toBe(0o600);
+      expect(readFileSync(join(workspace, 'audit', 'log.md'), 'utf-8')).toContain(
+        `source.retire | Retired 1 removed mounted source(s) (run ${receipt.runId}): ${reason}`,
+      );
+
+      const verify = initDatabase(dbPath());
+      expect(verify.ok).toBe(true);
+      if (!verify.ok) return;
+      try {
+        const db = verify.value;
+        const trace = db
+          .prepare<
+            [],
+            { n: number }
+          >(`SELECT COUNT(*) AS n FROM traces WHERE event_type = 'source.retire'`)
+          .get();
+        expect(trace?.n).toBe(1);
+        const rows = db
+          .prepare<[], { metadata: string; stale: number }>(
+            `SELECT s.metadata, c.stale FROM sources s JOIN compilations c ON c.source_id = s.id
+              WHERE json_extract(s.metadata, '$.maintenance.relativePath') = 'gone.md'`,
+          )
+          .all();
+        expect(rows).toHaveLength(1);
+        expect(rows[0]?.stale).toBe(1);
+        expect(maintenanceOf(rows[0]?.metadata)).toMatchObject({
+          retiredReason: reason,
+          retiredRunId: receipt.runId,
+        });
+        // The live source is untouched.
+        const kept = db
+          .prepare<[], { stale: number }>(
+            `SELECT c.stale FROM sources s JOIN compilations c ON c.source_id = s.id
+              WHERE json_extract(s.metadata, '$.maintenance.relativePath') = 'kept.md'`,
+          )
+          .get();
+        expect(kept?.stale).toBe(0);
+      } finally {
+        closeDatabase(verify.value);
+      }
+
+      const quiet = summaryClient();
+      const unblocked = await maintain(quiet.client);
+      expect(unblocked.status).toBe('verified_noop');
+      expect(unblocked.scan.counts.removed).toBe(0);
+      expect(unblocked.scan.counts.retired).toBe(1);
+      expect(quiet.calls()).toBe(0);
+
+      // The file comes back byte-identical. A scan-only run reports the
+      // revival as pending work and leaves the source retired.
+      writeFileSync(join(mounted, 'gone.md'), '# Gone\nA durable gone decision.\n', 'utf-8');
+      const scanOnly = await runMaintenance(workspace, dbPath(), {
+        scanOnly: true,
+        lockWaitSeconds: '1',
+      });
+      expect(scanOnly.status).toBe('failure');
+      expect(scanOnly.errorCode).toBe('scan_found_pending_work');
+      expect(scanOnly.scan.counts.revived).toBe(1);
+      expect(readFileSync(join(workspace, 'audit', 'log.md'), 'utf-8')).not.toContain(
+        'source.revive',
+      );
+
+      // A normal run revives it with no provider call.
+      const back = summaryClient();
+      const revived = await maintain(back.client);
+      expect(revived.error).toBeNull();
+      expect(revived.status).toBe('verified_noop');
+      expect(revived.scan.counts.revived).toBe(1);
+      expect(back.calls()).toBe(0);
+      expect(readFileSync(join(workspace, 'audit', 'log.md'), 'utf-8')).toContain('source.revive');
+      const after = initDatabase(dbPath());
+      expect(after.ok).toBe(true);
+      if (!after.ok) return;
+      try {
+        const row = after.value
+          .prepare<[], { metadata: string }>(
+            `SELECT metadata FROM sources
+              WHERE json_extract(metadata, '$.maintenance.relativePath') = 'gone.md'
+              ORDER BY ingested_at DESC LIMIT 1`,
+          )
+          .get();
+        expect(maintenanceOf(row?.metadata)['retiredAt']).toBeUndefined();
+        const stale = after.value
+          .prepare<[], { n: number }>('SELECT COUNT(*) AS n FROM compilations WHERE stale = 1')
+          .get();
+        expect(stale?.n).toBe(0);
+      } finally {
+        closeDatabase(after.value);
+      }
+      const settled = await maintain(summaryClient().client);
+      expect(settled.status).toBe('verified_noop');
+      expect(settled.scan.counts.revived).toBe(0);
+      expect(settled.scan.counts.unchanged).toBe(2);
+    });
+
+    it('recompiles a retired source that comes back with different content', async () => {
+      await retireRemovedSources(workspace, dbPath(), {
+        reason,
+        allRemoved: true,
+        lockWaitSeconds: '1',
+      });
+      writeFileSync(join(mounted, 'gone.md'), '# Gone\nA revised durable decision.\n', 'utf-8');
+      const back = summaryClient();
+      const receipt = await maintain(back.client);
+      expect(receipt.error).toBeNull();
+      expect(receipt.status).toBe('compiled');
+      expect(receipt.scan.counts.changed).toBe(1);
+      expect(back.calls()).toBe(1);
+      const settled = await maintain(summaryClient().client);
+      expect(settled.status).toBe('verified_noop');
+      expect(settled.scan.counts.retired).toBe(0);
+    });
+
+    it('retires every removed origin with --all-removed', async () => {
+      const preview = await retireRemovedSources(workspace, dbPath(), {
+        reason,
+        allRemoved: true,
+        dryRun: true,
+        lockWaitSeconds: '1',
+      });
+      expect(preview.receiptPath).toBeNull();
+      expect(preview.receipt.dryRun).toBe(true);
+      expect(preview.receipt.retired.map((item) => item.relativePath)).toEqual(['gone.md']);
+      expect((await maintain(summaryClient().client)).errorCode).toBe(
+        'removed_source_requires_retirement',
+      );
+
+      const { receipt } = await retireRemovedSources(workspace, dbPath(), {
+        reason,
+        allRemoved: true,
+        lockWaitSeconds: '1',
+      });
+      expect(receipt.retired.map((item) => item.relativePath)).toEqual(['gone.md']);
+      expect((await maintain(summaryClient().client)).status).toBe('verified_noop');
+    });
+
+    it('refuses unsafe requests and writes nothing', async () => {
+      const attempt = (opts: Parameters<typeof retireRemovedSources>[2]): Promise<unknown> =>
+        retireRemovedSources(workspace, dbPath(), { lockWaitSeconds: '1', ...opts });
+
+      await expect(attempt({ origins: ['live-repo:gone.md'] })).rejects.toThrow(/--reason/);
+      await expect(
+        attempt({ reason: 'too short', origins: ['live-repo:gone.md'] }),
+      ).rejects.toThrow(/--reason/);
+      await expect(attempt({ reason })).rejects.toThrow(/either --all-removed/);
+      await expect(
+        attempt({ reason, allRemoved: true, origins: ['live-repo:gone.md'] }),
+      ).rejects.toThrow(/either --all-removed/);
+      // A live file and a typo refuse the whole request, including the valid origin.
+      await expect(
+        attempt({ reason, origins: ['live-repo:gone.md', 'live-repo:kept.md'] }),
+      ).rejects.toThrow(/live-repo:kept\.md/);
+      await expect(attempt({ reason, origins: ['live-repo:gon.md'] })).rejects.toThrow(
+        /Not currently reported as removed/,
+      );
+
+      // An unwritable audit log refuses before anything is committed.
+      chmodSync(join(workspace, 'audit', 'log.md'), 0o400);
+      try {
+        await expect(attempt({ reason, allRemoved: true })).rejects.toThrow(/EACCES|permission/i);
+      } finally {
+        chmodSync(join(workspace, 'audit', 'log.md'), 0o600);
+      }
+
+      // A missing mount would make every file look removed; never retire then.
+      const parked = `${mounted}-parked`;
+      renameSync(mounted, parked);
+      try {
+        await expect(attempt({ reason, allRemoved: true })).rejects.toThrow(/mounts are missing/);
+      } finally {
+        renameSync(parked, mounted);
+      }
+
+      expect(readFileSync(join(workspace, 'audit', 'log.md'), 'utf-8')).not.toContain(
+        'source.retire',
+      );
+      expect((await maintain(summaryClient().client)).errorCode).toBe(
+        'removed_source_requires_retirement',
+      );
+    });
   });
 });
