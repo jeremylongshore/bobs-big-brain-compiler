@@ -26,6 +26,9 @@ AF_LIB="${AF_LIB:-$HOME/bin/lib/alert-floor.sh}"
 # Mounts read dedicated clones of merged main under this root, never a shared
 # working tree a session can switch branches in. See runbook 042.
 MOUNT_CHECKOUT_ROOT="${ICO_MOUNT_CHECKOUT_ROOT:-$HOME/.local/share/ico/mounts}"
+# Per-clone network bound, so a stalled origin cannot hold the run before the
+# compile's own timeout starts.
+MOUNT_FETCH_TIMEOUT="${ICO_MOUNT_FETCH_TIMEOUT:-120}"
 
 mkdir -p "$STATE_DIR"
 : > "$STATE_DIR/last.beat"
@@ -80,8 +83,9 @@ if [ -d "$MOUNT_CHECKOUT_ROOT" ]; then
       problem="not on branch main"
     elif [ -n "$(git -C "$checkout" status --porcelain 2>&1)" ]; then
       problem="has local changes"
-    elif ! git -C "$checkout" fetch --quiet origin main >>"$run_log" 2>&1; then
-      problem="fetch from origin failed"
+    elif ! timeout --kill-after=10s "$MOUNT_FETCH_TIMEOUT" \
+      git -C "$checkout" fetch --quiet origin main >>"$run_log" 2>&1; then
+      problem="fetch from origin failed or timed out"
     elif ! git -C "$checkout" merge --ff-only --quiet FETCH_HEAD >>"$run_log" 2>&1; then
       problem="cannot fast-forward to origin/main"
     fi

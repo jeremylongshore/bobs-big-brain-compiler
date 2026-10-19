@@ -45,6 +45,7 @@ run_wrapper() {
     ICO_BIN="$TEST_ROOT/ico" ICO_WORKSPACE="$TEST_ROOT/ws" \
     ICO_PROVIDER_FILE=/nonexistent ICO_MAINTAIN_STATE_DIR="$TEST_ROOT/state" \
     AF_LIB="$TEST_ROOT/alert-floor.sh" ICO_MOUNT_CHECKOUT_ROOT="$TEST_ROOT/mounts" \
+    ICO_MOUNT_FETCH_TIMEOUT="${ICO_MOUNT_FETCH_TIMEOUT:-120}" \
     MINIMAX_API_KEY=stub bash "$WRAPPER" >/dev/null 2>&1
 }
 
@@ -86,5 +87,14 @@ git -C "$TEST_ROOT/mounts/repo" reset -q --hard origin/main
 # 5. An unreachable origin refuses.
 git -C "$TEST_ROOT/mounts/repo" remote set-url origin "$TEST_ROOT/missing.git"
 expect_refusal 'unreachable origin' 'fetch from origin failed'
+
+# 6. A stalled origin is cut off by the fetch timeout instead of hanging.
+printf '#!/usr/bin/env bash\nexec sleep 60\n' > "$TEST_ROOT/stall-upload-pack"
+chmod +x "$TEST_ROOT/stall-upload-pack"
+git -C "$TEST_ROOT/mounts/repo" remote set-url origin "$TEST_ROOT/origin.git"
+git -C "$TEST_ROOT/mounts/repo" config remote.origin.uploadpack "$TEST_ROOT/stall-upload-pack"
+started=$SECONDS
+ICO_MOUNT_FETCH_TIMEOUT=2 expect_refusal 'stalled origin' 'fetch from origin failed or timed out'
+[ $((SECONDS - started)) -lt 30 ] || fail 'stalled origin: fetch timeout did not cut the wait'
 
 printf 'PASS: ico-maintain-daily mount-clone refresh\n'
