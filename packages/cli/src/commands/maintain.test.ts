@@ -25,6 +25,7 @@ import {
   createMeteredMaintenanceClient,
   type MaintenanceReceipt,
   readLatestMaintenanceReceipt,
+  relocateMount,
   retireRemovedSources,
   runMaintenance,
   scanMountedSources,
@@ -903,34 +904,34 @@ describe('ico maintain planning', () => {
     }
   });
 
-  describe('retiring removed sources', () => {
-    const dbPath = (): string => join(workspace, '.ico', 'state.db');
-    const summaryClient = (): { client: ClaudeClient; calls: () => number } => {
-      let calls = 0;
-      const client: ClaudeClient = {
-        createCompletion: vi.fn(() => {
-          calls++;
-          const content = `---\ntype: source-summary\nid: 11111111-1111-4111-8111-111111111111\ntitle: Retire Source\nsource_id: 22222222-2222-4222-8222-222222222222\nsource_path: raw/notes/source.md\ncompiled_at: 2026-10-18T00:00:00.000Z\nmodel: MiniMax-M3\ncontent_hash: abc123\n---\n\n## Summary\n\nThis source records a durable decision with enough grounded detail for deterministic validation.`;
-          return Promise.resolve(
-            ok({
-              content,
-              inputTokens: 100,
-              outputTokens: 50,
-              model: 'MiniMax-M3',
-              stopReason: 'stop',
-            }),
-          );
-        }),
-      };
-      return { client, calls: () => calls };
+  const dbPath = (): string => join(workspace, '.ico', 'state.db');
+  const summaryClient = (): { client: ClaudeClient; calls: () => number } => {
+    let calls = 0;
+    const client: ClaudeClient = {
+      createCompletion: vi.fn(() => {
+        calls++;
+        const content = `---\ntype: source-summary\nid: 11111111-1111-4111-8111-111111111111\ntitle: Retire Source\nsource_id: 22222222-2222-4222-8222-222222222222\nsource_path: raw/notes/source.md\ncompiled_at: 2026-10-18T00:00:00.000Z\nmodel: MiniMax-M3\ncontent_hash: abc123\n---\n\n## Summary\n\nThis source records a durable decision with enough grounded detail for deterministic validation.`;
+        return Promise.resolve(
+          ok({
+            content,
+            inputTokens: 100,
+            outputTokens: 50,
+            model: 'MiniMax-M3',
+            stopReason: 'stop',
+          }),
+        );
+      }),
     };
-    const maintain = (client: ClaudeClient): Promise<MaintenanceReceipt> =>
-      runMaintenance(
-        workspace,
-        dbPath(),
-        { maxCandidates: '10', dailyCeilingUsd: '10', debounceSeconds: '0', lockWaitSeconds: '1' },
-        { createClient: () => client },
-      );
+    return { client, calls: () => calls };
+  };
+  const maintain = (client: ClaudeClient): Promise<MaintenanceReceipt> =>
+    runMaintenance(
+      workspace,
+      dbPath(),
+      { maxCandidates: '10', dailyCeilingUsd: '10', debounceSeconds: '0', lockWaitSeconds: '1' },
+      { createClient: () => client },
+    );
+  describe('retiring removed sources', () => {
     const reason = 'Moved into the private legal library; removal was intended';
 
     beforeEach(async () => {
@@ -1166,6 +1167,171 @@ describe('ico maintain planning', () => {
       expect((await maintain(summaryClient().client)).errorCode).toBe(
         'removed_source_requires_retirement',
       );
+    });
+  });
+
+  describe('relocating a mount', () => {
+    const reason = 'Read merged main from a dedicated clone, not the shared checkout';
+    let moved: string;
+
+    beforeEach(async () => {
+      mkdirSync(join(workspace, 'audit'), { recursive: true });
+      writeFileSync(
+        join(workspace, 'audit', 'log.md'),
+        '# ICO Audit Log\n\n| Timestamp | Operation | Summary |\n|-----------|-----------|---------|\n',
+        'utf-8',
+      );
+      const dbResult = initDatabase(dbPath());
+      expect(dbResult.ok).toBe(true);
+      if (!dbResult.ok) return;
+      try {
+        expect(registerMount(dbResult.value, 'live-repo', mounted).ok).toBe(true);
+      } finally {
+        closeDatabase(dbResult.value);
+      }
+      writeFileSync(join(mounted, 'same.md'), '# Same\nA durable same decision.\n', 'utf-8');
+      writeFileSync(join(mounted, 'edited.md'), '# Edited\nA durable old decision.\n', 'utf-8');
+      expect((await maintain(summaryClient().client)).status).toBe('compiled');
+
+      // The clean copy has the same file, a newer edit, and one new file.
+      moved = join(root, 'clean-main');
+      mkdirSync(moved, { recursive: true });
+      writeFileSync(join(moved, 'same.md'), '# Same\nA durable same decision.\n', 'utf-8');
+      writeFileSync(join(moved, 'edited.md'), '# Edited\nA durable new decision.\n', 'utf-8');
+      writeFileSync(join(moved, 'added.md'), '# Added\nA durable added decision.\n', 'utf-8');
+    });
+
+    const mountPath = (): string | undefined => {
+      const dbResult = initDatabase(dbPath());
+      if (!dbResult.ok) throw dbResult.error;
+      try {
+        return dbResult.value
+          .prepare<[], { path: string }>(`SELECT path FROM mounts WHERE name = 'live-repo'`)
+          .get()?.path;
+      } finally {
+        closeDatabase(dbResult.value);
+      }
+    };
+
+    it('keeps the mount id so unchanged sources stay attached, with a receipt', async () => {
+      const preview = await relocateMount(workspace, dbPath(), {
+        mount: 'live-repo',
+        path: moved,
+        reason,
+        dryRun: true,
+        lockWaitSeconds: '1',
+      });
+      expect(preview.receiptPath).toBeNull();
+      expect(preview.receipt.dryRun).toBe(true);
+      expect(preview.receipt.after).toMatchObject({ unchanged: 1, changed: 1, new: 1 });
+      expect(preview.receipt.removedOrigins).toEqual([]);
+      expect(mountPath()).toBe(mounted);
+
+      const { receipt, receiptPath } = await relocateMount(workspace, dbPath(), {
+        mount: 'live-repo',
+        path: moved,
+        reason,
+        lockWaitSeconds: '1',
+      });
+      expect(mountPath()).toBe(moved);
+      expect(receipt).toMatchObject({
+        kind: 'mount-relocation',
+        mountName: 'live-repo',
+        fromPath: mounted,
+        toPath: moved,
+        dryRun: false,
+      });
+      expect(receipt.before).toMatchObject({ unchanged: 2, changed: 0, new: 0 });
+      expect(receipt.traceEventId).not.toBeNull();
+      expect(JSON.parse(readFileSync(receiptPath ?? '', 'utf-8'))).toEqual(receipt);
+      expect(statSync(receiptPath ?? '').mode & 0o777).toBe(0o600);
+      expect(receiptPath).toContain(join('.ico', 'maintenance', 'relocations'));
+      expect(readFileSync(join(workspace, 'audit', 'log.md'), 'utf-8')).toContain(
+        `mount.relocate | Relocated mount "live-repo" from ${mounted} to ${moved}`,
+      );
+
+      // Only the edited and the added file reach the provider.
+      const next = summaryClient();
+      const compiled = await maintain(next.client);
+      expect(compiled.error).toBeNull();
+      expect(compiled.scan.counts).toMatchObject({ unchanged: 1, changed: 1, new: 1, removed: 0 });
+      expect(next.calls()).toBe(2);
+      expect((await maintain(summaryClient().client)).status).toBe('verified_noop');
+    });
+
+    it('refuses a move that would orphan tracked sources unless told to allow it', async () => {
+      rmSync(join(moved, 'same.md'));
+      await expect(
+        relocateMount(workspace, dbPath(), {
+          mount: 'live-repo',
+          path: moved,
+          reason,
+          lockWaitSeconds: '1',
+        }),
+      ).rejects.toThrow(
+        /would make 1 tracked source\(s\) look removed .*:same\.md.*nothing changed/,
+      );
+      expect(mountPath()).toBe(mounted);
+      expect(readFileSync(join(workspace, 'audit', 'log.md'), 'utf-8')).not.toContain(
+        'mount.relocate',
+      );
+
+      const { receipt } = await relocateMount(workspace, dbPath(), {
+        mount: 'live-repo',
+        path: moved,
+        reason,
+        allowRemoved: true,
+        lockWaitSeconds: '1',
+      });
+      expect(receipt.removedOrigins).toHaveLength(1);
+      expect(receipt.removedOrigins[0]).toMatch(/:same\.md$/);
+      expect(mountPath()).toBe(moved);
+      expect((await maintain(summaryClient().client)).errorCode).toBe(
+        'removed_source_requires_retirement',
+      );
+    });
+
+    it('refuses bad requests without touching the mount', async () => {
+      const unreasoned = { mount: 'live-repo', path: moved, lockWaitSeconds: '1' };
+      const base = { ...unreasoned, reason };
+      await expect(relocateMount(workspace, dbPath(), unreasoned)).rejects.toThrow(
+        /--reason is required/,
+      );
+      await expect(
+        relocateMount(workspace, dbPath(), { ...base, reason: 'moved' }),
+      ).rejects.toThrow(/--reason is required/);
+      await expect(relocateMount(workspace, dbPath(), { ...base, mount: 'nope' })).rejects.toThrow(
+        /No mount found with name or id "nope"/,
+      );
+      await expect(
+        relocateMount(workspace, dbPath(), { ...base, path: join(root, 'missing') }),
+      ).rejects.toThrow(/Not an existing directory/);
+      await expect(relocateMount(workspace, dbPath(), { ...base, path: mounted })).rejects.toThrow(
+        /already reads from/,
+      );
+
+      const other = join(root, 'other');
+      mkdirSync(other);
+      const dbResult = initDatabase(dbPath());
+      if (!dbResult.ok) throw dbResult.error;
+      try {
+        expect(registerMount(dbResult.value, 'other-repo', other).ok).toBe(true);
+      } finally {
+        closeDatabase(dbResult.value);
+      }
+      await expect(relocateMount(workspace, dbPath(), { ...base, path: other })).rejects.toThrow(
+        /Mount "other-repo" already reads from/,
+      );
+
+      chmodSync(join(workspace, 'audit', 'log.md'), 0o400);
+      try {
+        await expect(relocateMount(workspace, dbPath(), base)).rejects.toThrow(
+          /EACCES|permission/i,
+        );
+      } finally {
+        chmodSync(join(workspace, 'audit', 'log.md'), 0o600);
+      }
+      expect(mountPath()).toBe(mounted);
     });
   });
 });

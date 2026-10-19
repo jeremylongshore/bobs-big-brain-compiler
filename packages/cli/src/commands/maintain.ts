@@ -16,12 +16,13 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   statSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { basename, dirname, extname, join, relative } from 'node:path';
+import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 
 import type { Command } from 'commander';
 
@@ -63,6 +64,7 @@ import { scanDirectory } from './ingest.js';
 
 const RECEIPT_SCHEMA_VERSION = 4;
 const RETIREMENT_RECEIPT_SCHEMA_VERSION = 1;
+const RELOCATION_RECEIPT_SCHEMA_VERSION = 1;
 const INFERENCE_BUDGET_EXCEEDED = 'INFERENCE_BUDGET_EXCEEDED';
 
 export type MaintenanceStatus = 'compiled' | 'partial' | 'verified_noop' | 'failure';
@@ -1346,15 +1348,21 @@ export interface RetirementReceipt {
   traceEventId: string | null;
 }
 
-function retirementDirectory(workspacePath: string): string {
-  const directory = join(receiptDirectory(workspacePath), 'retirements');
+function operationDirectory(workspacePath: string, name: 'retirements' | 'relocations'): string {
+  const directory = join(receiptDirectory(workspacePath), name);
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   chmodSync(directory, 0o700);
   return directory;
 }
 
-function writeRetirementReceipt(workspacePath: string, receipt: RetirementReceipt): string {
-  const directory = retirementDirectory(workspacePath);
+function retirementDirectory(workspacePath: string): string {
+  return operationDirectory(workspacePath, 'retirements');
+}
+
+function writeOperationReceipt(
+  directory: string,
+  receipt: RetirementReceipt | RelocationReceipt,
+): string {
   const target = join(directory, `${receipt.runId}.json`);
   const temporary = `${target}.tmp-${process.pid}-${randomUUID()}`;
   try {
@@ -1561,7 +1569,10 @@ export async function retireRemovedSources(
           traceEventId,
         };
         try {
-          outcome = { receipt, receiptPath: writeRetirementReceipt(workspacePath, receipt) };
+          outcome = {
+            receipt,
+            receiptPath: writeOperationReceipt(retirementDirectory(workspacePath), receipt),
+          };
         } catch (error) {
           throw afterCommit(error);
         }
@@ -1577,6 +1588,232 @@ export async function retireRemovedSources(
     throw new Error('Another brain writer held the lock for the full wait window');
   }
   if (outcome === null) throw new Error('Retirement finished without a result');
+  return outcome;
+}
+
+export interface RelocateOptions {
+  /** Name or id of the mount to move. */
+  mount?: string;
+  /** The directory the mount should read from. */
+  path?: string;
+  /** Why the mount moved. Required; it is the governed record. */
+  reason?: string;
+  /** Accept a relocation that makes tracked origins look removed. */
+  allowRemoved?: boolean;
+  dryRun?: boolean;
+  lockWaitSeconds?: string;
+}
+
+export interface RelocationReceipt {
+  schemaVersion: number;
+  kind: 'mount-relocation';
+  runId: string;
+  startedAt: string;
+  finishedAt: string;
+  workspace: string;
+  dryRun: boolean;
+  reason: string;
+  mountId: string;
+  mountName: string;
+  fromPath: string;
+  toPath: string;
+  /** Scan counts across all mounts before and after the move. */
+  before: MaintenanceScan['counts'];
+  after: MaintenanceScan['counts'];
+  /** This mount's origins the new directory no longer contains. */
+  removedOrigins: string[];
+  traceEventId: string | null;
+}
+
+/** Thrown inside the relocation transaction to roll back a dry run. */
+class RelocationPreviewRollback extends Error {
+  constructor() {
+    super('Relocation dry run rolled back');
+  }
+}
+
+/**
+ * Point an existing mount at a different directory, keeping its id.
+ *
+ * Origins are keyed by mount id plus relative path, so a relocation keeps
+ * every tracked source attached: identical files stay unchanged, differing
+ * files recompile, and new files ingest on the next maintenance run. Removing
+ * and re-adding the mount instead would mint a new id and make every origin
+ * look removed. The move is scanned inside the same transaction that commits
+ * it, and it refuses when the new directory would make tracked origins look
+ * removed unless `allowRemoved` is set, so a wrong or empty directory cannot
+ * silently orphan a mount.
+ */
+export async function relocateMount(
+  workspacePath: string,
+  dbPath: string,
+  opts: RelocateOptions,
+): Promise<{ receipt: RelocationReceipt; receiptPath: string | null }> {
+  const reason = opts.reason?.trim() ?? '';
+  if (reason.length < 10) {
+    throw new Error('--reason is required and must say why the mount moved');
+  }
+  const mountRef = opts.mount?.trim() ?? '';
+  if (mountRef.length === 0) throw new Error('--mount is required');
+  const requestedPath = opts.path?.trim() ?? '';
+  if (requestedPath.length === 0) throw new Error('--path is required');
+  const toPath = resolve(requestedPath);
+  if (!existsSync(toPath) || !statSync(toPath).isDirectory()) {
+    throw new Error(`Not an existing directory: ${toPath}`);
+  }
+  const lockWaitSeconds = finiteNonNegative(opts.lockWaitSeconds, 10, '--lock-wait-seconds');
+  const runId = new Date().toISOString().replace(/[:.]/g, '-');
+  const startedAt = new Date().toISOString();
+  let outcome: { receipt: RelocationReceipt; receiptPath: string | null } | null = null;
+
+  const lockResult = await withWriteLock(
+    () => {
+      const dbResult = initDatabase(dbPath);
+      if (!dbResult.ok) throw dbResult.error;
+      const db = dbResult.value;
+      try {
+        const mountsResult = listMounts(db);
+        if (!mountsResult.ok) throw mountsResult.error;
+        const mount = mountsResult.value.find((m) => m.name === mountRef || m.id === mountRef);
+        if (mount === undefined) throw new Error(`No mount found with name or id "${mountRef}"`);
+        const canonical = (path: string): string =>
+          existsSync(path) ? realpathSync(path) : resolve(path);
+        if (canonical(mount.path) === canonical(toPath)) {
+          throw new Error(`Mount "${mount.name}" already reads from ${toPath}`);
+        }
+        const clash = mountsResult.value.find(
+          (m) => m.id !== mount.id && canonical(m.path) === canonical(toPath),
+        );
+        if (clash !== undefined) {
+          throw new Error(`Mount "${clash.name}" already reads from ${toPath}`);
+        }
+
+        const before = scanMountedSources(db, workspacePath);
+        const beforeRemoved = new Set(before.removedOrigins);
+        const updatePath = db.prepare<[string, string], void>(
+          'UPDATE mounts SET path = ? WHERE id = ?',
+        );
+
+        // Commit the path, rescan, and decide inside one transaction: any
+        // refusal (or a dry run) throws and rolls the path back untouched.
+        const state: { preview: RelocationReceipt | null; traceEventId: string | null } = {
+          preview: null,
+          traceEventId: null,
+        };
+        const apply = db.transaction(() => {
+          updatePath.run(toPath, mount.id);
+          const after = scanMountedSources(db, workspacePath);
+          const prefix = `${mount.id}:`;
+          const removedOrigins = after.removedOrigins
+            .filter((key) => key.startsWith(prefix) && !beforeRemoved.has(key))
+            .sort();
+          state.preview = {
+            schemaVersion: RELOCATION_RECEIPT_SCHEMA_VERSION,
+            kind: 'mount-relocation',
+            runId,
+            startedAt,
+            finishedAt: new Date().toISOString(),
+            workspace: workspacePath,
+            dryRun: opts.dryRun === true,
+            reason,
+            mountId: mount.id,
+            mountName: mount.name,
+            fromPath: mount.path,
+            toPath,
+            before: before.counts,
+            after: after.counts,
+            removedOrigins,
+            traceEventId: null,
+          };
+          if (opts.dryRun === true) throw new RelocationPreviewRollback();
+          if (removedOrigins.length > 0 && opts.allowRemoved !== true) {
+            throw new Error(
+              `Relocating "${mount.name}" to ${toPath} would make ${removedOrigins.length} ` +
+                `tracked source(s) look removed (first: ${removedOrigins[0] ?? ''}); ` +
+                'nothing changed. Pass --allow-removed to move anyway and retire them after.',
+            );
+          }
+          const trace = writeTrace(
+            db,
+            workspacePath,
+            'mount.relocate',
+            {
+              runId,
+              reason,
+              mountId: mount.id,
+              mountName: mount.name,
+              fromPath: mount.path,
+              toPath,
+              removedOrigins,
+            },
+            { summary: `Relocated mount "${mount.name}" to ${toPath}: ${reason}` },
+          );
+          if (!trace.ok) throw trace.error;
+          state.traceEventId = trace.value.event_id;
+        });
+
+        if (opts.dryRun !== true) {
+          // The audit line and the receipt are written after the DB commit.
+          accessSync(operationDirectory(workspacePath, 'relocations'), fsConstants.W_OK);
+          accessSync(join(workspacePath, 'audit', 'log.md'), fsConstants.W_OK);
+        }
+        let rolledBack = false;
+        try {
+          apply();
+        } catch (error) {
+          if (!(error instanceof RelocationPreviewRollback)) throw error;
+          rolledBack = true;
+        }
+        if (rolledBack) {
+          if (state.preview === null) throw new Error('Relocation preview was not produced');
+          outcome = { receipt: state.preview, receiptPath: null };
+          return;
+        }
+        const { preview, traceEventId: committedTrace } = state;
+        if (preview === null || committedTrace === null) {
+          throw new Error('Relocation committed without a trace');
+        }
+        const afterCommit = (error: unknown): Error =>
+          new Error(
+            `Relocation run ${runId} is committed (trace ${committedTrace}) but its ` +
+              `audit line or receipt could not be written: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+          );
+        const receipt: RelocationReceipt = {
+          ...preview,
+          finishedAt: new Date().toISOString(),
+          traceEventId: committedTrace,
+        };
+        const audit = appendAuditLog(
+          workspacePath,
+          'mount.relocate',
+          `Relocated mount "${mount.name}" from ${mount.path} to ${toPath} (run ${runId}): ${reason}`,
+        );
+        if (!audit.ok) throw afterCommit(audit.error);
+        try {
+          outcome = {
+            receipt,
+            receiptPath: writeOperationReceipt(
+              operationDirectory(workspacePath, 'relocations'),
+              receipt,
+            ),
+          };
+        } catch (error) {
+          throw afterCommit(error);
+        }
+      } finally {
+        closeDatabase(db);
+      }
+    },
+    { waitSeconds: lockWaitSeconds, requireLock: true },
+  );
+
+  if (!lockResult.ok) throw lockResult.error;
+  if (!lockResult.value.ran) {
+    throw new Error('Another brain writer held the lock for the full wait window');
+  }
+  if (outcome === null) throw new Error('Relocation finished without a result');
   return outcome;
 }
 
@@ -1666,6 +1903,54 @@ export function register(program: Command): void {
         for (const item of receipt.retired) {
           process.stdout.write(`  ${item.mountName}:${item.relativePath}\n`);
         }
+        if (receiptPath !== null) {
+          process.stdout.write(formatInfo(`Receipt: ${receiptPath}`) + '\n');
+        }
+      } catch (error) {
+        process.stderr.write(
+          `${formatError(error instanceof Error ? error.message : String(error))}\n`,
+        );
+        process.exitCode = 1;
+      }
+    });
+
+  maintain
+    .command('relocate')
+    .description('Point a mount at a different directory, keeping its sources, with a receipt')
+    .requiredOption('--mount <name>', 'Name or id of the mount to move')
+    .requiredOption('--path <dir>', 'Directory the mount should read from')
+    .requiredOption('--reason <text>', 'Why the mount moved (recorded in the receipt)')
+    .option('--allow-removed', 'Move even if tracked sources would look removed')
+    .option('--dry-run', 'Show the scan delta without writing anything')
+    .option('--lock-wait-seconds <n>', 'Seconds to wait for the required brain write lock', '10')
+    .action(async (opts: RelocateOptions, cmd: Command) => {
+      const global = cmd.optsWithGlobals<GlobalOptions>();
+      const resolved = resolveWorkspace(
+        global.workspace !== undefined ? { workspace: global.workspace } : undefined,
+      );
+      if (!resolved.ok) {
+        process.stderr.write(`${formatError(resolved.error.message)}\n`);
+        process.exitCode = 1;
+        return;
+      }
+      try {
+        const { receipt, receiptPath } = await relocateMount(
+          resolved.value.root,
+          resolved.value.dbPath,
+          opts,
+        );
+        if (global.json === true) {
+          process.stdout.write(`${formatJSON(receipt)}\n`);
+          return;
+        }
+        const verb = receipt.dryRun ? 'Would relocate' : 'Relocated';
+        process.stdout.write(
+          formatSuccess(`${verb} mount "${receipt.mountName}" to ${receipt.toPath}`) + '\n',
+        );
+        const keys = ['files', 'unchanged', 'changed', 'new'] as const;
+        const delta = keys.map((k) => `${k} ${receipt.before[k]} -> ${receipt.after[k]}`);
+        process.stdout.write(`  ${delta.join(', ')}\n`);
+        process.stdout.write(`  removed by this move: ${receipt.removedOrigins.length}\n`);
         if (receiptPath !== null) {
           process.stdout.write(formatInfo(`Receipt: ${receiptPath}`) + '\n');
         }
