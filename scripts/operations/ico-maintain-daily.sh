@@ -23,6 +23,12 @@ DAILY_CEILING_USD="${ICO_DAILY_CEILING_USD:-1}"
 LOCK_WAIT_SECONDS="${ICO_LOCK_WAIT_SECONDS:-600}"
 MAX_CANDIDATES="${ICO_MAINTAIN_MAX_CANDIDATES:-10}"
 AF_LIB="${AF_LIB:-$HOME/bin/lib/alert-floor.sh}"
+# Mounts read dedicated clones of merged main under this root, never a shared
+# working tree a session can switch branches in. See runbook 042.
+MOUNT_CHECKOUT_ROOT="${ICO_MOUNT_CHECKOUT_ROOT:-$HOME/.local/share/ico/mounts}"
+# Per-clone network bound, so a stalled origin cannot hold the run before the
+# compile's own timeout starts.
+MOUNT_FETCH_TIMEOUT="${ICO_MOUNT_FETCH_TIMEOUT:-120}"
 
 mkdir -p "$STATE_DIR"
 : > "$STATE_DIR/last.beat"
@@ -61,6 +67,40 @@ fi
 trap 'unset MINIMAX_API_KEY minimax_key 2>/dev/null || true' EXIT
 
 run_log="$STATE_DIR/run-$(date -u +%Y%m%dT%H%M%SZ).log"
+: > "$run_log"
+
+# Fast-forward every dedicated mount clone to origin/main before the scan.
+# Fail closed: a dirty, off-main, or non-fast-forward clone means something
+# other than this job touched it, and compiling it would not be merged truth.
+mount_heads="{}"
+if [ -d "$MOUNT_CHECKOUT_ROOT" ]; then
+  for checkout in "$MOUNT_CHECKOUT_ROOT"/*/; do
+    checkout="${checkout%/}"
+    [ -d "$checkout/.git" ] || continue
+    name="$(basename "$checkout")"
+    problem=""
+    if [ "$(git -C "$checkout" symbolic-ref --quiet --short HEAD 2>/dev/null)" != main ]; then
+      problem="not on branch main"
+    elif [ -n "$(git -C "$checkout" status --porcelain 2>&1)" ]; then
+      problem="has local changes"
+    elif ! timeout --kill-after=10s "$MOUNT_FETCH_TIMEOUT" \
+      git -C "$checkout" fetch --quiet origin main >>"$run_log" 2>&1; then
+      problem="fetch from origin failed or timed out"
+    elif ! git -C "$checkout" merge --ff-only --quiet FETCH_HEAD >>"$run_log" 2>&1; then
+      problem="cannot fast-forward to origin/main"
+    fi
+    if [ -n "$problem" ]; then
+      alert_failure "mount clone $name $problem; log=$run_log"
+      echo "FATAL: mount clone $checkout $problem" >&2
+      echo "Log: $run_log" >&2
+      exit 1
+    fi
+    head="$(git -C "$checkout" rev-parse HEAD)"
+    echo "mount clone $name at $head" >>"$run_log"
+    mount_heads="$(jq -c --arg n "$name" --arg h "$head" '. + {($n): $h}' <<<"$mount_heads")"
+  done
+fi
+
 billing_args=(--billing-mode "$BILLING_MODE")
 if [ "$BILLING_MODE" = "metered" ]; then
   billing_args+=(--daily-ceiling-usd "$DAILY_CEILING_USD")
@@ -74,7 +114,7 @@ timeout --signal=TERM --kill-after=60s "$TIMEOUT_SECONDS" \
     --max-input-age-days "$MAX_INPUT_AGE_DAYS" \
     --lock-wait-seconds "$LOCK_WAIT_SECONDS" \
     --max-candidates "$MAX_CANDIDATES" \
-    >"$run_log" 2>&1
+    >>"$run_log" 2>&1
 run_code=$?
 set -e
 
@@ -93,7 +133,9 @@ if [ "$run_code" -eq 0 ] && {
     --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     --arg status "$status" \
     --arg receiptSha256 "$(sha256sum "$receipt" | awk '{print $1}')" \
-    '{at:$at,status:$status,receiptSha256:$receiptSha256}' > "$STATE_DIR/last.ok"
+    --argjson mountHeads "$mount_heads" \
+    '{at:$at,status:$status,receiptSha256:$receiptSha256,mountHeads:$mountHeads}' \
+    > "$STATE_DIR/last.ok"
   echo "ICO maintenance $status; receipt=$receipt"
   exit 0
 fi

@@ -285,6 +285,12 @@ jobs:
       - name: Shellcheck notification seam
         run: shellcheck --severity=error scripts/distiller/notify-routing.sh scripts/distiller/test-notification-routing.sh scripts/distiller/teamkb-compile-daily.sh
 
+      - name: Verify ICO maintenance mount-clone refresh
+        run: bash scripts/operations/test-ico-maintain-daily.sh
+
+      - name: Shellcheck ICO maintenance wrapper
+        run: shellcheck --severity=error scripts/operations/ico-maintain-daily.sh scripts/operations/test-ico-maintain-daily.sh
+
   arch-check:
     name: Architecture Rules
     runs-on: ubuntu-latest

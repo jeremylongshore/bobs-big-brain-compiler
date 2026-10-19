@@ -32,15 +32,30 @@ Historical schema-v2 receipts remain readable: a missing `billingMode` means `me
 
 ## Production mounts
 
-Register live documentation roots, not an abandoned staging snapshot. For the Bob's Big Brain team path:
+Mount dedicated clones of merged `main`, never a shared working tree. A session that switches branches in `~/000-projects/<repo>` would otherwise change what the brain compiles: on 2026-10-18 the `intent-os` mount was reading a branch 79 commits behind `main`, and branch switches surface as mass removed or changed sources. Each mount reads its own clone under `~/.local/share/ico/mounts/<mount name>`, which the nightly wrapper fast-forwards to `origin/main` before the scan. Nothing else may write to those clones.
+
+Create a clone once per mount (a local clone reuses the existing objects; the origin is then pointed at GitHub):
 
 ```bash
-ico --workspace ~/.teamkb/brain mount add bbb-umbrella ~/000-projects/bobs-big-brain-umbrella
-ico --workspace ~/.teamkb/brain mount add bbb-compiler ~/000-projects/bobs-big-brain-compiler
-ico --workspace ~/.teamkb/brain mount add bbb-registrar ~/000-projects/bobs-big-brain-registrar
-ico --workspace ~/.teamkb/brain mount add bbb-plugin ~/000-projects/bobs-big-brain-plugin
-ico --workspace ~/.teamkb/brain mount add intent-os ~/000-projects/intent-os
+M=~/.local/share/ico/mounts
+git clone --no-checkout ~/000-projects/intent-os "$M/intent-os"
+git -C "$M/intent-os" remote set-url origin https://github.com/intent-solutions-io/intent-os.git
+git -C "$M/intent-os" fetch origin main
+git -C "$M/intent-os" checkout -B main origin/main
+git -C "$M/intent-os" branch --set-upstream-to=origin/main main
 ```
+
+Then register it (new brain) or relocate an existing mount onto it (see § Relocating a mount). For the Bob's Big Brain team path the five mounts are:
+
+```bash
+ico --workspace ~/.teamkb/brain mount add bbb-umbrella  ~/.local/share/ico/mounts/bbb-umbrella
+ico --workspace ~/.teamkb/brain mount add bbb-compiler  ~/.local/share/ico/mounts/bbb-compiler
+ico --workspace ~/.teamkb/brain mount add bbb-registrar ~/.local/share/ico/mounts/bbb-registrar
+ico --workspace ~/.teamkb/brain mount add bbb-plugin    ~/.local/share/ico/mounts/bbb-plugin
+ico --workspace ~/.teamkb/brain mount add intent-os     ~/.local/share/ico/mounts/intent-os
+```
+
+Before each scan the wrapper visits every Git clone directly under `ICO_MOUNT_CHECKOUT_ROOT` (default `~/.local/share/ico/mounts`) and runs `git fetch origin main` (bounded by `ICO_MOUNT_FETCH_TIMEOUT`, default 120 seconds per clone) plus a fast-forward-only merge. It fails closed, alerting and skipping the compile, when a clone is not on `main`, has local changes, cannot fetch within the bound, or cannot fast-forward. Each clone's compiled head is written to the run log and to `mountHeads` in `~/.local/state/ico-maintain-daily/last.ok`, so a receipt can be traced to exact commits. Git checkout sets file mtimes to checkout time, so `scan.mounts[].newestInputMtime` on these mounts is the last fast-forward, not the last edit.
 
 The scanner is recursive, skips hidden directories and `node_modules`, accepts supported extensions case-insensitively, and assigns a stable collision-resistant raw path from mount identity plus relative path. Git mounts enumerate tracked files plus non-ignored untracked files, so ignored caches and permission-restricted scratch backups are outside the knowledge surface instead of becoming silent scan gaps. A Git enumeration failure still fails the run. Content hashes, not mtimes, decide freshness. Direct repository mounts disable the input-age gate by default because an unchanged repository can be healthy. Set `ICO_MAX_INPUT_AGE_DAYS` only for a derived feed that has an explicit delivery SLA; the receipt still records each mount's newest observed mtime.
 
@@ -48,7 +63,7 @@ Removing a tracked source is fail-closed. Maintenance reports `removed_source_re
 
 ## Retiring removed sources
 
-When a mounted file that maintenance already tracks disappears, every run fails with `removed_source_requires_retirement` until an operator says why. The receipt lists the affected origins as `<mount id>:<relative path>` in `scan.removedOrigins`. Decide per origin whether the removal was intended: a file deleted or moved on the branch you mean to mount. If the mount is a working tree that another session switched to a different branch, fix the checkout instead of retiring.
+When a mounted file that maintenance already tracks disappears, every run fails with `removed_source_requires_retirement` until an operator says why. The receipt lists the affected origins as `<mount id>:<relative path>` in `scan.removedOrigins`. Decide per origin whether the removal was intended: a file deleted or moved on the branch you mean to mount. If the mount is not a dedicated clone of `main` (§ Production mounts), relocate it instead of retiring.
 
 Preview, then retire with a reason that names where the content went:
 
@@ -64,6 +79,21 @@ ico --workspace ~/.teamkb/brain maintain retire --origin intent-os:legal/README.
 Retirement deletes nothing. `raw/` stays append-only and compiled pages stay on disk. Under the brain write lock it records `retiredAt`, `retiredReason` and `retiredRunId` in each source row's `metadata.maintenance`, marks that source's compilations stale so they no longer feed concept extraction, and writes a `source.retire` trace event, an audit-log line and a receipt at `.ico/maintenance/retirements/<run id>.json`. Retired origins then count under `scan.counts.retired` and stop blocking maintenance.
 
 If a retired file comes back byte-identical, the next run revives it: the content hash proves the retired summary came from those exact bytes, so maintenance clears the retirement, marks the compilations current again, and writes a `source.revive` trace and audit line without a provider call. A file that comes back with different content is an ordinary change and is recompiled.
+
+## Relocating a mount
+
+Moving a mount to a different directory must keep its id: origins are keyed `<mount id>:<relative path>`, so `mount remove` plus `mount add` would mint a new id and make every tracked source look removed. Use `maintain relocate`, which keeps the id and records the move:
+
+```bash
+ico --workspace ~/.teamkb/brain maintain relocate --mount intent-os \
+  --path ~/.local/share/ico/mounts/intent-os \
+  --reason "Read merged main from a dedicated clone, not the shared checkout" --dry-run
+ico --workspace ~/.teamkb/brain maintain relocate --mount intent-os \
+  --path ~/.local/share/ico/mounts/intent-os \
+  --reason "Read merged main from a dedicated clone, not the shared checkout"
+```
+
+Under the brain write lock it scans all mounts, sets the new path, rescans inside the same transaction, and reports the before and after counts. Identical files stay `unchanged`, differing files become `changed`, and files only in the new directory become `new`; the next maintenance run compiles them. It refuses, changing nothing, when the reason is under 10 characters, the named mount or the new directory does not exist, the mount already reads from that directory, another mount reads from it, or the audit log or receipt directory is not writable. It also refuses when the new directory would make tracked sources look removed, listing the first one; pass `--allow-removed` only when that loss is intended, then retire them (§ Retiring removed sources). A committed move writes a `mount.relocate` trace event, an audit-log line and a receipt at `.ico/maintenance/relocations/<run id>.json`.
 
 ## Install and schedule
 
