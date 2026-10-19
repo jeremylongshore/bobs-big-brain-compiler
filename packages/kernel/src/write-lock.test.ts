@@ -146,7 +146,7 @@ describe('withWriteLock', () => {
         '/tmp/does-not-need-to-exist/.write.lock',
         'sh',
         '-c',
-        'printf locked; exec cat',
+        'command -v cat >/dev/null && printf locked && exec cat',
       ],
       expect.anything(),
     );
@@ -226,9 +226,16 @@ describe.runIf(hasFlock)('withWriteLock with a real flock', () => {
     lockPath = join(dir, '.write.lock');
   });
 
-  afterEach(() => {
-    holder?.stdin?.end();
+  afterEach(async () => {
+    // Wait for the holder to exit so it cannot touch the directory mid-delete.
+    const exiting = holder;
     holder = undefined;
+    if (exiting !== undefined && exiting.exitCode === null && exiting.signalCode === null) {
+      await new Promise<void>((resolve) => {
+        exiting.once('close', () => resolve());
+        exiting.stdin?.end();
+      });
+    }
     rmSync(dir, { recursive: true, force: true });
   });
 

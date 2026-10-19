@@ -14,7 +14,7 @@
  * (util-linux `flock(1)`, advisory `LOCK_EX`). To serialise against them from
  * Node — which has no built-in `flock(2)` binding — this helper acquires the
  * SAME advisory lock by spawning
- * `flock -E 75 -w <wait> -x <lock> sh -c 'printf locked; exec cat'`. `flock`
+ * `flock -E 75 -w <wait> -x <lock> sh -c 'command -v cat … && printf locked && exec cat'`. `flock`
  * runs the command only once it holds `LOCK_EX`, so the `locked` byte on stdout
  * is the acquisition signal: the callback never starts before it arrives. `cat`
  * then holds the lock while it blocks on an open stdin pipe, and the lock
@@ -188,7 +188,9 @@ export async function withWriteLock<T>(
           lockPath,
           'sh',
           '-c',
-          `printf ${ACQUIRED_SIGNAL}; exec cat`,
+          // Signal only once `cat` is known runnable: if the exec could fail after
+          // the signal, the shell would exit and release the lock mid-callback.
+          `command -v cat >/dev/null && printf ${ACQUIRED_SIGNAL} && exec cat`,
         ],
         { stdio: ['pipe', 'pipe', 'ignore'] },
       );
