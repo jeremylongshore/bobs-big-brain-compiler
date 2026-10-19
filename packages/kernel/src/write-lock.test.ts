@@ -2,13 +2,17 @@
  * Tests for the ~/.teamkb single-writer lock (e06.5 reuse of e06.12 flock / R13).
  *
  * The lock serialises the on-push incremental compile against the nightly
- * compile + backup. These tests inject a fake `spawn` so we exercise the three
- * outcomes — acquired-and-ran, contended-skip-graceful, flock-missing-degraded —
- * deterministically, without a real filesystem lock or the `flock` binary.
+ * compile + backup. Most tests inject a fake `spawn` so we exercise each
+ * outcome (acquired-and-ran, contended-skip-graceful, flock failure,
+ * flock-missing-degraded) deterministically. The `real flock` suite then holds
+ * an actual lock from another process, because a fake cannot prove exclusion.
  */
 
-import type { spawn as SpawnFn } from 'node:child_process';
+import { spawn, type spawn as SpawnFn, spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,16 +26,18 @@ import { resolveLockPath, withWriteLock } from './write-lock.js';
 class FakeChild extends EventEmitter {
   exitCode: number | null = null;
   stdin = { end: vi.fn() };
+  stdout = new EventEmitter();
 }
 
 /**
  * Build a fake `spawn` that returns scripted children per invocation.
  *
  * The helper spawns `flock --version` (the probe) first when `flockAvailable`
- * is not injected, then the holder `flock -w N -x LOCK cat`. Our tests inject
- * `flockAvailable` so only the holder spawn happens — one child per call.
+ * is not injected, then the holder `flock -E 75 -w N -x LOCK sh -c …`. Our
+ * tests inject `flockAvailable` so only the holder spawn happens — one child
+ * per call.
  */
-function makeSpawn(behavior: 'acquire' | 'contended'): {
+function makeSpawn(behavior: 'acquire' | 'contended' | 'fail'): {
   spawnFn: typeof SpawnFn;
   children: FakeChild[];
 } {
@@ -39,14 +45,15 @@ function makeSpawn(behavior: 'acquire' | 'contended'): {
   const spawnFn = vi.fn(() => {
     const child = new FakeChild();
     children.push(child);
-    if (behavior === 'contended') {
-      // Simulate `flock` timing out: the holder process closes almost
-      // immediately (before the deferred critical section runs).
-      child.exitCode = 1;
-      queueMicrotask(() => child.emit('close', 1));
+    if (behavior === 'acquire') {
+      // flock holds the lock, so the holder shell prints the signal.
+      queueMicrotask(() => child.stdout.emit('data', Buffer.from('locked')));
+    } else {
+      // The wait expired (75) or flock failed (1) without ever printing.
+      const code = behavior === 'contended' ? 75 : 1;
+      child.exitCode = code;
+      queueMicrotask(() => child.emit('close', code));
     }
-    // 'acquire': the child stays alive (exitCode null) until stdin.end() is
-    // called by the helper, at which point we emit close.
     return child;
   });
   // The fake only implements the surface withWriteLock touches; cast through
@@ -127,10 +134,20 @@ describe('withWriteLock', () => {
     expect(result.value.value).toBe(42);
     // Released the lock by ending the holder's stdin (→ `cat` exits → unlock).
     expect(children[0]?.stdin.end).toHaveBeenCalledOnce();
-    // The holder was spawned as `flock -w <n> -x <lock> cat`.
+    // The holder signals acquisition from inside flock, then blocks in cat.
     expect(spawnFn).toHaveBeenCalledWith(
       'flock',
-      ['-w', '10', '-x', '/tmp/does-not-need-to-exist/.write.lock', 'cat'],
+      [
+        '-E',
+        '75',
+        '-w',
+        '10',
+        '-x',
+        '/tmp/does-not-need-to-exist/.write.lock',
+        'sh',
+        '-c',
+        'command -v cat >/dev/null && printf locked && exec cat',
+      ],
       expect.anything(),
     );
   });
@@ -152,6 +169,20 @@ describe('withWriteLock', () => {
     expect(fn).not.toHaveBeenCalled();
   });
 
+  it('reports a flock failure as an error, never as contention', async () => {
+    const { spawnFn } = makeSpawn('fail');
+    const fn = vi.fn(() => 'should-not-run');
+    const result = await withWriteLock(fn, {
+      flockAvailable: true,
+      spawnFn,
+      lockPath: '/tmp/x/.write.lock',
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toMatch(/flock exited with code 1 before acquiring/);
+    expect(fn).not.toHaveBeenCalled();
+  });
+
   it('honors a custom wait timeout in the flock invocation', async () => {
     const { spawnFn } = makeSpawn('acquire');
     await withWriteLock(() => undefined, {
@@ -162,7 +193,7 @@ describe('withWriteLock', () => {
     });
     expect(spawnFn).toHaveBeenCalledWith(
       'flock',
-      ['-w', '3', '-x', '/tmp/x/.write.lock', 'cat'],
+      expect.arrayContaining(['-w', '3', '-x', '/tmp/x/.write.lock']),
       expect.anything(),
     );
   });
@@ -180,5 +211,81 @@ describe('withWriteLock', () => {
     expect(result.error.message).toBe('boom');
     // Even on error the lock is released.
     expect(children[0]?.stdin.end).toHaveBeenCalledOnce();
+  });
+});
+
+const hasFlock = spawnSync('flock', ['--version'], { stdio: 'ignore' }).status === 0;
+
+describe.runIf(hasFlock)('withWriteLock with a real flock', () => {
+  let dir: string;
+  let lockPath: string;
+  let holder: ReturnType<typeof spawn> | undefined;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'ico-write-lock-'));
+    lockPath = join(dir, '.write.lock');
+  });
+
+  afterEach(async () => {
+    // Wait for the holder to exit so it cannot touch the directory mid-delete.
+    const exiting = holder;
+    holder = undefined;
+    if (exiting !== undefined && exiting.exitCode === null && exiting.signalCode === null) {
+      await new Promise<void>((resolve) => {
+        exiting.once('close', () => resolve());
+        exiting.stdin?.end();
+      });
+    }
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  /** Hold the lock from another process, resolving once it is really held. */
+  const holdLock = (): Promise<void> =>
+    new Promise((resolve, reject) => {
+      // Closing its stdin ends `cat`, the last process holding the lock.
+      holder = spawn('flock', ['-x', lockPath, 'sh', '-c', 'printf held; exec cat'], {
+        stdio: ['pipe', 'pipe', 'ignore'],
+      });
+      holder.stdout?.once('data', () => resolve());
+      holder.once('error', reject);
+    });
+
+  it('does not run the critical section while another process holds the lock', async () => {
+    await holdLock();
+    const fn = vi.fn(() => 'should-not-run');
+    const started = Date.now();
+    const result = await withWriteLock(fn, { lockPath, waitSeconds: 1, requireLock: true });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual({ ran: false, locked: true });
+    expect(fn).not.toHaveBeenCalled();
+    expect(Date.now() - started).toBeGreaterThanOrEqual(900);
+  });
+
+  it('runs only after the other holder releases', async () => {
+    await holdLock();
+    let releasedAt = 0;
+    setTimeout(() => {
+      releasedAt = Date.now();
+      holder?.stdin?.end();
+    }, 300);
+    let ranAt = 0;
+    const result = await withWriteLock(
+      () => {
+        ranAt = Date.now();
+        return 'ran';
+      },
+      { lockPath, waitSeconds: 5, requireLock: true },
+    );
+    expect(result.ok && result.value.ran).toBe(true);
+    expect(releasedAt).toBeGreaterThan(0);
+    expect(ranAt).toBeGreaterThanOrEqual(releasedAt);
+  });
+
+  it('releases the lock after the critical section so the next writer acquires', async () => {
+    const first = await withWriteLock(() => 1, { lockPath, waitSeconds: 1, requireLock: true });
+    const second = await withWriteLock(() => 2, { lockPath, waitSeconds: 1, requireLock: true });
+    expect(first.ok && first.value.value).toBe(1);
+    expect(second.ok && second.value.value).toBe(2);
   });
 });

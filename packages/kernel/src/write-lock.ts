@@ -13,11 +13,15 @@
  * The shell writers take the lock with `flock -w <wait> -x "$LOCK" …`
  * (util-linux `flock(1)`, advisory `LOCK_EX`). To serialise against them from
  * Node — which has no built-in `flock(2)` binding — this helper acquires the
- * SAME advisory lock by spawning `flock -w <wait> -x <lock> cat`: `flock`
- * acquires `LOCK_EX` and holds it while `cat` blocks on an open stdin pipe; the
- * lock releases the instant we close that pipe (on callback completion). Because
- * it is the identical advisory lock on the identical path, it mutually excludes
- * the shell writers correctly.
+ * SAME advisory lock by spawning
+ * `flock -E 75 -w <wait> -x <lock> sh -c 'command -v cat … && printf locked && exec cat'`. `flock`
+ * runs the command only once it holds `LOCK_EX`, so the `locked` byte on stdout
+ * is the acquisition signal: the callback never starts before it arrives. `cat`
+ * then holds the lock while it blocks on an open stdin pipe, and the lock
+ * releases the instant we close that pipe (on callback completion). Because it
+ * is the identical advisory lock on the identical path, it mutually excludes the
+ * shell writers. Exit code 75 means the wait expired; any other exit before the
+ * signal is a lock failure, not contention.
  *
  * Contract (mirrors the shell wrapper, `~/bin/teamkb-compile-daily.sh`):
  *   - EXCLUSIVE lock.
@@ -85,6 +89,11 @@ export interface WriteLockResult<T> {
 // ---------------------------------------------------------------------------
 // Internal
 // ---------------------------------------------------------------------------
+
+/** `flock -E` exit code for "the wait expired while another writer held the lock". */
+const FLOCK_TIMEOUT_EXIT = 75;
+/** Printed by the holder only after `flock` holds the lock. */
+const ACQUIRED_SIGNAL = 'locked';
 
 /** Resolve the canonical lock path, matching the shell wrappers exactly. */
 export function resolveLockPath(explicit?: string): string {
@@ -154,8 +163,9 @@ export async function withWriteLock<T>(
     return err(e instanceof Error ? e : new Error(String(e)));
   }
 
-  // Acquire: `flock -w <wait> -x <lock> cat`. `flock` holds LOCK_EX while `cat`
-  // blocks reading its stdin; closing that stdin releases the lock.
+  // Acquire: flock runs the shell only once it holds LOCK_EX; the shell
+  // prints the acquisition signal and then `cat` blocks on its stdin. Closing
+  // that stdin releases the lock.
   return new Promise<Result<WriteLockResult<T>, Error>>((resolve) => {
     let settled = false;
     const finish = (r: Result<WriteLockResult<T>, Error>): void => {
@@ -167,60 +177,69 @@ export async function withWriteLock<T>(
 
     let holder: ReturnType<typeof spawn>;
     try {
-      holder = spawnFn('flock', ['-w', String(waitSeconds), '-x', lockPath, 'cat'], {
-        stdio: ['pipe', 'ignore', 'ignore'],
-      });
+      holder = spawnFn(
+        'flock',
+        [
+          '-E',
+          String(FLOCK_TIMEOUT_EXIT),
+          '-w',
+          String(waitSeconds),
+          '-x',
+          lockPath,
+          'sh',
+          '-c',
+          // Signal only once `cat` is known runnable: if the exec could fail after
+          // the signal, the shell would exit and release the lock mid-callback.
+          `command -v cat >/dev/null && printf ${ACQUIRED_SIGNAL} && exec cat`,
+        ],
+        { stdio: ['pipe', 'pipe', 'ignore'] },
+      );
     } catch (e) {
       finish(err(e instanceof Error ? e : new Error(String(e))));
       return;
     }
 
     let acquired = false;
-
-    // If `flock` exits BEFORE we run the callback, it timed out waiting → the
-    // lock was contended. `flock` exits 1 on wait-timeout; `cat` would exit 0
-    // only after we close stdin (which we only do post-callback). So an early
-    // close means "could not acquire".
-    holder.on('close', () => {
-      if (!acquired) {
-        // Contended — `flock` timed out waiting (exits before we run the
-        // callback). Skip-graceful: resolve ran=false, no error.
-        finish(ok({ ran: false, locked: true }));
+    const release = (): void => {
+      // Close `cat`'s stdin so it exits and `flock` unlocks.
+      try {
+        holder.stdin?.end();
+      } catch {
+        /* holder may already be gone; release is best-effort */
       }
-      // else: normal release after the callback finished; nothing to do.
-    });
-    holder.on('error', (e) => {
-      finish(err(e instanceof Error ? e : new Error(String(e))));
-    });
+    };
 
-    // `flock` acquires the lock immediately before exec'ing `cat`, so once the
-    // child is spawned and its stdin pipe is writable we treat the lock as held.
-    // Guard against the race above via the `acquired` flag + a microtask defer
-    // so a synchronous early-close (timeout) is observed first.
     const runCritical = async (): Promise<void> => {
-      acquired = true;
       try {
         const value = await fn();
         finish(ok({ ran: true, locked: true, value }));
       } catch (e) {
         finish(err(e instanceof Error ? e : new Error(String(e))));
       } finally {
-        // Release the lock: close `cat`'s stdin so it exits and `flock` unlocks.
-        try {
-          holder.stdin?.end();
-        } catch {
-          /* holder may already be gone; release is best-effort */
-        }
+        release();
       }
     };
 
-    // Defer one macrotask so a wait-timeout `close` (which fires ~immediately on
-    // contention) is seen before we mark acquired. Keeps the two outcomes
-    // deterministic without polling.
-    setTimeout(() => {
-      if (!settled && holder.exitCode === null) {
-        void runCritical();
+    holder.stdout?.once('data', () => {
+      if (acquired || settled) return;
+      acquired = true;
+      void runCritical();
+    });
+
+    // An exit before the acquisition signal means the lock was never held.
+    holder.on('close', (code: number | null) => {
+      if (acquired) return; // normal release after the callback finished
+      if (code === FLOCK_TIMEOUT_EXIT) {
+        // Contended: another writer held the lock for the whole wait.
+        // Skip-graceful: resolve ran=false, no error.
+        finish(ok({ ran: false, locked: true }));
+        return;
       }
-    }, 0);
+      finish(err(new Error(`flock exited with code ${String(code)} before acquiring ${lockPath}`)));
+    });
+    holder.on('error', (e) => {
+      if (!acquired) release();
+      finish(err(e instanceof Error ? e : new Error(String(e))));
+    });
   });
 }
