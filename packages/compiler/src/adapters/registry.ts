@@ -9,10 +9,9 @@
  * Never throws — all failures are returned as `err(Error)`.
  */
 
-import { type Result } from '@ico/types';
+import { err, type Result } from '@ico/types';
 
 import { ingestMarkdown } from './markdown.js';
-import { ingestPdf } from './pdf.js';
 import { type IngestResult } from './types.js';
 import { ingestWebClip } from './web-clip.js';
 
@@ -85,7 +84,16 @@ export async function ingestSource(
       return ingestMarkdown(filePath);
 
     case 'pdf':
-      return ingestPdf(filePath);
+      try {
+        // PDF parsing initializes native dependencies. Keep that work off every
+        // other route (including compiler imports and CLI help/version).
+        const { ingestPdf } = await import('./pdf.js');
+        return await ingestPdf(filePath);
+      } catch (cause) {
+        // Dynamic module loading and an adapter failure both obey the registry's
+        // Result contract, including failures before the adapter's own catches.
+        return err(cause instanceof Error ? cause : new Error(String(cause)));
+      }
 
     case 'html':
       return ingestWebClip(filePath);
