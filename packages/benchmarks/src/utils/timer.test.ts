@@ -2,7 +2,9 @@
  * Tests for the bench timing utility (E10-B06).
  */
 
-import { describe, expect, it } from 'vitest';
+import { performance } from 'node:perf_hooks';
+
+import { describe, expect, it, vi } from 'vitest';
 
 import { bench, formatBenchResult } from './timer.js';
 
@@ -32,23 +34,30 @@ describe('bench', () => {
   });
 
   it('returns the median of multiple samples', async () => {
-    // Force ordered durations by sleeping. 10/20/30ms → median 20.
-    const durations = [10, 20, 30];
-    let idx = 0;
-    const r = await bench(
-      'median',
-      async () => {
-        const ms = durations[idx]!;
-        idx += 1;
-        await new Promise<void>((res) => setTimeout(res, ms));
-      },
-      { iterations: 3 },
-    );
-    // Allow generous tolerance — setTimeout is approximate, GC can drift.
-    expect(r.medianMs).toBeGreaterThan(15);
-    expect(r.medianMs).toBeLessThan(60);
-    expect(r.minMs).toBeLessThanOrEqual(r.medianMs);
-    expect(r.maxMs).toBeGreaterThanOrEqual(r.medianMs);
+    // Unordered durations verify sorting while avoiding scheduler speed bounds.
+    const durations = [30, 2, 10];
+    let clockMs = 0;
+    let calls = 0;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => clockMs);
+    try {
+      const r = await bench(
+        'median',
+        async () => {
+          const duration = durations[calls++]!;
+          // Advance after yielding so measuring without awaiting fn would fail.
+          await Promise.resolve();
+          clockMs += duration;
+        },
+        { iterations: durations.length },
+      );
+      expect(calls).toBe(3);
+      expect(r.samplesMs).toEqual([30, 2, 10]);
+      expect(r.medianMs).toBe(10);
+      expect(r.minMs).toBe(2);
+      expect(r.maxMs).toBe(30);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it('captures rss delta as a finite number', async () => {
