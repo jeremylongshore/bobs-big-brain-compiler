@@ -53,7 +53,7 @@ const PAGE_BREAK = '---PAGE_BREAK---';
 function makeMockSummary(sourceId: string, sourcePath: string, hash: string): string {
   return `---
 type: source-summary
-id: 11111111-2222-3333-4444-555555555555
+id: 11111111-2222-4333-8444-555555555555
 title: Test Source Summary
 source_id: ${sourceId}
 source_path: ${sourcePath}
@@ -90,7 +90,7 @@ Test conclusions about structured knowledge bases.
 function makeMockSummary2(sourceId: string, sourcePath: string, hash: string): string {
   return `---
 type: source-summary
-id: 22222222-3333-4444-5555-666666666666
+id: 22222222-3333-4444-8555-666666666666
 title: Second Source Summary
 source_id: ${sourceId}
 source_path: ${sourcePath}
@@ -123,11 +123,11 @@ Well-structured ontologies reduce query latency significantly.
 
 const MOCK_CONCEPT_PAGE = `---
 type: concept
-id: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+id: aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee
 title: Test Concept
 definition: A test concept for validation purposes.
 source_ids:
-  - 11111111-2222-3333-4444-555555555555
+  - 11111111-2222-4333-8444-555555555555
 compiled_at: 2026-04-06T00:00:00.000Z
 model: claude-sonnet-4-6
 ---
@@ -149,11 +149,11 @@ Extended discussion of the test concept and its implications for knowledge syste
 
 const MOCK_ENTITY_PAGE = `---
 type: entity
-id: bbbbbbbb-cccc-dddd-eeee-ffffffffffff
+id: bbbbbbbb-cccc-4ddd-8eee-ffffffffffff
 title: Test Entity
 entity_type: tool
 source_ids:
-  - 11111111-2222-3333-4444-555555555555
+  - 11111111-2222-4333-8444-555555555555
 compiled_at: 2026-04-06T00:00:00.000Z
 model: claude-sonnet-4-6
 ---
@@ -165,14 +165,14 @@ A test entity representing a knowledge compilation tool.
 
 const MOCK_TOPIC_PAGE = `---
 type: topic
-id: cccccccc-dddd-eeee-ffff-aaaaaaaaaaaa
+id: cccccccc-dddd-4eee-8fff-aaaaaaaaaaaa
 title: Test Topic
 summary: A topic synthesized from multiple source summaries.
 source_ids:
-  - 11111111-2222-3333-4444-555555555555
-  - 22222222-3333-4444-5555-666666666666
+  - 11111111-2222-4333-8444-555555555555
+  - 22222222-3333-4444-8555-666666666666
 concept_ids:
-  - aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+  - aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee
 compiled_at: 2026-04-06T00:00:00.000Z
 model: claude-sonnet-4-6
 ---
@@ -196,12 +196,12 @@ Graph-based knowledge representations support complex query patterns.
 
 const MOCK_CONTRADICTION_PAGE = `---
 type: contradiction
-id: dddddddd-eeee-ffff-aaaa-bbbbbbbbbbbb
+id: dddddddd-eeee-4fff-8aaa-bbbbbbbbbbbb
 title: Test Contradiction
 severity: low
 source_ids:
-  - 11111111-2222-3333-4444-555555555555
-  - 22222222-3333-4444-5555-666666666666
+  - 11111111-2222-4333-8444-555555555555
+  - 22222222-3333-4444-8555-666666666666
 compiled_at: 2026-04-06T00:00:00.000Z
 model: claude-sonnet-4-6
 ---
@@ -224,12 +224,12 @@ The contradiction is minor and may reflect differences in corpus scale rather th
 
 const MOCK_GAP_PAGE = `---
 type: open-question
-id: eeeeeeee-ffff-aaaa-bbbb-cccccccccccc
+id: eeeeeeee-ffff-4aaa-8bbb-cccccccccccc
 title: Test Open Question
 priority: medium
 evidence_strength: weak
 related_page_ids:
-  - aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+  - aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee
 compiled_at: 2026-04-06T00:00:00.000Z
 model: claude-sonnet-4-6
 ---
