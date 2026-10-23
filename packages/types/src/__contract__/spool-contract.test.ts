@@ -174,9 +174,8 @@ describe('spool boundary contract — ICO emission ↔ INTKB MemoryCandidate', (
     // Build directly without going through ICO's parser (which would also reject).
     const wire = JSON.parse(JSON.stringify(buildSample())) as Record<string, unknown>;
     wire['capturedAt'] = '2026-05-24T03:00:00+05:30'; // valid ISO 8601 with offset
-    const parsed = IntkbMemoryCandidate.safeParse(wire);
-    // The local parser and vendored registrar contract both use the patched
-    // Zod4 entrypoint and enforce the same UTC Z-suffixed wire timestamp.
-    expect(parsed.success).toBe(false);
+    // Both local and vendored parsers resolve through this workspace's Zod4.
+    expect(SpoolMemoryCandidateSchema.safeParse(wire).success).toBe(false);
+    expect(IntkbMemoryCandidate.safeParse(wire).success).toBe(false);
   });
 });

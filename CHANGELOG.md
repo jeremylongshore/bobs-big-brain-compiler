@@ -49,7 +49,8 @@
 
 - Upgrade all resolved Zod dependencies to 4.6.7 and Vite to 7.3.7 to address
   GHSA-mrhx-c7xc-m3w5 and GHSA-587h-7wmj-h5pm. Early collection rejection
-  applies to schemas with size bounds; regression tests cover arrays, sets, and maps.
+  applies to schemas with size bounds; library-behavior regression tests cover
+  arrays, sets, and maps. No production collection limits are added.
 
 - Each nightly compile date now has a 3,000-second outer deadline and a 10-second
   termination grace, covering compile, review, audit, and notification work. Expired runs
@@ -70,8 +71,10 @@
 
 - Migrate `@ico/types` to Zod 4, including explicit string keys for trace payload
   records. UUID validation now enforces RFC version/variant bits, and missing-field
-  diagnostics use Zod 4 wording. UTC Z-suffixed wire timestamps and the deterministic
-  spool UUID namespace are preserved. An offline test exercises shared-schema parsing
+  diagnostics use Zod 4 wording. Internal consumers sharing Zod schemas must use
+  compatible Zod 4 types. The vendored contract now rejects offset timestamps;
+  production UTC wire emission and the spool UUID namespace are unchanged.
+  An offline test exercises shared-schema parsing
   and schema generation through the actual Anthropic SDK structured-output helper.
 
 - Hardened the public `ico-your-internals` plugin skill to v0.3.0: dry runs are
