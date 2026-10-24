@@ -6,6 +6,7 @@
  * createClaudeClient so the production code path remains unchanged.
  */
 
+import { APIError } from '@anthropic-ai/sdk';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -257,9 +258,11 @@ describe('createCompletion (mocked SDK)', () => {
   });
 
   it('retries on rate-limit error and succeeds on the second attempt', async () => {
-    const rateLimitErr = Object.assign(
-      new Error('Claude API rate_limit_error (HTTP 429): Too many requests'),
-      { status: 429 },
+    const rateLimitErr = new APIError(
+      429,
+      { message: 'Too many requests' },
+      undefined,
+      new Headers(),
     );
 
     const successResponse = {
