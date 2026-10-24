@@ -11,7 +11,7 @@
  * the same one our cross-platform-coverage tests already exercise.
  */
 
-import { spawn } from 'node:child_process';
+import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -27,7 +27,8 @@ let tmpBase: string;
 beforeEach(() => {
   tmpBase = mkdtempSync(join(tmpdir(), 'ico-proc-'));
 });
-afterEach(() => {
+afterEach(async () => {
+  await cleanupOwnedChildren();
   rmSync(tmpBase, { recursive: true, force: true });
 });
 
@@ -38,23 +39,181 @@ interface SpawnResult {
   signal: NodeJS.Signals | null;
 }
 
+interface OwnedChild {
+  child: ChildProcessWithoutNullStreams;
+  stdout: string;
+  stderr: string;
+  closed: boolean;
+  error?: Error;
+  completion: Promise<SpawnResult>;
+}
+
+const ownedChildren = new Map<ChildProcessWithoutNullStreams, OwnedChild>();
+
+function spawnOwned(args: string[], env: NodeJS.ProcessEnv = process.env): OwnedChild {
+  const child = spawn(process.execPath, args, {
+    env: { ...env, NO_COLOR: '1' },
+  });
+  let complete!: (result: SpawnResult) => void;
+  const owned: OwnedChild = {
+    child,
+    stdout: '',
+    stderr: '',
+    closed: false,
+    completion: new Promise((resolve_) => {
+      complete = resolve_;
+    }),
+  };
+  // Register close/error tracking before any test can trigger a signal or exit.
+  child.stdout.on('data', (data: Buffer) => {
+    owned.stdout += data.toString('utf8');
+  });
+  child.stderr.on('data', (data: Buffer) => {
+    owned.stderr += data.toString('utf8');
+  });
+  child.once('error', (error) => {
+    owned.error = error;
+  });
+  child.once('close', (code, signal) => {
+    owned.closed = true;
+    complete({ stdout: owned.stdout, stderr: owned.stderr, code, signal });
+  });
+  ownedChildren.set(child, owned);
+  return owned;
+}
+
+async function resultOf(owned: OwnedChild): Promise<SpawnResult> {
+  const result = await owned.completion;
+  if (owned.error) throw owned.error;
+  return result;
+}
+
+async function cleanupOwnedChildren(): Promise<void> {
+  const outcomes = await Promise.allSettled(
+    [...ownedChildren.values()].map(async (owned) => {
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      try {
+        if (!owned.closed) {
+          if (owned.child.exitCode === null && owned.child.signalCode === null) {
+            owned.child.kill('SIGKILL');
+          }
+          // Bound teardown separately; never silently claim an unreaped child is gone.
+          await Promise.race([
+            owned.completion,
+            new Promise<never>((_resolve, reject) => {
+              timeout = setTimeout(
+                () => reject(new Error('owned fixture child did not close during teardown')),
+                2000,
+              );
+            }),
+          ]);
+        }
+      } finally {
+        if (timeout !== undefined) clearTimeout(timeout);
+        if (owned.closed) ownedChildren.delete(owned.child);
+      }
+    }),
+  );
+  const errors = outcomes
+    .filter((outcome) => outcome.status === 'rejected')
+    .map((outcome): unknown => outcome.reason);
+  if (errors.length > 0) throw new AggregateError(errors, 'failed to reap owned fixture children');
+}
+
+function waitForReady(owned: OwnedChild, marker = 'READY', timeoutMs = 5000): Promise<void> {
+  return new Promise((resolve_, reject) => {
+    const cleanup = () => {
+      clearTimeout(timeout);
+      owned.child.stdout.off('data', check);
+      owned.child.off('close', onClose);
+      owned.child.off('error', onError);
+    };
+    const finish = (error?: Error) => {
+      cleanup();
+      if (error) reject(error);
+      else resolve_();
+    };
+    const check = () => {
+      if (owned.stdout.includes(marker)) finish();
+    };
+    const onClose = () => finish(new Error(`child closed before ${marker}`));
+    const onError = (error: Error) => finish(error);
+    owned.child.stdout.on('data', check);
+    owned.child.once('close', onClose);
+    owned.child.once('error', onError);
+    const timeout = setTimeout(() => finish(new Error(`child never wrote ${marker}`)), timeoutMs);
+    if (owned.error) onError(owned.error);
+    else if (owned.closed) onClose();
+    else check();
+  });
+}
+
 function spawnCli(
   args: string[],
   opts: { env?: Record<string, string> } = {},
 ): Promise<SpawnResult> {
-  return new Promise((resolve_) => {
-    const child = spawn('node', [CLI_PATH, ...args], {
-      env: { ...process.env, ...opts.env, NO_COLOR: '1' },
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (d: Buffer) => (stdout += d.toString('utf-8')));
-    child.stderr.on('data', (d: Buffer) => (stderr += d.toString('utf-8')));
-    child.on('close', (code, signal) => {
-      resolve_({ stdout, stderr, code, signal });
-    });
-  });
+  return resultOf(spawnOwned([CLI_PATH, ...args], { ...process.env, ...opts.env }));
 }
+
+function spawnScript(code: string, args: string[] = []): Promise<SpawnResult> {
+  return resultOf(spawnOwned(['--input-type=module', '-e', code, ...args]));
+}
+
+// Failure-path fixtures are plain Node scripts, independent of CLI build/startup.
+describe('owned process fixture cleanup', () => {
+  it('reaps a looping child when readiness times out and removes readiness listeners', async () => {
+    const owned = spawnOwned([
+      '-e',
+      `process.stdout.write('BOOTED\\n'); setInterval(() => {}, 1000);`,
+    ]);
+    await waitForReady(owned, 'BOOTED');
+    const listeners = {
+      data: owned.child.stdout.listenerCount('data'),
+      close: owned.child.listenerCount('close'),
+      error: owned.child.listenerCount('error'),
+    };
+    try {
+      const readiness = waitForReady(owned, 'READY', 30);
+      await expect(readiness).rejects.toThrow('child never wrote READY');
+      expect(owned.child.stdout.listenerCount('data')).toBe(listeners.data);
+      expect(owned.child.listenerCount('close')).toBe(listeners.close);
+      expect(owned.child.listenerCount('error')).toBe(listeners.error);
+    } finally {
+      // Same teardown path as afterEach, including when an assertion above fails.
+      await cleanupOwnedChildren();
+    }
+    expect(owned.closed).toBe(true);
+    expect(ownedChildren.size).toBe(0);
+    expect((await owned.completion).signal).toBe('SIGKILL');
+  });
+
+  it('rejects early close immediately and reaps another owned looping child', async () => {
+    const exiting = spawnOwned([
+      '-e',
+      `process.stdin.once('data', () => process.exit(7)); process.stdout.write('BOOTED\\n');`,
+    ]);
+    const looping = spawnOwned([
+      '-e',
+      `process.stdout.write('BOOTED\\n'); setInterval(() => {}, 1000);`,
+    ]);
+    await Promise.all([waitForReady(exiting, 'BOOTED'), waitForReady(looping, 'BOOTED')]);
+    const readiness = waitForReady(exiting, 'READY');
+    // completion and readiness close listeners both exist before provoking exit.
+    exiting.child.stdin.end('exit');
+    try {
+      await expect(readiness).rejects.toThrow('child closed before READY');
+    } finally {
+      await cleanupOwnedChildren();
+    }
+    expect((await exiting.completion).code).toBe(7);
+    expect(exiting.closed).toBe(true);
+    expect(looping.closed).toBe(true);
+    expect((await looping.completion).signal).toBe('SIGKILL');
+    expect(ownedChildren.size).toBe(0);
+    expect(exiting.child.listenerCount('close')).toBe(0);
+    expect(exiting.child.stdout.listenerCount('data')).toBe(1);
+  });
+});
 
 describe('top-level process handlers — SIGINT', () => {
   it('SIGINT during a hanging operation produces a friendly message and exits 130', async () => {
@@ -68,31 +227,11 @@ describe('top-level process handlers — SIGINT', () => {
         setInterval(() => {}, 1000);
       });
     `;
-    const child = spawn('node', ['--input-type=module', '-e', code], {
-      env: { ...process.env, NO_COLOR: '1' },
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (d: Buffer) => (stdout += d.toString('utf-8')));
-    child.stderr.on('data', (d: Buffer) => (stderr += d.toString('utf-8')));
-
-    // Wait until the child writes READY before sending the signal.
-    await new Promise<void>((resolve_, reject) => {
-      const timeout = setTimeout(() => reject(new Error('child never wrote READY')), 5000);
-      const check = setInterval(() => {
-        if (stdout.includes('READY')) {
-          clearTimeout(timeout);
-          clearInterval(check);
-          resolve_();
-        }
-      }, 25);
-    });
-
-    child.kill('SIGINT');
-
-    const result = await new Promise<SpawnResult>((r) => {
-      child.on('close', (code_, signal) => r({ stdout, stderr, code: code_, signal }));
-    });
+    const owned = spawnOwned(['--input-type=module', '-e', code]);
+    await waitForReady(owned);
+    const completion = resultOf(owned);
+    owned.child.kill('SIGINT');
+    const result = await completion;
 
     expect(result.stderr).toMatch(/interrupted \(SIGINT\)/);
     expect(result.code).toBe(130);
@@ -110,17 +249,8 @@ describe('top-level process handlers — unhandled rejection', () => {
         });
       });
     `;
-    const result = await spawnCli([], {}).then(
-      () =>
-        new Promise<SpawnResult>((r) => {
-          const child = spawn('node', ['--input-type=module', '-e', code], {
-            env: { ...process.env, NO_COLOR: '1' },
-          });
-          let stderr = '';
-          child.stderr.on('data', (d: Buffer) => (stderr += d.toString('utf-8')));
-          child.on('close', (c, s) => r({ stdout: '', stderr, code: c, signal: s }));
-        }),
-    );
+    await spawnCli([], {});
+    const result = await spawnScript(code);
 
     expect(result.stderr).toMatch(/\[ico\] unhandled rejection/);
     expect(result.stderr).toContain('synthetic rejection for testing');
@@ -136,14 +266,7 @@ describe('top-level process handlers — unhandled rejection', () => {
         });
       });
     `;
-    const result = await new Promise<SpawnResult>((r) => {
-      const child = spawn('node', ['--input-type=module', '-e', code], {
-        env: { ...process.env, NO_COLOR: '1' },
-      });
-      let stderr = '';
-      child.stderr.on('data', (d: Buffer) => (stderr += d.toString('utf-8')));
-      child.on('close', (c, s) => r({ stdout: '', stderr, code: c, signal: s }));
-    });
+    const result = await spawnScript(code);
 
     expect(result.stderr).toMatch(/rate limit/i);
     expect(result.code).toBe(1);
@@ -160,14 +283,7 @@ describe('top-level process handlers — stack traces', () => {
         });
       });
     `;
-    const result = await new Promise<SpawnResult>((r) => {
-      const child = spawn('node', ['--input-type=module', '-e', code], {
-        env: { ...process.env, NO_COLOR: '1' },
-      });
-      let stderr = '';
-      child.stderr.on('data', (d: Buffer) => (stderr += d.toString('utf-8')));
-      child.on('close', (c, s) => r({ stdout: '', stderr, code: c, signal: s }));
-    });
+    const result = await spawnScript(code);
     // Friendly message present.
     expect(result.stderr).toContain('UNIQUE_UNKNOWN_ERROR_MARKER_ZXY');
     // Stack trace present (friendlyError didn't recognize it → fell through to verbatim).
@@ -184,14 +300,7 @@ describe('top-level process handlers — stack traces', () => {
         });
       });
     `;
-    const result = await new Promise<SpawnResult>((r) => {
-      const child = spawn('node', ['--input-type=module', '-e', code], {
-        env: { ...process.env, NO_COLOR: '1' },
-      });
-      let stderr = '';
-      child.stderr.on('data', (d: Buffer) => (stderr += d.toString('utf-8')));
-      child.on('close', (c, s) => r({ stdout: '', stderr, code: c, signal: s }));
-    });
+    const result = await spawnScript(code);
     expect(result.stderr).toMatch(/rate limit/i);
     // No stack frames — known category mapped to a clean hint.
     expect(result.stderr).not.toMatch(/^\s+at\s+/m);
@@ -207,16 +316,8 @@ describe('top-level process handlers — stack traces', () => {
         });
       });
     `;
-    const result = await new Promise<SpawnResult>((r) => {
-      // Pass --verbose AFTER `--` so Node forwards it to script argv rather
-      // than trying to parse it as a Node flag.
-      const child = spawn('node', ['--input-type=module', '-e', code, '--', '--verbose'], {
-        env: { ...process.env, NO_COLOR: '1' },
-      });
-      let stderr = '';
-      child.stderr.on('data', (d: Buffer) => (stderr += d.toString('utf-8')));
-      child.on('close', (c, s) => r({ stdout: '', stderr, code: c, signal: s }));
-    });
+    // Forward --verbose after -- so Node leaves it in the script argv.
+    const result = await spawnScript(code, ['--', '--verbose']);
     expect(result.stderr).toMatch(/rate limit/i);
     // Stack frames in `node -e` scripts are reported as `[stdin]:line:col`
     // not `*.js:line:col`. Match the `at ` marker instead.
