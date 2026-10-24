@@ -85,14 +85,18 @@ export async function ingestSource(
 
     case 'pdf':
       try {
-        // PDF parsing initializes native dependencies. Keep that work off every
-        // other route (including compiler imports and CLI help/version).
+        // Defer native PDF dependency initialization until this format is requested.
         const { ingestPdf } = await import('./pdf.js');
         return await ingestPdf(filePath);
       } catch (cause) {
         // Dynamic module loading and an adapter failure both obey the registry's
         // Result contract, including failures before the adapter's own catches.
-        return err(cause instanceof Error ? cause : new Error(String(cause)));
+        try {
+          return err(cause instanceof Error ? cause : new Error(String(cause)));
+        } catch {
+          // A rejection may itself throw during instanceof or string conversion.
+          return err(new Error('PDF ingestion failed'));
+        }
       }
 
     case 'html':

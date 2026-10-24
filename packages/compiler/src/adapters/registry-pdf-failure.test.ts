@@ -21,6 +21,28 @@ describe('PDF registry failure boundary', () => {
     },
   );
 
+  const unprintableReasons: { name: string; reason: unknown }[] = [
+    { name: 'null-prototype object', reason: Object.create(null) },
+    {
+      name: 'throwing primitive conversion',
+      reason: {
+        [Symbol.toPrimitive]() {
+          throw new Error('conversion failed');
+        },
+      },
+    },
+  ];
+
+  it.each(unprintableReasons)('returns a Result error for $name', async ({ reason }) => {
+    adapter.mockRejectedValueOnce(reason);
+    const result = await ingestSource('fixture.pdf');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBeInstanceOf(Error);
+      expect(result.error.message).toBe('PDF ingestion failed');
+    }
+  });
+
   it('preserves an adapter-returned Result error unchanged', async () => {
     const failure = err(new Error('PDF format rejected'));
     adapter.mockResolvedValueOnce(failure);
