@@ -33,13 +33,13 @@ import { summarizeSource } from './summarize.js';
 // Fixtures
 // ---------------------------------------------------------------------------
 
-const SOURCE_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+const SOURCE_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 const SOURCE_PATH = 'raw/notes/my-research-paper.md';
 const CONTENT_HASH = 'abc123def456abc123def456abc123def456abc123def456abc123def456abc1';
 
 const MOCK_FRONTMATTER = `---
 type: source-summary
-id: ffffffff-eeee-dddd-cccc-bbbbbbbbbbbb
+id: ffffffff-eeee-4ddd-8ccc-bbbbbbbbbbbb
 title: My Research Paper
 source_id: ${SOURCE_ID}
 source_path: ${SOURCE_PATH}
@@ -369,7 +369,7 @@ describe('summarizeSource', () => {
 
   it('handles source paths with underscores and mixed case in the slug', async () => {
     const altSourcePath = 'raw/papers/My_Research_Paper_2024.pdf';
-    const altSourceId = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+    const altSourceId = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff';
     insertSource(env.db, altSourceId, altSourcePath);
 
     const client = mockClient(MOCK_API_RESPONSE);

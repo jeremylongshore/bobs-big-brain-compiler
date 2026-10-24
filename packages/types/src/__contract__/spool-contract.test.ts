@@ -20,7 +20,7 @@ import { IntkbMemoryCandidate } from './intkb-memory-candidate-snapshot.js';
 function buildSample(overrides: Partial<SpoolMemoryCandidate> = {}): SpoolMemoryCandidate {
   return SpoolMemoryCandidateSchema.parse({
     schemaVersion: '1',
-    id: '6c6f6e67-7368-6f72-6500-69636f73706c',
+    id: '550e8400-e29b-41d4-a716-446655440000',
     status: 'inbox',
     source: 'import',
     content: 'A compiled wiki page body about transformer attention.',
@@ -174,15 +174,8 @@ describe('spool boundary contract — ICO emission ↔ INTKB MemoryCandidate', (
     // Build directly without going through ICO's parser (which would also reject).
     const wire = JSON.parse(JSON.stringify(buildSample())) as Record<string, unknown>;
     wire['capturedAt'] = '2026-05-24T03:00:00+05:30'; // valid ISO 8601 with offset
-    const parsed = IntkbMemoryCandidate.safeParse(wire);
-    // Zod 3.x accepts offset datetimes; Zod 4.x does not. INTKB is on 4.x;
-    // ICO ships on 3.24 today. The vendored snapshot uses whatever Zod is
-    // available in @ico/types (currently 3.24), so this assertion may flip
-    // when ICO migrates to Zod 4 (bead intentional-cognition-os-j83).
-    // Document the current expectation: under Zod 3 this still parses; the
-    // contract guarantee (Z-suffix from ICO) is enforced by ICO's own
-    // schema regardless of Zod version. Skipping the strict assertion until
-    // ICO migrates.
-    expect(parsed).toBeDefined();
+    // Both local and vendored parsers resolve through this workspace's Zod4.
+    expect(SpoolMemoryCandidateSchema.safeParse(wire).success).toBe(false);
+    expect(IntkbMemoryCandidate.safeParse(wire).success).toBe(false);
   });
 });
