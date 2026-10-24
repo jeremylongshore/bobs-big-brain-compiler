@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { ingestPdf } from './pdf.js';
+import { ingestSource } from './registry.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -74,6 +75,16 @@ describe('ingestPdf', () => {
     const result = await ingestPdf(filePath);
 
     expect(result.ok).toBe(true);
+  });
+
+  it('ingests a valid PDF through the lazy registry route', async () => {
+    const filePath = await writeTmp('registry.pdf', MINIMAL_PDF);
+    const result = await ingestSource(filePath);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.sourceType).toBe('pdf');
+      expect(result.value.content).toContain('Hello World');
+    }
   });
 
   it('sets sourceType to "pdf"', async () => {
