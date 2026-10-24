@@ -215,7 +215,9 @@ describe('ico lint — subprocess', { timeout: 30_000 }, () => {
 
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toContain('schema violation');
-    expect(result.stdout).toContain('definition: Required');
+    expect(result.stdout).toContain(
+      'definition: Invalid input: expected string, received undefined',
+    );
   });
 
   it('--json exits 0 and emits valid JSON with the expected top-level structure', () => {

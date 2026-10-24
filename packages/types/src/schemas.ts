@@ -109,7 +109,7 @@ export const TraceEnvelopeSchema = z.object({
   event_type: z.string(),
   event_id: z.string().uuid(),
   correlation_id: z.string().uuid().nullable(),
-  payload: z.record(z.unknown()),
+  payload: z.record(z.string(), z.unknown()),
   prev_hash: z.string().nullable(),
 });
 

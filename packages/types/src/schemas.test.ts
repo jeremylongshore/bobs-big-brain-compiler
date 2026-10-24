@@ -170,3 +170,25 @@ describe('RecallResultSchema', () => {
     expect(RecallResultSchema.parse(recall)).toEqual(recall);
   });
 });
+
+describe('trace payload record compatibility', () => {
+  it('retains arbitrary string-keyed JSON values and rejects an array payload', () => {
+    const envelope = {
+      timestamp: '2026-10-23T00:00:00Z',
+      event_type: 'fixture',
+      event_id: '550e8400-e29b-41d4-a716-446655440000',
+      correlation_id: null,
+      prev_hash: null,
+      payload: {
+        label: 'value',
+        count: 3,
+        enabled: false,
+        nullable: null,
+        nested: { key: 'value' },
+        list: [1, 'two'],
+      },
+    };
+    expect(TraceEnvelopeSchema.parse(envelope)).toEqual(envelope);
+    expect(TraceEnvelopeSchema.safeParse({ ...envelope, payload: [] }).success).toBe(false);
+  });
+});
