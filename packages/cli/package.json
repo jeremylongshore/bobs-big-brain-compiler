@@ -42,7 +42,7 @@
     "verify-pack": "bash ../../scripts/verify-npm-pack.sh"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.82.0",
+    "@anthropic-ai/sdk": "^0.91.1",
     "@intentsolutions/core": "^0.10.0",
     "better-sqlite3": "^11.9.0",
     "commander": "^13.0.0",
