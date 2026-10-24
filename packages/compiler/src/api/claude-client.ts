@@ -4,14 +4,19 @@
  * Provides a thin, Result-typed layer over @anthropic-ai/sdk with:
  * - Exponential backoff retry on 429/529
  * - Structured error classification (auth, rate-limit, overloaded, bad-request, server)
- * - API key never logged or surfaced in returned errors
+ * - Error diagnostics retain HTTP status without provider bodies or headers
  * - Prompt injection detection via sanitizeForPrompt
  * - Token estimation heuristic
  *
  * Never throws — all error paths return err(Error).
  */
 
-import Anthropic, { APIError } from '@anthropic-ai/sdk';
+import Anthropic, {
+  APIConnectionError,
+  APIConnectionTimeoutError,
+  APIError,
+  APIUserAbortError,
+} from '@anthropic-ai/sdk';
 
 import {
   err,
@@ -105,39 +110,79 @@ export interface ClaudeClient {
 // Internal: error sanitization
 // ---------------------------------------------------------------------------
 
-/**
- * Build a clean Error from an Anthropic SDK error, never exposing auth headers
- * or the raw SDK error chain. Only the HTTP status and a safe message survive.
- */
-function sanitizeApiError(raw: unknown): Error {
-  if (raw instanceof APIError) {
-    const status = (raw as { status?: number }).status ?? 0;
-    let category: string;
+interface ProviderFailure {
+  readonly error: Error;
+  readonly retryable: boolean;
+}
 
-    if (status === 401) {
-      category = 'authentication_error';
-    } else if (status === 400) {
-      category = 'bad_request_error';
-    } else if (status === 429) {
-      category = 'rate_limit_error';
-    } else if (status === 529) {
-      category = 'overloaded_error';
-    } else if (status >= 500) {
-      category = 'server_error';
-    } else {
-      category = 'api_error';
+// Constructed only at the compatible transport boundary from response.status.
+// Neither provider body text nor arbitrary thrown Error messages carry policy.
+class ProviderHttpError extends Error {
+  constructor(
+    readonly status: number,
+    readonly providerLabel: string,
+  ) {
+    super('Provider HTTP failure');
+  }
+}
+
+class ProviderTransportError extends Error {
+  constructor(readonly kind: 'timeout' | 'request' | 'response') {
+    super('Provider transport failure');
+  }
+}
+
+function sanitizeApiError(raw: unknown): ProviderFailure {
+  const fixed = (message: string, retryable = false): ProviderFailure => ({
+    error: new Error(message),
+    retryable,
+  });
+  if (raw instanceof ProviderTransportError) {
+    return fixed(
+      raw.kind === 'timeout'
+        ? 'Provider API request timed out'
+        : raw.kind === 'response'
+          ? 'Provider API invalid response'
+          : 'Provider API connection failed',
+    );
+  }
+  // These SDK classes extend APIError and must be recognized before HTTP errors.
+  if (raw instanceof APIConnectionTimeoutError) return fixed('Claude API request timed out');
+  if (raw instanceof APIUserAbortError) return fixed('Claude API request aborted');
+  if (raw instanceof APIConnectionError) return fixed('Claude API connection failed');
+  if (raw instanceof ProviderHttpError || raw instanceof APIError) {
+    const status: unknown = raw.status;
+    if (typeof status !== 'number' || !Number.isInteger(status) || status < 100 || status > 599) {
+      return fixed('Claude API request failed');
     }
-
-    // Strip auth headers, raw body, requestID — safe message only
-    return new Error(`Claude API ${category} (HTTP ${status}): ${raw.message}`);
+    const compatible = raw instanceof ProviderHttpError;
+    const overloaded = compatible ? status === 503 : status === 529;
+    const category =
+      status === 401
+        ? 'authentication_error'
+        : status === 429
+          ? 'rate_limit_error'
+          : overloaded
+            ? 'overloaded_error'
+            : status >= 500
+              ? 'server_error'
+              : compatible || status === 400
+                ? 'bad_request_error'
+                : 'api_error';
+    const label = compatible ? raw.providerLabel : 'Claude';
+    return fixed(`${label} API ${category} (HTTP ${status})`, status === 429 || overloaded);
   }
+  // Do not inspect unknown message/name/status/cause: all may be untrusted.
+  return fixed('Claude API request failed');
+}
 
-  if (raw instanceof Error) {
-    // May be a network error, timeout, etc. — return as-is (no auth leakage)
-    return new Error(`Claude API request failed: ${raw.message}`);
+function discardResponseBody(response: Response): void {
+  try {
+    // Request cancellation without reading or awaiting an unbounded error body.
+    void response.body?.cancel().catch(() => undefined);
+  } catch {
+    // Cancellation failure must neither disclose the cause nor replace HTTP status.
   }
-
-  return new Error('Claude API request failed: unknown error');
 }
 
 // ---------------------------------------------------------------------------
@@ -165,7 +210,7 @@ interface AnthropicLike {
         max_tokens: number;
         temperature: number;
         system: string;
-        messages: ReadonlyArray<{ role: string; content: string }>;
+        messages: Array<{ role: 'user'; content: string }>;
       },
       options?: { timeout?: number },
     ): Promise<{
@@ -186,7 +231,7 @@ async function attempt(
   systemPrompt: string,
   userPrompt: string,
   options: Required<CompletionOptions>,
-): Promise<Result<CompletionResult, Error>> {
+): Promise<Result<CompletionResult, ProviderFailure>> {
   try {
     const response = await client.messages.create(
       {
@@ -328,6 +373,7 @@ function createOpenAiAdapter(provider: ProviderConfig, apiKey: string): Anthropi
           options?.timeout != null
             ? setTimeout(() => controller.abort(), options.timeout)
             : undefined;
+        let phase: 'request' | 'response' = 'request';
 
         try {
           const headers: Record<string, string> = { 'content-type': 'application/json' };
@@ -349,22 +395,11 @@ function createOpenAiAdapter(provider: ProviderConfig, apiKey: string): Anthropi
             }),
             signal: controller.signal,
           });
+          phase = 'response';
 
           if (!res.ok) {
-            const status = res.status;
-            const body = await res.text().catch(() => '');
-            // Map onto the same category strings the retry logic keys off of.
-            const category =
-              status === 401
-                ? 'authentication_error'
-                : status === 429
-                  ? 'rate_limit_error'
-                  : status === 503
-                    ? 'overloaded_error'
-                    : status >= 500
-                      ? 'server_error'
-                      : 'bad_request_error';
-            throw new Error(`${label} API ${category} (HTTP ${status}): ${body.slice(0, 200)}`);
+            discardResponseBody(res);
+            throw new ProviderHttpError(res.status, label);
           }
 
           const data = (await res.json()) as OpenAiChatResponse;
@@ -389,6 +424,9 @@ function createOpenAiAdapter(provider: ProviderConfig, apiKey: string): Anthropi
             model: data.model ?? model,
             stop_reason: choice?.finish_reason ?? 'stop',
           };
+        } catch (raw) {
+          if (raw instanceof ProviderHttpError) throw raw;
+          throw new ProviderTransportError(controller.signal.aborted ? 'timeout' : phase);
         } finally {
           if (timer != null) clearTimeout(timer);
         }
@@ -421,7 +459,7 @@ function buildTransport(provider: ProviderConfig, apiKey: string): AnthropicLike
   if (provider.baseURL !== null) {
     anthropicOptions.baseURL = provider.baseURL;
   }
-  return new Anthropic(anthropicOptions) as unknown as AnthropicLike;
+  return new Anthropic(anthropicOptions);
 }
 
 /**
@@ -434,7 +472,7 @@ function buildTransport(provider: ProviderConfig, apiKey: string): AnthropicLike
  * use the Anthropic SDK with an optional base-URL override. Either way the same
  * retry / error-sanitize / Result-typed surface is returned.
  *
- * @param apiKey            - Provider API key for the selected provider. Never logged.
+ * @param apiKey            - Provider API key, excluded from wrapper error diagnostics.
  * @param anthropicInstance - Optional SDK-shaped object; provide in tests to avoid real HTTP
  *                            calls. Must satisfy the {@link AnthropicLike} duck type. Takes
  *                            precedence over the provider switch.
@@ -477,15 +515,8 @@ export function createClaudeClient(apiKey: string, anthropicInstance?: unknown):
           return result;
         }
 
-        lastError = result.error;
-
-        // Determine if this error is retryable by inspecting the message
-        // (we already sanitized the status into the message string)
-        const isRetryable =
-          lastError.message.includes('rate_limit_error') ||
-          lastError.message.includes('overloaded_error');
-
-        if (!isRetryable) {
+        lastError = result.error.error;
+        if (!result.error.retryable) {
           return err(lastError);
         }
       }
