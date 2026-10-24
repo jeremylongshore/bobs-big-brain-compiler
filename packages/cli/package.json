@@ -57,7 +57,7 @@
     "@ico/types": "workspace:*",
     "tsup": "^8.4.0",
     "typescript": "^5.8.0",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   },
   "publishConfig": {
     "access": "public"

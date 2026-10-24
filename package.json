@@ -54,9 +54,12 @@
     "overrides": {
       "brace-expansion": "^5.0.12",
       "browserslist": "^4.28.7",
-      "fast-uri": "^3.1.8",
+      "fast-uri": "^3.1.9",
       "js-yaml@<4": "^3.15.2",
-      "@intentsolutions/core@0.10.0>zod": "^4.6.7"
+      "@intentsolutions/core@0.10.0>zod": "^4.6.7",
+      "typed-rest-client@2.3.1>qs": "^6.16.0",
+      "@stryker-mutator/instrumenter@9.6.1>@babel/core": "~7.29.6",
+      "eslint@10.2.0>@humanfs/node": "^0.16.8"
     },
     "peerDependencyRules": {
       "allowAny": [
@@ -71,7 +74,7 @@
     "@intentsolutions/audit-harness": "^1.4.0",
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/vitest-runner": "^9.6.1",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^4.1.12",
     "dependency-cruiser": "^17.4.0",
     "eslint": "^10.2.0",
     "eslint-plugin-simple-import-sort": "^13.0.0",
@@ -81,6 +84,6 @@
     "prettier": "^3.8.3",
     "typescript-eslint": "^8.58.2",
     "vite": "^7.3.7",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   }
 }
