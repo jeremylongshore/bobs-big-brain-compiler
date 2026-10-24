@@ -20,7 +20,7 @@
     "clean": "rm -rf dist .tsbuildinfo"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.82.0",
+    "@anthropic-ai/sdk": "^0.91.1",
     "@ico/kernel": "workspace:*",
     "@ico/types": "workspace:*",
     "gray-matter": "^4.0.3",
