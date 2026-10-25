@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 
+const PROMPT_HASH_VERSION = 'ico-prompt-v1' as const;
+
 /** A client-reported completion identity, not provider authentication. */
 export interface ModelCallProvenance {
   phase: 'summarize' | 'map' | 'reduce';
@@ -8,7 +10,7 @@ export interface ModelCallProvenance {
   /** Zero-based map batch; absent for summary and reduce calls. */
   batchIndex?: number;
   responseModel: string;
-  promptHashVersion: 'ico-prompt-v1';
+  promptHashVersion: typeof PROMPT_HASH_VERSION;
   promptHash: string;
 }
 
@@ -28,9 +30,9 @@ export function modelCallProvenance(
   return {
     ...identity,
     responseModel,
-    promptHashVersion: 'ico-prompt-v1',
+    promptHashVersion: PROMPT_HASH_VERSION,
     promptHash: createHash('sha256')
-      .update(JSON.stringify(['ico-prompt-v1', systemPrompt, userPrompt]), 'utf8')
+      .update(JSON.stringify([PROMPT_HASH_VERSION, systemPrompt, userPrompt]), 'utf8')
       .digest('hex'),
   };
 }

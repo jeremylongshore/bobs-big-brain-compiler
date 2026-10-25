@@ -502,7 +502,13 @@ export function mergePages(rawPages: readonly string[], options: MergePagesOptio
   const fallback = options.fallbackTitle ?? 'untitled';
   const groups = new Map<
     string,
-    { title: string; chosen: string; ids: string[]; inputIndices: number[] }
+    {
+      title: string;
+      chosen: string;
+      chosenIndex: number;
+      ids: string[];
+      listInputIndices: number[];
+    }
   >();
   const order: string[] = [];
 
@@ -513,18 +519,29 @@ export function mergePages(rawPages: readonly string[], options: MergePagesOptio
 
     const existing = groups.get(key);
     if (existing === undefined) {
-      groups.set(key, { title, chosen: page, ids: [...ids], inputIndices: [inputIndex] });
+      groups.set(key, {
+        title,
+        chosen: page,
+        chosenIndex: inputIndex,
+        ids: [...ids],
+        listInputIndices: ids.length > 0 ? [inputIndex] : [],
+      });
       order.push(key);
     } else {
-      existing.inputIndices.push(inputIndex);
       // Keep the longest page as the canonical body/definition.
       if (page.length > existing.chosen.length) {
         existing.chosen = page;
+        existing.chosenIndex = inputIndex;
         existing.title = title;
       }
+      let addedIds = false;
       for (const id of ids) {
-        if (!existing.ids.includes(id)) existing.ids.push(id);
+        if (!existing.ids.includes(id)) {
+          existing.ids.push(id);
+          addedIds = true;
+        }
       }
+      if (addedIds) existing.listInputIndices.push(inputIndex);
     }
   }
 
@@ -539,6 +556,12 @@ export function mergePages(rawPages: readonly string[], options: MergePagesOptio
     // page parseable by the spool reader (bead ...-57c). Already-fenced pages
     // are returned unchanged.
     content = ensureFrontmatterFence(content);
-    return { key, id, title: group.title, content, inputIndices: group.inputIndices };
+    // Only the chosen body and first suppliers of retained list entries
+    // contribute. Keep their original raw-page order, independent of which
+    // later body wins the longest-page comparison.
+    const inputIndices = [...new Set([group.chosenIndex, ...group.listInputIndices])].sort(
+      (a, b) => a - b,
+    );
+    return { key, id, title: group.title, content, inputIndices };
   });
 }

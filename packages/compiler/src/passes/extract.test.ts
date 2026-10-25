@@ -206,29 +206,93 @@ describe('extractConcepts', () => {
     expect(conceptPath).toContain('wiki/concepts');
   });
 
-  it('chains each merged contributor model and exact prompt instead of the last batch alone', async () => {
-    const secondPath = 'wiki/sources/second.md';
-    writeFileSync(
-      join(env.wsRoot, secondPath),
-      MOCK_SUMMARY_CONTENT.replace('My Research Paper', 'Second paper'),
-    );
+  it.each([true, false])(
+    'chains only retained contributors (second batch adds list entries: %s)',
+    async (secondContributes) => {
+      const secondPath = 'wiki/sources/second.md';
+      writeFileSync(
+        join(env.wsRoot, secondPath),
+        MOCK_SUMMARY_CONTENT.replace('My Research Paper', 'Second paper'),
+      );
+      const completion = vi
+        .fn<ClaudeClient['createCompletion']>()
+        .mockResolvedValueOnce(
+          ok({
+            content: MOCK_CONCEPT_PAGE,
+            inputTokens: 1,
+            outputTokens: 2,
+            model: 'model-first',
+            stopReason: 'end_turn',
+          }),
+        )
+        .mockResolvedValueOnce(
+          ok({
+            content: secondContributes
+              ? MOCK_CONCEPT_PAGE.replace(
+                  'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+                  'bbbbbbbb-cccc-dddd-eeee-ffffffffffff',
+                )
+              : MOCK_CONCEPT_PAGE,
+            inputTokens: 3,
+            outputTokens: 4,
+            model: 'model-second',
+            stopReason: 'end_turn',
+          }),
+        );
+      const result = await extractConcepts(
+        { createCompletion: completion },
+        env.db,
+        env.wsRoot,
+        [SUMMARY_PATH, secondPath],
+        { batchSize: 1 },
+      );
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw result.error;
+      expect(result.value.pages).toHaveLength(1);
+      const traceDir = join(env.wsRoot, 'audit', 'traces');
+      const lines = readdirSync(traceDir)
+        .filter((name) => name.endsWith('.jsonl'))
+        .flatMap((name) => readFileSync(join(traceDir, name), 'utf8').trim().split('\n'));
+      const trace = lines
+        .map((line) => JSON.parse(line) as { event_type: string; payload: Record<string, unknown> })
+        .find((entry) => entry.event_type === 'compile.extract');
+      const expected = completion.mock.calls.map(([system, user], batchIndex) => ({
+        phase: 'map',
+        attempt: 0,
+        batchIndex,
+        responseModel: batchIndex === 0 ? 'model-first' : 'model-second',
+        promptHashVersion: 'ico-prompt-v1',
+        promptHash: createHash('sha256')
+          .update(JSON.stringify(['ico-prompt-v1', system, user]), 'utf8')
+          .digest('hex'),
+      }));
+      expect(trace?.payload['modelCalls']).toEqual(
+        expected.filter((_, index) => secondContributes || index === 0),
+      );
+      expect(JSON.stringify(trace?.payload)).not.toContain(MOCK_SUMMARY_CONTENT);
+    },
+  );
+
+  it('records contributing map calls in a raw rejection receipt without publishing a page', async () => {
+    const rejectedPage = (id: string) =>
+      conceptPage('Rejected', [id]).replace('Body for Rejected.', 'short');
     const completion = vi
       .fn<ClaudeClient['createCompletion']>()
       .mockResolvedValueOnce(
         ok({
-          content: MOCK_CONCEPT_PAGE,
+          content: rejectedPage('s1'),
           inputTokens: 1,
           outputTokens: 2,
-          model: 'model-first',
+          model: 'reject-first',
           stopReason: 'end_turn',
         }),
       )
       .mockResolvedValueOnce(
         ok({
-          content: MOCK_CONCEPT_PAGE,
+          content: rejectedPage('s2'),
           inputTokens: 3,
           outputTokens: 4,
-          model: 'model-second',
+          model: 'reject-second',
           stopReason: 'end_turn',
         }),
       );
@@ -236,31 +300,32 @@ describe('extractConcepts', () => {
       { createCompletion: completion },
       env.db,
       env.wsRoot,
-      [SUMMARY_PATH, secondPath],
+      [SUMMARY_PATH, SUMMARY_PATH],
       { batchSize: 1 },
     );
     expect(result.ok).toBe(true);
     if (!result.ok) throw result.error;
-    expect(result.value.pages).toHaveLength(1);
-    const traceDir = join(env.wsRoot, 'audit', 'traces');
-    const lines = readdirSync(traceDir)
+    expect(result.value).toEqual({ pages: [], skipped: 1 });
+    expect(existsSync(join(env.wsRoot, 'wiki/concepts/rejected.md'))).toBe(false);
+    const directory = join(env.wsRoot, 'audit/traces');
+    const traces = readdirSync(directory)
       .filter((name) => name.endsWith('.jsonl'))
-      .flatMap((name) => readFileSync(join(traceDir, name), 'utf8').trim().split('\n'));
-    const trace = lines
-      .map((line) => JSON.parse(line) as { event_type: string; payload: Record<string, unknown> })
-      .find((entry) => entry.event_type === 'compile.extract');
-    const expected = completion.mock.calls.map(([system, user], batchIndex) => ({
-      phase: 'map',
-      attempt: 0,
-      batchIndex,
-      responseModel: batchIndex === 0 ? 'model-first' : 'model-second',
-      promptHashVersion: 'ico-prompt-v1',
-      promptHash: createHash('sha256')
-        .update(JSON.stringify(['ico-prompt-v1', system, user]), 'utf8')
-        .digest('hex'),
-    }));
-    expect(trace?.payload['modelCalls']).toEqual(expected);
-    expect(JSON.stringify(trace?.payload)).not.toContain(MOCK_SUMMARY_CONTENT);
+      .flatMap((name) => readFileSync(join(directory, name), 'utf8').trim().split('\n'))
+      .map((line) => JSON.parse(line) as { event_type: string; payload: Record<string, unknown> });
+    const rejection = traces.find((entry) => entry.event_type === 'compile.validation.reject');
+    expect(rejection?.payload['code']).toBe('BODY_TOO_SHORT');
+    expect(rejection?.payload['modelCalls']).toEqual(
+      completion.mock.calls.map(([system, user], batchIndex) => ({
+        phase: 'map',
+        batchIndex,
+        attempt: 0,
+        responseModel: batchIndex === 0 ? 'reject-first' : 'reject-second',
+        promptHashVersion: 'ico-prompt-v1',
+        promptHash: createHash('sha256')
+          .update(JSON.stringify(['ico-prompt-v1', system, user]), 'utf8')
+          .digest('hex'),
+      })),
+    );
   });
 
   // -------------------------------------------------------------------------

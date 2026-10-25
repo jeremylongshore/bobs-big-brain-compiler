@@ -665,7 +665,7 @@ A secondary contradiction about evidence standards.
       createCompletion: vi.fn().mockImplementation((systemPrompt: string) => {
         const content = isReduceCall(systemPrompt)
           ? contradictionPage('Shared Conflict', ['xb-3'])
-          : // First batch emits the intra-batch half; later batches find nothing.
+          : // Later batches repeat the same page without adding body/list content.
             contradictionPage('Shared Conflict', ['xb-0']);
         return Promise.resolve(
           ok({
@@ -701,7 +701,9 @@ A secondary contradiction about evidence standards.
     const trace = traceEnvelopes(env.wsRoot).find(
       (entry) => entry.event_type === 'compile.contradict',
     );
-    expect(trace?.payload['modelCalls']).toEqual(modelCalls);
+    expect(trace?.payload['modelCalls']).toEqual(
+      modelCalls.filter((call, index) => index === 0 || call.phase === 'reduce'),
+    );
     expect(new Set(modelCalls.map((call) => call.promptHash)).size).toBe(calls.length);
 
     const rows = env.db

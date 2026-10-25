@@ -745,8 +745,10 @@ commitment; changing only the reported model leaves the prompt hash unchanged.
 Summary receipts retain every completed validation attempt, including a rejected
 attempt preceding a successful retry, with each actual retry prompt. A final
 post-model validation rejection also retains that attempt history. Batched page
-receipts retain the calls that emitted raw pages merged into the final page,
-including shorter duplicates whose list entries were unioned. A call emitting
+receipts retain the selected body's call and the calls that first supplied retained
+list entries, including shorter duplicates that added new list IDs. A replaced
+body with no retained list contribution and a redundant duplicate adding nothing
+are excluded. A call emitting
 multiple contributing pages appears once; separate calls remain separate even
 when their prompts and model IDs match. Contradiction reduce calls use their own
 system/user strings and phase. Calls producing no contributing page are not

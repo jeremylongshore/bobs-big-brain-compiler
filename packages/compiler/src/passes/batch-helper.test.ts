@@ -204,6 +204,43 @@ describe('setFrontmatterList', () => {
 // ---------------------------------------------------------------------------
 
 describe('mergePages', () => {
+  it('credits only the selected body and pages that actually supplied unioned list entries', () => {
+    const selected = conceptPage(
+      'Shared',
+      [],
+      'The selected body is deliberately much longer than the discarded alternatives.',
+    );
+    const merged = mergePages(
+      [
+        conceptPage('Shared', [], 'discarded'),
+        selected,
+        conceptPage('Shared', ['s1'], 'short'),
+        conceptPage('Shared', ['s1'], 'short'),
+      ],
+      { listField: 'source_ids' },
+    );
+    expect(merged[0]!.inputIndices).toEqual([1, 2]);
+    expect(merged[0]!.content).toContain('The selected body');
+    expect(parseFrontmatterList(merged[0]!.content, 'source_ids')).toEqual(['s1']);
+  });
+
+  it('retains the first list supplier after replacing its body and excludes later redundant duplicates', () => {
+    const merged = mergePages(
+      [
+        conceptPage('Shared', ['s1'], 'first'),
+        conceptPage(
+          'Shared',
+          ['s1'],
+          'The replacement body is longer, while its list repeats the first supplied entry.',
+        ),
+        conceptPage('Shared', ['s1'], 'ignored'),
+      ],
+      { listField: 'source_ids' },
+    );
+    expect(merged[0]!.inputIndices).toEqual([0, 1]);
+    expect(parseFrontmatterList(merged[0]!.content, 'source_ids')).toEqual(['s1']);
+  });
+
   it('collapses same-titled pages into one and unions the source_ids', () => {
     const pages = [
       conceptPage('Knowledge Compilation', ['s1']),
