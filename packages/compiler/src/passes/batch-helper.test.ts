@@ -204,6 +204,30 @@ describe('setFrontmatterList', () => {
 // ---------------------------------------------------------------------------
 
 describe('mergePages', () => {
+  it('preserves C++, C# and C as distinct concepts while retaining ordinary title equivalence', () => {
+    const pages = ['C++', 'C#', 'C'].map((title, index) =>
+      conceptPage(title, [`source-${index}`], `Independent language ${title}.`),
+    );
+    const merged = mergePages(pages, { listField: 'source_ids' });
+    expect(merged).toHaveLength(3);
+    expect(new Set(merged.map((page) => page.id)).size).toBe(3);
+    expect(merged.map((page) => page.title)).toEqual(['C++', 'C#', 'C']);
+    for (const [index, page] of merged.entries()) {
+      expect(page.content).toContain(`Independent language ${page.title}.`);
+      expect(parseFrontmatterList(page.content, 'source_ids')).toEqual([`source-${index}`]);
+    }
+    const revised = mergePages(
+      ['c++', 'c#', 'c'].map((title) => conceptPage(title, [], 'Updated definition.')),
+      { listField: 'source_ids' },
+    );
+    expect(revised.map((page) => page.id)).toEqual(merged.map((page) => page.id));
+    const equivalent = mergePages(
+      [conceptPage('Semantic Graphs', ['first']), conceptPage(' semantic,   graphs! ', ['second'])],
+      { listField: 'source_ids' },
+    );
+    expect(equivalent).toHaveLength(1);
+    expect(parseFrontmatterList(equivalent[0]!.content, 'source_ids')).toEqual(['first', 'second']);
+  });
   it('credits only the selected body and pages that actually supplied unioned list entries', () => {
     const selected = conceptPage(
       'Shared',

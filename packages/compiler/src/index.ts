@@ -58,6 +58,8 @@ export {
 } from './cost-gate.js';
 export {
   detectOrphans,
+  detectOutputPathConflicts,
+  type OutputPathConflict,
   extractWikilinks,
   type LintResult,
   runLint,

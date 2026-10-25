@@ -370,6 +370,7 @@ describe('renderLintReport', () => {
     staleness: { stale: 0, pages: [] },
     uncompiled: { count: 0, sources: [] },
     orphans: { count: 0, pages: [] },
+    outputPaths: { count: 0, conflicts: [] },
     issues: 0,
   };
 
@@ -478,6 +479,98 @@ describe('runLint', () => {
 
   afterEach(() => {
     rmSync(tmpBase, { recursive: true, force: true });
+  });
+
+  it('reports conflicting source owners without modifying compilation records', () => {
+    const opened = initDatabase(ws.dbPath);
+    if (!opened.ok) throw opened.error;
+    const db = opened.value;
+    try {
+      for (const id of ['source-a', 'source-b']) {
+        insertSource(db, { id, path: `raw/${id}.md`, ingestedAt: '2024-01-01T00:00:00Z' });
+        insertCompilation(db, {
+          id: `comp-${id}`,
+          sourceId: id,
+          outputPath: 'wiki/sources/readme.md',
+          compiledAt: '2024-01-02T00:00:00Z',
+        });
+      }
+      const before = db.prepare('SELECT * FROM compilations ORDER BY id').all();
+      const result = runLint(ws.root, ws.dbPath);
+      expect(result.outputPaths).toEqual({
+        count: 1,
+        conflicts: [
+          {
+            path: 'wiki/sources/readme.md',
+            kind: 'conflicting-identities',
+            identities: ['summary:source-a', 'summary:source-b'],
+            compilationIds: ['comp-source-a', 'comp-source-b'],
+          },
+        ],
+      });
+      expect(db.prepare('SELECT * FROM compilations ORDER BY id').all()).toEqual(before);
+      expect(stripAnsi(renderLintReport(result, ws.root))).toContain('conflicting-identities');
+    } finally {
+      closeDatabase(db);
+    }
+  });
+
+  it('reports ambiguous historical rows separately from known identity conflicts', () => {
+    const opened = initDatabase(ws.dbPath);
+    if (!opened.ok) throw opened.error;
+    try {
+      for (const id of ['old-random-a', 'old-random-b']) {
+        insertCompilation(opened.value, {
+          id,
+          sourceId: null,
+          type: 'concept',
+          outputPath: 'wiki/concepts/legacy.md',
+          compiledAt: '2024-01-02T00:00:00Z',
+        });
+      }
+      expect(runLint(ws.root, ws.dbPath).outputPaths.conflicts).toEqual([
+        {
+          path: 'wiki/concepts/legacy.md',
+          kind: 'unverifiable-legacy',
+          identities: [],
+          compilationIds: ['old-random-a', 'old-random-b'],
+        },
+      ]);
+    } finally {
+      closeDatabase(opened.value);
+    }
+  });
+
+  it('does not report a normal summary cache rerun as a path conflict', () => {
+    const opened = initDatabase(ws.dbPath);
+    if (!opened.ok) throw opened.error;
+    try {
+      insertSource(opened.value, {
+        id: 'source-a',
+        path: 'raw/a.md',
+        ingestedAt: '2024-01-01T00:00:00Z',
+      });
+      insertCompilation(opened.value, {
+        id: 'stable-cache-row',
+        sourceId: 'source-a',
+        outputPath: 'wiki/sources/a.md',
+        compiledAt: '2024-01-02T00:00:00Z',
+      });
+      opened.value
+        .prepare('UPDATE compilations SET compiled_at = ? WHERE id = ?')
+        .run('2024-01-03T00:00:00Z', 'stable-cache-row');
+      expect(runLint(ws.root, ws.dbPath).outputPaths).toEqual({ count: 0, conflicts: [] });
+    } finally {
+      closeDatabase(opened.value);
+    }
+  });
+
+  it('recognizes title references to suffixed filenames in orphan detection', () => {
+    const target = join(ws.root, 'wiki', 'concepts', `type-inference--${'a'.repeat(64)}.md`);
+    const referrer = join(ws.root, 'wiki', 'sources', 'source.md');
+    writeFile(target, VALID_CONCEPT_PAGE);
+    writeFile(referrer, VALID_SOURCE_SUMMARY + '\n[[Type Inference]]\n');
+    expect(detectOrphans(join(ws.root, 'wiki'), [target, referrer])).toEqual([]);
   });
 
   // --- Clean workspace -------------------------------------------------------

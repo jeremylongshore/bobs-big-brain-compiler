@@ -23,6 +23,7 @@ import { err, ok, type Result } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
 import { validateCompiledContent } from '../validation.js';
+import { wikiOutputFilename } from './output-filename.js';
 import {
   checkModelOutput,
   CompileSkipError,
@@ -30,6 +31,7 @@ import {
   type OutputRejectCode,
   stampPassProvenance,
 } from './output-filter.js';
+import { assertWikiOutputOwnership } from './output-ownership.js';
 import { type ModelCallProvenance, modelCallProvenance } from './trace-provenance.js';
 
 // ---------------------------------------------------------------------------
@@ -183,7 +185,6 @@ export async function summarizeSource(
   options?: SummarizeOptions,
 ): Promise<Result<SummarizeResult, Error>> {
   // 1. Generate compilation metadata.
-  const compilationId = randomUUID();
   const compiledAt = new Date().toISOString();
   const model = options?.model ?? DEFAULT_MODEL;
   const maxTokens = options?.maxTokens ?? DEFAULT_MAX_TOKENS;
@@ -319,6 +320,7 @@ export async function summarizeSource(
   // this function was CALLED with, so the page-side carry the spool emitter
   // reads is never model-invented.
   content = stampPassProvenance(content, 'compile.summarize', {
+    source_id: sourceId,
     source_path: sourcePath,
     content_hash: contentHash,
   });
@@ -327,10 +329,10 @@ export async function summarizeSource(
 
   // 4. Derive the output path.
   const slug = sourcePathToSlug(sourcePath);
-  const outputPath = join('wiki', 'sources', `${slug}.md`);
   const absoluteOutputDir = join(workspacePath, 'wiki', 'sources');
-  const absoluteOutputPath = join(workspacePath, outputPath);
-  const tmpPath = `${absoluteOutputPath}.tmp`;
+  let outputPath: string;
+  let absoluteOutputPath: string;
+  let tmpPath: string;
 
   // Receipts-precede-visibility (G1): write the content to `.tmp`, write all
   // receipts (compilations row + provenance + trace), and only THEN rename
@@ -342,6 +344,10 @@ export async function summarizeSource(
 
   // 5. Write the response to a tmp path (NOT yet visible).
   try {
+    outputPath = join('wiki', 'sources', wikiOutputFilename('summary', sourceId, slug));
+    absoluteOutputPath = join(workspacePath, outputPath);
+    tmpPath = `${absoluteOutputPath}.tmp`;
+    assertWikiOutputOwnership(db, outputPath, absoluteOutputPath, 'summary', sourceId);
     if (!existsSync(absoluteOutputDir)) {
       mkdirSync(absoluteOutputDir, { recursive: true });
     }
@@ -352,10 +358,22 @@ export async function summarizeSource(
 
   // 6. Insert compilation record via prepared statement.
   try {
+    const existing = db
+      .prepare<
+        [string, string],
+        { id: string }
+      >("SELECT id FROM compilations WHERE source_id = ? AND type = 'summary' AND output_path = ?")
+      .get(sourceId, outputPath);
+    const compilationId = existing?.id ?? randomUUID();
     db.prepare<[string, string, string, string, string, number, string, number], void>(
       `INSERT INTO compilations
          (id, source_id, type, output_path, compiled_at, stale, model, tokens_used)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(source_id, type, output_path) DO UPDATE SET
+         compiled_at = excluded.compiled_at,
+         stale = excluded.stale,
+         model = excluded.model,
+         tokens_used = excluded.tokens_used`,
     ).run(compilationId, sourceId, 'summary', outputPath, compiledAt, 0, responseModel, tokensUsed);
   } catch (e) {
     return err(e instanceof Error ? e : new Error(String(e)));

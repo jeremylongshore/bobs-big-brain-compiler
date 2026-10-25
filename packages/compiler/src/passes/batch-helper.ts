@@ -215,14 +215,14 @@ export function shouldRunReduce(batchCount: number, digest: ReadonlyArray<Digest
 
 /**
  * Normalize a page title into a stable comparison key: lowercase, collapse any
- * run of non-alphanumeric characters to a single hyphen, trim leading/trailing
+ * run of characters other than alphanumerics, + and # to a single hyphen, trim leading/trailing
  * hyphens. "Knowledge Compilation" and "knowledge   compilation!" both map to
  * `knowledge-compilation`, so they merge.
  */
 export function normalizeTitle(title: string): string {
   return title
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/[^a-z0-9+#]+/g, '-')
     .replace(/^-|-$/g, '');
 }
 

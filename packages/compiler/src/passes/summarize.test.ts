@@ -165,6 +165,114 @@ describe('summarizeSource', () => {
     rmSync(base, { recursive: true, force: true });
   });
 
+  it('stamps the caller source identity instead of a model-supplied different source ID', async () => {
+    const response = MOCK_API_RESPONSE.replace(
+      `source_id: ${SOURCE_ID}`,
+      'source_id: bbbbbbbb-cccc-4ddd-8eee-ffffffffffff',
+    );
+    const first = await summarizeSource(
+      mockClient(response),
+      env.db,
+      env.wsRoot,
+      SOURCE_ID,
+      'Raw source text.',
+      SOURCE_PATH,
+      CONTENT_HASH,
+    );
+    expect(first.ok).toBe(true);
+    if (!first.ok) throw first.error;
+    expect(readFileSync(join(env.wsRoot, first.value.outputPath), 'utf8')).toContain(
+      `source_id: ${SOURCE_ID}`,
+    );
+    const second = await summarizeSource(
+      mockClient(response),
+      env.db,
+      env.wsRoot,
+      SOURCE_ID,
+      'Updated raw source text.',
+      SOURCE_PATH,
+      CONTENT_HASH,
+    );
+    expect(second.ok).toBe(true);
+    if (!second.ok) throw second.error;
+    expect(second.value.outputPath).toBe(first.value.outputPath);
+  });
+
+  it('preserves same-basename source outputs and keeps each logical source path stable on recompile', async () => {
+    const secondId = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff';
+    const secondPath = 'raw/archive/my-research-paper.md';
+    insertSource(env.db, secondId, secondPath);
+    const firstBody = MOCK_API_RESPONSE + '\nFirst source body sentinel.\n';
+    const secondBody =
+      MOCK_API_RESPONSE.replace(`source_id: ${SOURCE_ID}`, `source_id: ${secondId}`).replace(
+        `source_path: ${SOURCE_PATH}`,
+        `source_path: ${secondPath}`,
+      ) + '\nSecond source body sentinel.\n';
+    const first = await summarizeSource(
+      mockClient(firstBody),
+      env.db,
+      env.wsRoot,
+      SOURCE_ID,
+      'First independent raw source.',
+      SOURCE_PATH,
+      CONTENT_HASH,
+    );
+    const second = await summarizeSource(
+      mockClient(secondBody),
+      env.db,
+      env.wsRoot,
+      secondId,
+      'Second independent raw source.',
+      secondPath,
+      CONTENT_HASH,
+    );
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    if (!first.ok) throw first.error;
+    if (!second.ok) throw second.error;
+    expect(second.value.outputPath).not.toBe(first.value.outputPath);
+    expect(readFileSync(join(env.wsRoot, first.value.outputPath), 'utf8')).toContain(
+      'First source body sentinel.',
+    );
+    expect(readFileSync(join(env.wsRoot, second.value.outputPath), 'utf8')).toContain(
+      'Second source body sentinel.',
+    );
+    const records = env.db
+      .prepare<
+        [],
+        { id: string; source_id: string; output_path: string }
+      >('SELECT id, source_id, output_path FROM compilations ORDER BY source_id')
+      .all();
+    expect(records).toHaveLength(2);
+    expect(new Set(records.map((row) => row.output_path)).size).toBe(2);
+    expect(new Set(records.map((row) => row.source_id))).toEqual(new Set([SOURCE_ID, secondId]));
+    const revised = await summarizeSource(
+      mockClient(
+        firstBody.replace('First source body sentinel.', 'Revised first source body sentinel.'),
+      ),
+      env.db,
+      env.wsRoot,
+      SOURCE_ID,
+      'Edited first raw source.',
+      SOURCE_PATH,
+      'b'.repeat(64),
+    );
+    expect(revised.ok).toBe(true);
+    if (!revised.ok) throw revised.error;
+    expect(revised.value.outputPath).toBe(first.value.outputPath);
+    expect(readFileSync(join(env.wsRoot, first.value.outputPath), 'utf8')).toContain(
+      'Revised first source body sentinel.',
+    );
+    expect(readFileSync(join(env.wsRoot, second.value.outputPath), 'utf8')).toContain(
+      'Second source body sentinel.',
+    );
+    expect(
+      env.db
+        .prepare('SELECT id, source_id, output_path FROM compilations ORDER BY source_id')
+        .all(),
+    ).toEqual(records);
+  });
+
   it('chains both retry prompts and models, and detects editing provenance before a successor', async () => {
     const complete = vi
       .fn<ClaudeClient['createCompletion']>()
@@ -246,9 +354,9 @@ describe('summarizeSource', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const expectedPath = join(env.wsRoot, 'wiki', 'sources', 'my-research-paper.md');
+    const expectedPath = join(env.wsRoot, result.value.outputPath);
     expect(existsSync(expectedPath)).toBe(true);
-    expect(result.value.outputPath).toBe('wiki/sources/my-research-paper.md');
+    expect(result.value.outputPath).toMatch(/^wiki\/sources\/my-research-paper--[0-9a-f]{64}\.md$/);
   });
 
   // -------------------------------------------------------------------------
@@ -305,7 +413,8 @@ describe('summarizeSource', () => {
 
     expect(row).not.toBeNull();
     expect(row!.type).toBe('summary');
-    expect(row!.output_path).toBe('wiki/sources/my-research-paper.md');
+    expect(row!.output_path).toBe(result.value.outputPath);
+    expect(row!.output_path).toMatch(/^wiki\/sources\/my-research-paper--[0-9a-f]{64}\.md$/);
     expect(row!.tokens_used).toBe(700); // 500 + 200
   });
 
@@ -335,7 +444,10 @@ describe('summarizeSource', () => {
     // At least one provenance record should exist for compile.summarize.
     const summarizeRecords = derivResult.value.filter((r) => r.operation === 'compile.summarize');
     expect(summarizeRecords.length).toBeGreaterThanOrEqual(1);
-    expect(summarizeRecords[0]!.outputPath).toBe('wiki/sources/my-research-paper.md');
+    expect(summarizeRecords[0]!.outputPath).toBe(result.value.outputPath);
+    expect(summarizeRecords[0]!.outputPath).toMatch(
+      /^wiki\/sources\/my-research-paper--[0-9a-f]{64}\.md$/,
+    );
     expect(summarizeRecords[0]!.outputType).toBe('summary');
   });
 
@@ -467,7 +579,9 @@ describe('summarizeSource', () => {
     if (!result.ok) return;
 
     // Underscores and mixed case → lowercased with hyphens, no extension.
-    expect(result.value.outputPath).toBe('wiki/sources/my-research-paper-2024.md');
+    expect(result.value.outputPath).toMatch(
+      /^wiki\/sources\/my-research-paper-2024--[0-9a-f]{64}\.md$/,
+    );
   });
 
   // -------------------------------------------------------------------------
@@ -491,7 +605,9 @@ describe('summarizeSource', () => {
     expect((result.error as CompileSkipError).code).toBe('EMPTY_SOURCE');
     // No Claude call was made and no file was written.
     expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
-    expect(existsSync(join(env.wsRoot, 'wiki', 'sources', 'my-research-paper.md'))).toBe(false);
+    expect(
+      readdirSync(join(env.wsRoot, 'wiki', 'sources')).filter((name) => name.endsWith('.md')),
+    ).toEqual([]);
     const traces = readTraces(env.db, { eventType: 'compile.validation.reject' });
     expect(traces.ok).toBe(true);
     if (traces.ok) expect(traces.value.length).toBe(1);
@@ -528,7 +644,9 @@ describe('summarizeSource', () => {
     expect(result.error).toBeInstanceOf(CompileSkipError);
     // Two attempts (initial + one retry).
     expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
-    expect(existsSync(join(env.wsRoot, 'wiki', 'sources', 'my-research-paper.md'))).toBe(false);
+    expect(
+      readdirSync(join(env.wsRoot, 'wiki', 'sources')).filter((name) => name.endsWith('.md')),
+    ).toEqual([]);
     const rejection = traceEnvelopes(env.wsRoot).find(
       (entry) => entry.event_type === 'compile.validation.reject',
     );
