@@ -47,6 +47,11 @@
 
 ### Fixed
 
+- Pass resolved workspace provider settings into `loadConfig`-based CLI clients so `.env`-only
+  provider, wire, base URL, key and model values reach the selected transport.
+  Environment variables retain precedence without exporting file settings into
+  the process environment (`intentional-cognition-os-6g8`).
+
 - Upgrade all resolved Zod dependencies to 4.6.7 and Vite to 7.3.7 to address
   GHSA-mrhx-c7xc-m3w5 and GHSA-587h-7wmj-h5pm. Early collection rejection
   applies to schemas with size bounds; library-behavior regression tests cover

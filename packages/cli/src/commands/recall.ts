@@ -106,7 +106,7 @@ export async function runRecallGenerate(
   if (!wsResult.ok) return { ok: false, error: wsResult.error };
   const { root: wsPath, dbPath } = wsResult.value;
 
-  let config: { apiKey: string; model: string };
+  let config: ReturnType<typeof loadConfig>;
   try {
     config = loadConfig(wsPath);
   } catch (e) {
@@ -115,7 +115,7 @@ export async function runRecallGenerate(
       error: new Error(`Config error: ${e instanceof Error ? e.message : String(e)}`),
     };
   }
-  const client = createClaudeClient(config.apiKey);
+  const client = createClaudeClient(config);
 
   const dbResult = initDatabase(dbPath);
   if (!dbResult.ok) return { ok: false, error: dbResult.error };
@@ -247,7 +247,7 @@ export async function runRecallQuiz(
   if (!wsResult.ok) return { ok: false, error: wsResult.error };
   const { root: wsPath, dbPath } = wsResult.value;
 
-  let config: { apiKey: string; model: string };
+  let config: ReturnType<typeof loadConfig>;
   try {
     config = loadConfig(wsPath);
   } catch (e) {
@@ -256,7 +256,7 @@ export async function runRecallQuiz(
       error: new Error(`Config error: ${e instanceof Error ? e.message : String(e)}`),
     };
   }
-  const client = createClaudeClient(config.apiKey);
+  const client = createClaudeClient(config);
 
   const dbResult = initDatabase(dbPath);
   if (!dbResult.ok) return { ok: false, error: dbResult.error };

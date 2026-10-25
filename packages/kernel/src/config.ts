@@ -1,12 +1,20 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { providerRequiresKey, resolveApiKey, resolveModel, resolveProvider } from '@ico/types';
+import {
+  type ProviderConfig,
+  providerRequiresKey,
+  resolveApiKey,
+  resolveModel,
+  resolveProvider,
+} from '@ico/types';
 
 export interface IcoConfig {
   workspace: string;
   /** The active provider id (`ICO_PROVIDER`), e.g. `anthropic`, `groq`, `deepseek`. */
   provider: string;
+  /** Resolved transport settings; non-enumerable like apiKey. */
+  readonly providerConfig: ProviderConfig;
   model: string;
   researchModel: string;
   logLevel: 'debug' | 'info' | 'warn' | 'error';
@@ -127,6 +135,12 @@ export function loadConfig(cwd: string = process.cwd()): IcoConfig {
   };
 
   // Make apiKey non-enumerable so JSON.stringify(config) never includes it
+  Object.defineProperty(config, 'providerConfig', {
+    value: Object.freeze({ ...provider, keyEnv: Object.freeze([...provider.keyEnv]) }),
+    enumerable: false,
+    writable: false,
+    configurable: false,
+  });
   Object.defineProperty(config, 'apiKey', {
     value: apiKey,
     enumerable: false,

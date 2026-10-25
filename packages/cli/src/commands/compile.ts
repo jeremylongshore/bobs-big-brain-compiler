@@ -58,6 +58,7 @@ import {
   withWriteLock,
   writeTrace,
 } from '@ico/kernel';
+import { resolveProvider } from '@ico/types';
 
 import { anchorAfterCompile } from '../lib/anchor.js';
 import { formatError, formatInfo, formatSuccess, formatWarning } from '../lib/output.js';
@@ -909,14 +910,17 @@ export function register(program: Command): void {
 
         // Load config. The link pass is deterministic and does not need an API key,
         // so we gracefully degrade when the key is absent.
-        let config: { apiKey: string; model: string };
+        let config: Pick<ReturnType<typeof loadConfig>, 'apiKey' | 'model' | 'providerConfig'>;
         try {
-          const loaded = loadConfig(workspacePath);
-          config = { apiKey: loaded.apiKey, model: loaded.model };
+          config = loadConfig(workspacePath);
         } catch (e) {
           if (target === 'links') {
             // Link pass is deterministic — no API key required.
-            config = { apiKey: '', model: modelOverride ?? 'claude-sonnet-4-6' };
+            config = {
+              apiKey: '',
+              model: modelOverride ?? 'claude-sonnet-4-6',
+              providerConfig: resolveProvider({}),
+            };
           } else {
             closeDatabase(db);
             process.stderr.write(formatError(e instanceof Error ? e.message : String(e)) + '\n');
@@ -925,7 +929,7 @@ export function register(program: Command): void {
         }
 
         const model = modelOverride ?? config.model;
-        const client = createClaudeClient(config.apiKey);
+        const client = createClaudeClient(config);
         const ctx: CompileContext = { workspacePath, dbPath, db, client, model };
 
         try {
