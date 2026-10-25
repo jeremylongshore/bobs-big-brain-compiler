@@ -162,7 +162,7 @@ export async function runAsk(
   // -------------------------------------------------------------------------
   // 2. Load config and create Claude client
   // -------------------------------------------------------------------------
-  let config: { apiKey: string; model: string };
+  let config: ReturnType<typeof loadConfig>;
 
   try {
     config = loadConfig(wsPath);
@@ -175,7 +175,7 @@ export async function runAsk(
   }
 
   const model = askOptions.model ?? config.model;
-  const client = createClaudeClient(config.apiKey);
+  const client = createClaudeClient(config);
 
   // -------------------------------------------------------------------------
   // 3. Open database

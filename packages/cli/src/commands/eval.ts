@@ -124,7 +124,7 @@ export async function runEvalCommand(
     // on the live provider (DeepSeek in prod) via the same client.
     const needsClaude = specs.some((s) => s.type === 'compilation' || s.type === 'faithfulness');
     if (needsClaude) {
-      let config: { apiKey: string; model: string };
+      let config: ReturnType<typeof loadConfig>;
       try {
         config = loadConfig(wsPath);
       } catch (e) {
@@ -135,7 +135,7 @@ export async function runEvalCommand(
           ),
         };
       }
-      claudeClient = createClaudeClient(config.apiKey);
+      claudeClient = createClaudeClient(config);
       // Honor the workspace's configured model as the fallback. The
       // handler's precedence is: spec.model > options.model > env > hard
       // default. By passing config.model in options, the operator's

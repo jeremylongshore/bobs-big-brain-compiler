@@ -465,20 +465,31 @@ function buildTransport(provider: ProviderConfig, apiKey: string): AnthropicLike
 /**
  * Create a {@link ClaudeClient}.
  *
- * Provider is selected by `ICO_PROVIDER` (default `anthropic`) via the provider
- * registry: `openai`-wire providers (OpenAI, Groq, NVIDIA, DeepSeek, local
+ * Pass a loaded workspace configuration to preserve its resolved .env settings.
+ * The string-key form selects `ICO_PROVIDER` (default `anthropic`) from the
+ * ambient environment. `openai`-wire providers (OpenAI, Groq, NVIDIA, DeepSeek, local
  * Ollama/vLLM) route through the in-process OpenAI-compatible adapter;
  * `anthropic`-wire providers (Anthropic native, DeepSeek-anthropic, custom)
  * use the Anthropic SDK with an optional base-URL override. Either way the same
  * retry / error-sanitize / Result-typed surface is returned.
  *
- * @param apiKey            - Provider API key, excluded from wrapper error diagnostics.
+ * @param configuration     - Resolved workspace settings, or a provider API key for
+ *                            ambient-environment callers. Keys are excluded from diagnostics.
  * @param anthropicInstance - Optional SDK-shaped object; provide in tests to avoid real HTTP
  *                            calls. Must satisfy the {@link AnthropicLike} duck type. Takes
  *                            precedence over the provider switch.
  */
-export function createClaudeClient(apiKey: string, anthropicInstance?: unknown): ClaudeClient {
-  const provider = resolveProvider(process.env);
+export function createClaudeClient(
+  configuration:
+    | string
+    | { readonly apiKey: string; readonly providerConfig: ProviderConfig; readonly model: string },
+  anthropicInstance?: unknown,
+): ClaudeClient {
+  // Loaded workspace settings already include .env/environment precedence.
+  // Keep the string API for callers that deliberately use ambient environment.
+  const provider =
+    typeof configuration === 'string' ? resolveProvider(process.env) : configuration.providerConfig;
+  const apiKey = typeof configuration === 'string' ? configuration : configuration.apiKey;
   const sdkClient: AnthropicLike =
     anthropicInstance != null
       ? (anthropicInstance as AnthropicLike)
@@ -487,7 +498,8 @@ export function createClaudeClient(apiKey: string, anthropicInstance?: unknown):
   // Default model is provider-aware: `ICO_MODEL` wins, otherwise the selected
   // provider's default (so a non-Anthropic provider never falls back to a Claude
   // model name it can't serve).
-  const defaultModel = resolveModel(provider, process.env);
+  const defaultModel =
+    typeof configuration === 'string' ? resolveModel(provider, process.env) : configuration.model;
 
   return {
     async createCompletion(

@@ -228,7 +228,7 @@ export async function runRender(
   // -------------------------------------------------------------------------
   // 4. Load config
   // -------------------------------------------------------------------------
-  let config: { apiKey: string; model: string };
+  let config: ReturnType<typeof loadConfig>;
   try {
     config = loadConfig(wsPath);
   } catch (e) {
@@ -311,7 +311,7 @@ export async function runRender(
     // -----------------------------------------------------------------------
     // 8. Create Claude client and call render function
     // -----------------------------------------------------------------------
-    const client = createClaudeClient(config.apiKey);
+    const client = createClaudeClient(config);
 
     process.stdout.write(dim(`Rendering ${type}...`) + '\n');
 
