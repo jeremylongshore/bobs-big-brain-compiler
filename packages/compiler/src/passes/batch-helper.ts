@@ -77,17 +77,17 @@ export function chunkArray<T>(arr: readonly T[], size: number): T[][] {
 export const PER_DOC_TOKEN_BUDGET = 400;
 
 /**
- * Upper bound on the auto-scaled ceiling. Held at 8000 to stay within the
- * smallest provider output cap in play (DeepSeek = 8192), so scaling can never
- * push max_tokens past a model limit and turn a silent truncation into a hard
- * API rejection. Larger batches that need more must pin `maxTokens` explicitly.
+ * Upper bound on the automatic per-document increase. Automatic scaling alone
+ * stops at 8000; an explicitly configured baseline or per-call `maxTokens` can
+ * exceed it. The caller owns compatibility with its selected model output limit.
  */
 const MAX_SCALED_TOKENS = 8000;
 
 /**
  * Response token ceiling for a batched pass. When the caller does NOT pin
- * `maxTokens`, scale it with batch size (down-floored by the configured default,
- * up-capped by MAX_SCALED_TOKENS) so a full batch's pages fit instead of being
+ * `maxTokens`, scale it with batch size up to MAX_SCALED_TOKENS, then apply
+ * the configured default as a floor so explicit environment settings survive.
+ * This gives full batches more room instead of being
  * silently truncated at the 4096 default — a smaller-scale recurrence of the
  * original single-call truncation bug (bead intentional-cognition-os-u5t).
  */
@@ -97,7 +97,7 @@ export function scaledMaxTokens(
   batchSize: number,
 ): number {
   if (explicit !== undefined) return explicit;
-  return Math.min(MAX_SCALED_TOKENS, Math.max(defaultMax, batchSize * PER_DOC_TOKEN_BUDGET));
+  return Math.max(defaultMax, Math.min(MAX_SCALED_TOKENS, batchSize * PER_DOC_TOKEN_BUDGET));
 }
 
 /** True when a provider stopped generating because it hit the output ceiling. */

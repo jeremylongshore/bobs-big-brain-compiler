@@ -339,6 +339,14 @@ text`;
 });
 
 describe('scaledMaxTokens (bead u5t)', () => {
+  it('preserves a configured ceiling above the automatic scaling cap', () => {
+    expect(scaledMaxTokens(undefined, 16000, 20)).toBe(16000);
+  });
+
+  it('gives a direct option priority over a larger configured ceiling', () => {
+    expect(scaledMaxTokens(12000, 16000, 20)).toBe(12000);
+  });
+
   it('honors an explicit ceiling unchanged', () => {
     expect(scaledMaxTokens(12345, 4096, 25)).toBe(12345);
   });
