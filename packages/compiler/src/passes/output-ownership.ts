@@ -1,4 +1,4 @@
-import { lstatSync, readFileSync } from 'node:fs';
+import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync } from 'node:fs';
 
 import type { Database } from '@ico/kernel';
 
@@ -44,17 +44,40 @@ export function assertWikiOutputOwnership(
     throw new Error('Refusing wiki output with a conflicting compilation owner');
   }
 
-  let present: boolean;
+  let descriptor: number;
   try {
-    const stat = lstatSync(absoluteOutputPath);
-    if (!stat.isFile()) throw new Error('Refusing nonregular wiki output target');
-    present = true;
+    descriptor = openSync(
+      absoluteOutputPath,
+      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0),
+    );
   } catch (error) {
-    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
-    present = false;
+    if (error instanceof Error && 'code' in error) {
+      if (error.code === 'ENOENT') return;
+      if (error.code === 'ELOOP')
+        throw new Error('Refusing nonregular wiki output target', { cause: error });
+    }
+    throw error;
   }
-  if (!present) return;
-  const content = readFileSync(absoluteOutputPath, 'utf8');
+  let content: string;
+  try {
+    const opened = fstatSync(descriptor);
+    const current = lstatSync(absoluteOutputPath);
+    if (
+      !opened.isFile() ||
+      !current.isFile() ||
+      current.dev !== opened.dev ||
+      current.ino !== opened.ino
+    ) {
+      throw new Error('Refusing changed or nonregular wiki output target');
+    }
+    content = readFileSync(descriptor, 'utf8');
+    const after = lstatSync(absoluteOutputPath);
+    if (!after.isFile() || after.dev !== opened.dev || after.ino !== opened.ino) {
+      throw new Error('Refusing changed wiki output target');
+    }
+  } finally {
+    closeSync(descriptor);
+  }
   const header = /^---[\t ]*\r?\n([\s\S]*?)\r?\n---(?:[\t ]*(?:\r?\n|$))/.exec(
     content.trimStart(),
   )?.[1];

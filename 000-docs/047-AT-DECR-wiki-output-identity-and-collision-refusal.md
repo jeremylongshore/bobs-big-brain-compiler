@@ -25,8 +25,11 @@ UUID-v5 derivation, separators, body hashing and spool schema are unchanged.
 ## Ownership and repeated compilation
 
 Before a temporary output write, each pass checks existing compilation records
-for that path and the existing file's initial identity/type header. Conflicting,
-missing or ambiguous ownership is refused, including symlink/nonregular leaves.
+for that path and the existing file's initial identity/type header. A conflicting
+database/path owner is refused. An absent target with no conflicting database
+owner is allowed. An existing target must be a regular file with exactly one
+matching identity and type header; a matching header is evidence even when no
+compilation row exists. Symlink/nonregular leaves are refused.
 Summary headers use the caller's actual source ID. A normal summary rerun reuses
 the existing exact source/type/path compilation row ID and updates only compilation
 time, stale status, model and token metadata. It does not replace audit history.

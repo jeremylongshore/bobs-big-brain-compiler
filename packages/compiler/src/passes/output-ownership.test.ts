@@ -3,6 +3,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -10,11 +11,45 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { closeDatabase, type Database, initDatabase } from '@ico/kernel';
 
 import { assertWikiOutputOwnership } from './output-ownership.js';
+
+const io = vi.hoisted(() => ({
+  afterOpen: undefined as (() => void) | undefined,
+  beforeRead: undefined as (() => void) | undefined,
+  opened: [] as number[],
+  closed: [] as number[],
+}));
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    openSync: (...args: Parameters<typeof actual.openSync>) => {
+      const fd = actual.openSync(...args);
+      io.opened.push(fd);
+      const hook = io.afterOpen;
+      io.afterOpen = undefined;
+      hook?.();
+      return fd;
+    },
+    readFileSync: (...args: Parameters<typeof actual.readFileSync>) => {
+      if (typeof args[0] === 'number') {
+        const hook = io.beforeRead;
+        io.beforeRead = undefined;
+        hook?.();
+      }
+      return actual.readFileSync(...args);
+    },
+    closeSync: (fd: number) => {
+      io.closed.push(fd);
+      return actual.closeSync(fd);
+    },
+  };
+});
 
 const ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 const OTHER = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff';
@@ -36,6 +71,10 @@ describe('wiki output ownership before staging', () => {
   });
 
   afterEach(() => {
+    io.afterOpen = undefined;
+    io.beforeRead = undefined;
+    io.opened = [];
+    io.closed = [];
     closeDatabase(db);
     rmSync(root, { recursive: true, force: true });
   });
@@ -124,6 +163,51 @@ describe('wiki output ownership before staging', () => {
     expect(() => assertWikiOutputOwnership(db, path, target, 'summary', OTHER)).toThrow(
       'compilation owner',
     );
+  });
+
+  it('refuses a leaf swapped to a symlink after opening its original descriptor', () => {
+    writeFileSync(target, header());
+    const outside = join(root, 'outside-race.md');
+    writeFileSync(outside, header());
+    io.afterOpen = () => {
+      renameSync(target, target + '.preserved');
+      symlinkSync(outside, target);
+    };
+    expect(() => assertWikiOutputOwnership(db, path, target, 'concept', ID)).toThrow();
+    expect(readFileSync(outside, 'utf8')).toBe(header());
+    expect(readFileSync(target + '.preserved', 'utf8')).toBe(header());
+    expect(io.closed).toEqual(io.opened);
+  });
+
+  it('refuses a replaced regular leaf and closes its descriptor after open and before reading', () => {
+    writeFileSync(target, header());
+    io.afterOpen = () => {
+      renameSync(target, target + '.preserved');
+      writeFileSync(target, header());
+    };
+    expect(() => assertWikiOutputOwnership(db, path, target, 'concept', ID)).toThrow('changed');
+    expect(io.opened).toHaveLength(1);
+    expect(io.closed).toEqual(io.opened);
+  });
+
+  it('closes the descriptor on a read failure and leaves the original bytes unchanged', () => {
+    writeFileSync(target, header());
+    io.beforeRead = () => {
+      throw new Error('Injected read failure');
+    };
+    expect(() => assertWikiOutputOwnership(db, path, target, 'concept', ID)).toThrow(
+      'Injected read failure',
+    );
+    expect(io.opened).toHaveLength(1);
+    expect(io.closed).toEqual(io.opened);
+    expect(readFileSync(target, 'utf8')).toBe(header());
+  });
+
+  it('closes the descriptor after successful identity verification', () => {
+    writeFileSync(target, header());
+    assertWikiOutputOwnership(db, path, target, 'concept', ID);
+    expect(io.opened).toHaveLength(1);
+    expect(io.closed).toEqual(io.opened);
   });
 
   it('refuses nonregular targets without following or modifying an outside file', () => {
