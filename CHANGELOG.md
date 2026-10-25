@@ -486,11 +486,18 @@ consistency audit doc).
 
 ## [v1.0.0] - 2026-05-19
 
+Historical release text, recorded 2026-05-19:
+
 **First stable release.** All 10 epics complete. The system is operator-ready:
 compiles a local-first knowledge base from raw sources, supports interactive
 Q&A grounded in compiled wiki, runs multi-agent research tasks, and generates
-durable artifacts — all with append-only audit traces (by protocol; clarified 2026-10-25)
-and deterministic control-plane invariants.
+durable artifacts — all with append-only audit traces (by protocol) and deterministic
+control-plane invariants.
+
+_2026-10-25 clarification: the release text above is historical, not a current readiness
+assessment. Local integrity, ordering and rewrite detection follow the
+[hash-chained trace protocol](packages/kernel/src/traces.ts); receipts do not establish
+the truth of generated content._
 
 ### Added
 
