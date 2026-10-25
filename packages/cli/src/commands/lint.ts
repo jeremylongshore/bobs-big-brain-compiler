@@ -8,7 +8,8 @@
  *   2. Staleness — any compilation whose source has been re-ingested since the
  *      compilation ran.
  *   3. Uncompiled sources — sources with no summary compilation record.
- *   4. Orphan pages — wiki pages with no incoming [[slug]] backlinks.
+ *   4. Orphan pages — wiki pages with no resolved incoming references.
+ *   5. Duplicate output paths — conflicting identities or unresolved legacy owners.
  *
  * This file is the CLI surface only — commander wiring + human-readable
  * report rendering. The pure lint logic was extracted to
@@ -100,6 +101,9 @@ export function renderLintReport(result: LintResult, workspaceRoot: string): str
   lines.push(`${pad('Staleness:')}${stalenessStatus}`);
   lines.push(`${pad('Uncompiled:')}${uncompiledStatus}`);
   lines.push(`${pad('Orphans:')}${orphanStatus}`);
+  lines.push(
+    `${pad('Output paths:')}${result.outputPaths.count === 0 ? formatSuccess('no duplicate paths') : formatWarning(`${result.outputPaths.count} duplicate path group(s)`)}`,
+  );
   lines.push('');
 
   if (result.issues === 0) {
@@ -151,6 +155,10 @@ export function renderLintReport(result: LintResult, workspaceRoot: string): str
         : op;
       lines.push(`    ${relPath}`);
     }
+  }
+
+  for (const conflict of result.outputPaths.conflicts) {
+    lines.push(`  ${conflict.path} (${conflict.kind})`);
   }
 
   return lines.join('\n');

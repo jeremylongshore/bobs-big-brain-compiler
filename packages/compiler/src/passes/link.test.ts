@@ -110,6 +110,40 @@ describe('addBacklinks', () => {
   // 1. Empty wiki → returns ok with zero counts
   // -------------------------------------------------------------------------
 
+  it('resolves title links to identity-suffixed pages without conflating C operators', async () => {
+    const directory = join(env.wsRoot, 'wiki', 'concepts');
+    const names = [
+      'c-plus-plus--' + 'a'.repeat(64),
+      'c-hash--' + 'b'.repeat(64),
+      'c--' + 'c'.repeat(64),
+    ];
+    const titles = ['C++', 'C#', 'C'];
+    for (let i = 0; i < names.length; i++) {
+      writeFileSync(join(directory, `${names[i]}.md`), `---\ntitle: ${titles[i]}\n---\nBody\n`);
+    }
+    writeFileSync(join(directory, 'semantic-graph.md'), '[[C++|C plus plus]] [[C#]]');
+    const result = await addBacklinks(stubClient(), env.db, env.wsRoot);
+    expect(result.ok).toBe(true);
+    for (const name of names.slice(0, 2)) {
+      expect(readFileSync(join(directory, `${name}.md`), 'utf8')).toContain('## Backlinks');
+    }
+    expect(readFileSync(join(directory, `${names[2]}.md`), 'utf8')).not.toContain('## Backlinks');
+  });
+
+  it('refuses ambiguous title aliases but accepts an exact identity filename', async () => {
+    const directory = join(env.wsRoot, 'wiki', 'concepts');
+    const first = 'shared--' + 'a'.repeat(64);
+    const second = 'shared--' + 'b'.repeat(64);
+    for (const name of [first, second]) {
+      writeFileSync(join(directory, `${name}.md`), '---\ntitle: Shared\n---\nBody\n');
+    }
+    writeFileSync(join(directory, 'semantic-graph.md'), `[[Shared]] [[${first}]]`);
+    const result = await addBacklinks(stubClient(), env.db, env.wsRoot);
+    expect(result.ok).toBe(true);
+    expect(readFileSync(join(directory, `${first}.md`), 'utf8')).toContain('## Backlinks');
+    expect(readFileSync(join(directory, `${second}.md`), 'utf8')).not.toContain('## Backlinks');
+  });
+
   it('returns ok with pagesUpdated=0 when wiki/ is empty', async () => {
     const emptyBase = mkdtempSync(join(tmpdir(), 'ico-link-empty-'));
     const wsResult = initWorkspace('ws', emptyBase);

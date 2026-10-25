@@ -18,6 +18,7 @@ import { appendAuditLog, type Database, writeTrace } from '@ico/kernel';
 import { err, ok, type Result } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
+import { wikiReferenceResolver, wikiReferences } from '../wiki-references.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -103,34 +104,6 @@ function collectPages(workspacePath: string, subdir: string): PageInfo[] {
 }
 
 /**
- * Extract all [[slug]] references from a page's content.
- * Only the content portion after the frontmatter is scanned.
- */
-function extractReferences(content: string): Set<string> {
-  // Strip YAML frontmatter if present.
-  const bodyStart = content.startsWith('---') ? content.indexOf('---', 3) + 3 : 0;
-  const body = content.slice(bodyStart);
-
-  const refs = new Set<string>();
-  const wikiLinkPattern = /\[\[([^\]]+)\]\]/g;
-  let match: RegExpExecArray | null;
-  while ((match = wikiLinkPattern.exec(body)) !== null) {
-    const ref = match[1];
-    if (ref !== undefined) {
-      refs.add(
-        ref
-          .toLowerCase()
-          .replace(/[\s_]+/g, '-')
-          .replace(/[^a-z0-9-]/g, '')
-          .replace(/-+/g, '-')
-          .replace(/^-|-$/g, ''),
-      );
-    }
-  }
-  return refs;
-}
-
-/**
  * Strip any existing ## Backlinks section from the page content.
  * This prevents duplicate backlinks on re-runs.
  */
@@ -189,20 +162,17 @@ export async function addBacklinks(
     return ok({ pagesUpdated: 0, totalBacklinks: 0, compiledAt });
   }
 
-  // 2. Build forward reference map: slug → set of slugs it references.
-  const forwardRefs = new Map<string, Set<string>>();
+  // Resolve by page object, so duplicate stems in different directories cannot
+  // overwrite each other's graph entries. Ambiguous targets remain unresolved.
+  const resolveReference = wikiReferenceResolver(allPages);
+  const backRefs = new Map<PageInfo, Set<PageInfo>>();
   for (const page of allPages) {
-    forwardRefs.set(page.slug, extractReferences(page.content));
-  }
-
-  // 3. Build reverse reference map: slug → pages that reference it.
-  const backRefs = new Map<string, PageInfo[]>();
-  for (const page of allPages) {
-    const refs = forwardRefs.get(page.slug) ?? new Set();
-    for (const ref of refs) {
-      const existing = backRefs.get(ref) ?? [];
-      existing.push(page);
-      backRefs.set(ref, existing);
+    for (const reference of wikiReferences(stripBacklinksSection(page.content))) {
+      const target = resolveReference(reference);
+      if (!target) continue;
+      const referrers = backRefs.get(target) ?? new Set<PageInfo>();
+      referrers.add(page);
+      backRefs.set(target, referrers);
     }
   }
 
@@ -222,7 +192,8 @@ export async function addBacklinks(
   const pendingRenames: Array<{ tmpPath: string; absPath: string }> = [];
 
   for (const page of allPages) {
-    const referrers = backRefs.get(page.slug);
+    const incoming = backRefs.get(page);
+    const referrers = incoming ? [...incoming] : undefined;
     if (referrers === undefined || referrers.length === 0) continue;
 
     totalBacklinks += referrers.length;

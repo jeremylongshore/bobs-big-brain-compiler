@@ -37,7 +37,9 @@ import {
   scaledMaxTokens,
   wasTruncated,
 } from './batch-helper.js';
+import { wikiOutputFilename } from './output-filename.js';
 import { checkModelOutput, type PassOutcome, stampPassProvenance } from './output-filter.js';
+import { assertWikiOutputOwnership } from './output-ownership.js';
 import {
   attributeSources,
   recordCompilationSources,
@@ -135,20 +137,6 @@ export interface ExtractResult {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Convert a concept/entity title into a filesystem slug.
- */
-function titleToSlug(title: string): string {
-  return (
-    title
-      .toLowerCase()
-      .replace(/[\s_]+/g, '-')
-      .replace(/[^a-z0-9-]/g, '')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '') || 'item'
-  );
-}
 
 /**
  * Infer the page type from the frontmatter `type` field value.
@@ -327,12 +315,11 @@ export async function extractConcepts(
     const pageContent = stampPassProvenance(page.content, 'compile.extract');
     const pageType = inferPageType(pageContent);
     const title = page.title;
-    const slug = titleToSlug(title);
     const subdir = pageType === 'entity' ? 'entities' : 'concepts';
-    const outputPath = join('wiki', subdir, `${slug}.md`);
     const absoluteOutputDir = join(workspacePath, 'wiki', subdir);
-    const absoluteOutputPath = join(workspacePath, outputPath);
-    const tmpPath = `${absoluteOutputPath}.tmp`;
+    let outputPath: string;
+    let absoluteOutputPath: string;
+    let tmpPath: string;
 
     // 5. Write to a tmp path — receipts precede visibility (G1): the rename
     //    into the visible wiki path happens only after the compilations row,
@@ -340,6 +327,10 @@ export async function extractConcepts(
     //    orphan .tmp (swept by `ico audit reconcile`) or a receipt-without-
     //    file (auditable, re-derivable) — never an unreceipted visible page.
     try {
+      outputPath = join('wiki', subdir, wikiOutputFilename(pageType, page.id, page.key));
+      absoluteOutputPath = join(workspacePath, outputPath);
+      tmpPath = `${absoluteOutputPath}.tmp`;
+      assertWikiOutputOwnership(db, outputPath, absoluteOutputPath, pageType, page.id);
       if (!existsSync(absoluteOutputDir)) {
         mkdirSync(absoluteOutputDir, { recursive: true });
       }

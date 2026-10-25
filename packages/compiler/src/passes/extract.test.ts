@@ -155,6 +155,91 @@ describe('extractConcepts', () => {
   let env: TestEnv;
   let base: string;
 
+  it('preserves distinct merged identities whose readable filename slugs collide', async () => {
+    const response = [conceptPage('A+B', ['s1']), conceptPage('AB', ['s2'])]
+      .map((page) => page + '\nThis synthetic definition has a substantive independent body.\n')
+      .join('\n---PAGE_BREAK---\n');
+    const first = await extractConcepts(mockClient(response), env.db, env.wsRoot, [SUMMARY_PATH]);
+    expect(first.ok).toBe(true);
+    if (!first.ok) throw first.error;
+    expect(first.value.pages).toHaveLength(2);
+    const paths = first.value.pages.map((page) => page.outputPath);
+    expect(new Set(paths).size).toBe(2);
+    const bodies = paths.map((path) => readFileSync(join(env.wsRoot, path), 'utf8'));
+    expect(bodies.some((body) => body.includes('Body for A+B.'))).toBe(true);
+    expect(bodies.some((body) => body.includes('Body for AB.'))).toBe(true);
+    const records = env.db
+      .prepare<[], { output_path: string }>('SELECT output_path FROM compilations')
+      .all();
+    expect(new Set(records.map((row) => row.output_path))).toEqual(new Set(paths));
+    const revised = await extractConcepts(
+      mockClient(response.replace('Body for A+B.', 'Revised body for A+B.')),
+      env.db,
+      env.wsRoot,
+      [SUMMARY_PATH],
+    );
+    expect(revised.ok).toBe(true);
+    if (!revised.ok) throw revised.error;
+    expect(revised.value.pages.map((page) => page.outputPath)).toEqual(paths);
+    expect(readFileSync(join(env.wsRoot, paths[0]!), 'utf8')).toContain('Revised body for A+B.');
+    expect(readFileSync(join(env.wsRoot, paths[1]!), 'utf8')).toContain('Body for AB.');
+  });
+
+  it('refuses to retarget an existing compilation ID across derived kinds', async () => {
+    const first = await extractConcepts(mockClient(MOCK_CONCEPT_PAGE), env.db, env.wsRoot, [
+      SUMMARY_PATH,
+    ]);
+    expect(first.ok).toBe(true);
+    if (!first.ok) throw first.error;
+    const originalPath = first.value.pages[0]!.outputPath;
+    const originalBody = readFileSync(join(env.wsRoot, originalPath), 'utf8');
+    const before = env.db.serialize();
+    const auditFiles = () =>
+      ['traces', 'provenance'].flatMap((directory) =>
+        readdirSync(join(env.wsRoot, 'audit', directory)).map((file) => [
+          directory,
+          file,
+          readFileSync(join(env.wsRoot, 'audit', directory, file), 'utf8'),
+        ]),
+      );
+    const auditBefore = auditFiles();
+    const entitiesBefore = readdirSync(join(env.wsRoot, 'wiki/entities'));
+    const second = await extractConcepts(
+      mockClient(MOCK_ENTITY_PAGE.replace('title: Claude', 'title: Knowledge Compilation')),
+      env.db,
+      env.wsRoot,
+      [SUMMARY_PATH],
+    );
+    expect(second.ok).toBe(false);
+    if (second.ok) throw new Error('Cross-kind compilation identity unexpectedly retargeted');
+    expect(second.error.message).toContain('compilation identity');
+    expect(env.db.serialize()).toEqual(before);
+    expect(readFileSync(join(env.wsRoot, originalPath), 'utf8')).toBe(originalBody);
+    expect(auditFiles()).toEqual(auditBefore);
+    expect(readdirSync(join(env.wsRoot, 'wiki/entities'))).toEqual(entitiesBefore);
+  });
+
+  it('refuses to stage over a file claimed by a different logical page', async () => {
+    const client = mockClient(MOCK_API_RESPONSE);
+    const first = await extractConcepts(client, env.db, env.wsRoot, [SUMMARY_PATH]);
+    expect(first.ok).toBe(true);
+    if (!first.ok) throw first.error;
+    const path = first.value.pages[0]!.outputPath;
+    const file = join(env.wsRoot, path);
+    const content = readFileSync(file, 'utf8');
+    const changed = content.replace(/^id:.*$/m, 'id: bbbbbbbb-cccc-4ddd-8eee-ffffffffffff');
+    expect(changed).not.toBe(content);
+    writeFileSync(file, changed);
+    const before = env.db.serialize();
+    const second = await extractConcepts(client, env.db, env.wsRoot, [SUMMARY_PATH]);
+    expect(second.ok).toBe(false);
+    if (second.ok) throw new Error('Conflicting ownership unexpectedly accepted');
+    expect(second.error.message).toContain('header owner');
+    expect(readFileSync(file, 'utf8')).toBe(changed);
+    expect(existsSync(file + '.tmp')).toBe(false);
+    expect(env.db.serialize()).toEqual(before);
+  });
+
   beforeEach(() => {
     base = mkdtempSync(join(tmpdir(), 'ico-extract-base-'));
     const wsResult = initWorkspace('ws', base);

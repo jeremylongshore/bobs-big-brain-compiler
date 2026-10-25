@@ -53,7 +53,9 @@ import {
   scaledMaxTokens,
   wasTruncated,
 } from './batch-helper.js';
+import { wikiOutputFilename } from './output-filename.js';
 import { checkModelOutput, type PassOutcome, stampPassProvenance } from './output-filter.js';
+import { assertWikiOutputOwnership } from './output-ownership.js';
 import {
   attributeSources,
   recordCompilationSources,
@@ -153,18 +155,6 @@ export interface SynthesizeResult {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/** Convert a topic title to a filesystem slug. */
-function titleToSlug(title: string): string {
-  return (
-    title
-      .toLowerCase()
-      .replace(/[\s_]+/g, '-')
-      .replace(/[^a-z0-9-]/g, '')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '') || 'topic'
-  );
-}
 
 /**
  * Read all .md files from a wiki subdirectory.
@@ -344,10 +334,9 @@ export async function synthesizeTopics(
 
     const pageContent = stampPassProvenance(page.content, 'compile.synthesize');
     const title = page.title;
-    const slug = titleToSlug(title);
-    const outputPath = join('wiki', 'topics', `${slug}.md`);
-    const absoluteOutputPath = join(workspacePath, outputPath);
-    const tmpPath = `${absoluteOutputPath}.tmp`;
+    let outputPath: string;
+    let absoluteOutputPath: string;
+    let tmpPath: string;
 
     // 4. Write to a tmp path — receipts precede visibility (G1): the rename
     //    into the visible wiki path happens only after the compilations row,
@@ -355,6 +344,10 @@ export async function synthesizeTopics(
     //    orphan .tmp (swept by `ico audit reconcile`) or a receipt-without-
     //    file (auditable, re-derivable) — never an unreceipted visible page.
     try {
+      outputPath = join('wiki', 'topics', wikiOutputFilename('topic', page.id, page.key));
+      absoluteOutputPath = join(workspacePath, outputPath);
+      tmpPath = `${absoluteOutputPath}.tmp`;
+      assertWikiOutputOwnership(db, outputPath, absoluteOutputPath, 'topic', page.id);
       writeFileSync(tmpPath, pageContent, 'utf-8');
     } catch (e) {
       return err(e instanceof Error ? e : new Error(String(e)));
