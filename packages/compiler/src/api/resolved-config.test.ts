@@ -73,7 +73,12 @@ describe('resolved configuration reaches the compiler transport', () => {
     expect(JSON.parse(request?.body as string)).toMatchObject({ model: 'fixture-model' });
     expect(process.env['ICO_PROVIDER']).toBeUndefined();
     expect(process.env['ICO_MODEL']).toBeUndefined();
+    expect(process.env['ICO_BASE_URL']).toBeUndefined();
+    expect(process.env['GROQ_API_KEY']).toBeUndefined();
+    expect(config.provider).toBe(config.providerConfig.id);
+    expect(JSON.stringify(config)).not.toContain('providerConfig');
     expect(JSON.stringify(config)).not.toContain('fixture-key');
+    expect(JSON.stringify(config.providerConfig)).not.toContain('fixture-key');
   });
 
   it('uses a .env-only Anthropic-compatible URL and model', async () => {

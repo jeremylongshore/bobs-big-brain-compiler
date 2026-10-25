@@ -47,7 +47,7 @@
 
 ### Fixed
 
-- Pass resolved workspace provider settings into compiler clients so `.env`-only
+- Pass resolved workspace provider settings into `loadConfig`-based CLI clients so `.env`-only
   provider, wire, base URL, key and model values reach the selected transport.
   Environment variables retain precedence without exporting file settings into
   the process environment (`intentional-cognition-os-6g8`).
