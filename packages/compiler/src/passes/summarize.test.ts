@@ -8,8 +8,8 @@
  *   the compilation record was persisted.
  * - A mocked `ClaudeClient` so no network calls are made.
  */
-
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -22,12 +22,30 @@ import {
   initDatabase,
   initWorkspace,
   readTraces,
+  verifyAuditChain,
+  writeTrace,
 } from '@ico/kernel';
-import { ok } from '@ico/types';
+import { ok, type TraceEnvelope, TraceEnvelopeSchema } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
 import { CompileSkipError } from './output-filter.js';
 import { summarizeSource } from './summarize.js';
+
+/** Inspect authoritative JSONL envelopes, independently of the SQLite index. */
+function traceEnvelopes(workspacePath: string): TraceEnvelope[] {
+  const directory = join(workspacePath, 'audit', 'traces');
+  return readdirSync(directory)
+    .filter((name) => /^\d{4}-\d{2}-\d{2}\.jsonl$/.test(name))
+    .sort()
+    .flatMap((name) => readFileSync(join(directory, name), 'utf8').split('\n').filter(Boolean))
+    .map((line) => TraceEnvelopeSchema.parse(JSON.parse(line)));
+}
+
+function expectedPromptHash(system: string, user: string): string {
+  return createHash('sha256')
+    .update(JSON.stringify(['ico-prompt-v1', system, user]), 'utf8')
+    .digest('hex');
+}
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -145,6 +163,68 @@ describe('summarizeSource', () => {
   afterEach(() => {
     closeDatabase(env.db);
     rmSync(base, { recursive: true, force: true });
+  });
+
+  it('chains both retry prompts and models, and detects editing provenance before a successor', async () => {
+    const complete = vi
+      .fn<ClaudeClient['createCompletion']>()
+      .mockResolvedValueOnce(
+        ok({
+          content: 'I cannot summarize this document.',
+          inputTokens: 1,
+          outputTokens: 2,
+          model: 'retry-first',
+          stopReason: 'end_turn',
+        }),
+      )
+      .mockResolvedValueOnce(
+        ok({
+          content: MOCK_API_RESPONSE,
+          inputTokens: 3,
+          outputTokens: 4,
+          model: 'retry-second',
+          stopReason: 'end_turn',
+        }),
+      );
+    const result = await summarizeSource(
+      { createCompletion: complete },
+      env.db,
+      env.wsRoot,
+      SOURCE_ID,
+      'private-prompt-only-sentinel',
+      SOURCE_PATH,
+      CONTENT_HASH,
+    );
+    expect(result.ok).toBe(true);
+    const trace = traceEnvelopes(env.wsRoot).find(
+      (entry) => entry.event_type === 'compile.summarize',
+    );
+    expect(trace?.payload['modelCalls']).toEqual(
+      complete.mock.calls.map(([system, user], attempt) => ({
+        phase: 'summarize',
+        attempt,
+        responseModel: attempt === 0 ? 'retry-first' : 'retry-second',
+        promptHashVersion: 'ico-prompt-v1',
+        promptHash: expectedPromptHash(system, user),
+      })),
+    );
+    expect(complete.mock.calls[0]?.[1]).not.toBe(complete.mock.calls[1]?.[1]);
+    expect(JSON.stringify(trace?.payload)).not.toContain('private-prompt-only-sentinel');
+    expect(writeTrace(env.db, env.wsRoot, 'test.successor', { after: 'compile' }).ok).toBe(true);
+    const before = verifyAuditChain(env.wsRoot);
+    expect(before.ok && before.value.breaks).toEqual([]);
+    if (!trace) throw new Error('Missing compile trace');
+    const file = join(env.wsRoot, 'audit', 'traces', trace.timestamp.slice(0, 10) + '.jsonl');
+    const lines = readFileSync(file, 'utf8').split('\n');
+    const index = lines.findIndex((line) => line.includes(trace.event_id));
+    const edited = JSON.parse(lines[index]!) as {
+      payload: { modelCalls: { responseModel: string }[] };
+    };
+    edited.payload.modelCalls[0]!.responseModel = 'edited-model';
+    lines[index] = JSON.stringify(edited);
+    writeFileSync(file, lines.join('\n'));
+    const after = verifyAuditChain(env.wsRoot);
+    expect(after.ok && after.value.breaks.length).toBeGreaterThan(0);
   });
 
   // -------------------------------------------------------------------------
@@ -415,6 +495,11 @@ describe('summarizeSource', () => {
     const traces = readTraces(env.db, { eventType: 'compile.validation.reject' });
     expect(traces.ok).toBe(true);
     if (traces.ok) expect(traces.value.length).toBe(1);
+    const envelope = traceEnvelopes(env.wsRoot).find(
+      (entry) => entry.event_type === 'compile.validation.reject',
+    );
+    expect(envelope?.payload['code']).toBe('EMPTY_SOURCE');
+    expect(envelope?.payload).not.toHaveProperty('modelCalls');
   });
 
   it('retries once then skips-with-trace when the model keeps refusing', async () => {
@@ -444,6 +529,10 @@ describe('summarizeSource', () => {
     // Two attempts (initial + one retry).
     expect((client.createCompletion as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
     expect(existsSync(join(env.wsRoot, 'wiki', 'sources', 'my-research-paper.md'))).toBe(false);
+    const rejection = traceEnvelopes(env.wsRoot).find(
+      (entry) => entry.event_type === 'compile.validation.reject',
+    );
+    expect(rejection?.payload['modelCalls']).toHaveLength(2);
   });
 
   it('stamps deterministic pass provenance (compiled_by, pass_version, real path/hash) on the page', async () => {

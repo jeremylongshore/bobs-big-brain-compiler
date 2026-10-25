@@ -59,6 +59,11 @@ import {
   recordCompilationSources,
   resolveSummarySourceIds,
 } from './source-attribution.js';
+import {
+  contributingModelCalls,
+  type ModelCallProvenance,
+  modelCallProvenance,
+} from './trace-provenance.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -232,11 +237,12 @@ export async function synthesizeTopics(
   //    A single batch (small corpus) reproduces the old single-call behavior.
   const batches = chunkArray(summaries, batchSize);
   const rawPages: string[] = [];
+  const rawPageCalls: ModelCallProvenance[] = [];
   let inputTokens = 0;
   let outputTokens = 0;
   let responseModel = model;
 
-  for (const batch of batches) {
+  for (const [batchIndex, batch] of batches.entries()) {
     const summaryContent = batch.join('\n\n---\n\n');
     const userPrompt = buildUserPrompt({ compiledAt, model, summaryContent, conceptContent });
 
@@ -259,6 +265,11 @@ export async function synthesizeTopics(
     inputTokens += inTok;
     outputTokens += outTok;
     responseModel = respModel;
+    const callProvenance = modelCallProvenance(SYSTEM_PROMPT, userPrompt, respModel, {
+      phase: 'map',
+      batchIndex,
+      attempt: 0,
+    });
     // A hit token-ceiling silently drops pages — surface it loudly (bead u5t).
     if (wasTruncated(stopReason)) {
       process.stderr.write(
@@ -270,7 +281,10 @@ export async function synthesizeTopics(
 
     for (const page of content.split(PAGE_BREAK)) {
       const trimmed = page.trim();
-      if (trimmed.length > 0) rawPages.push(trimmed);
+      if (trimmed.length > 0) {
+        rawPages.push(trimmed);
+        rawPageCalls.push(callProvenance);
+      }
     }
   }
 
@@ -314,6 +328,7 @@ export async function synthesizeTopics(
     const outputCheck = checkModelOutput(page.content);
     if (!outputCheck.ok) {
       const rejectTrace = writeTrace(db, workspacePath, 'compile.validation.reject', {
+        modelCalls: contributingModelCalls(page.inputIndices, rawPageCalls),
         pass: 'compile.synthesize',
         code: outputCheck.rejection.code,
         title: page.title,
@@ -392,6 +407,7 @@ export async function synthesizeTopics(
 
     // 7. Write trace event.
     const traceResult = writeTrace(db, workspacePath, 'compile.synthesize', {
+      modelCalls: contributingModelCalls(page.inputIndices, rawPageCalls),
       compilationId,
       outputPath,
       tokensUsed,

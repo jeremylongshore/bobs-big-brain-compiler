@@ -4,18 +4,42 @@
  * Uses a real temporary workspace and SQLite database, with a mocked
  * ClaudeClient to avoid network calls.
  */
-
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { closeDatabase, type Database, initDatabase, initWorkspace, readTraces } from '@ico/kernel';
-import { ok } from '@ico/types';
+import { ok, type TraceEnvelope, TraceEnvelopeSchema } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
 import { detectContradictions } from './contradict.js';
+
+/** Inspect authoritative JSONL envelopes, independently of the SQLite index. */
+function traceEnvelopes(workspacePath: string): TraceEnvelope[] {
+  const directory = join(workspacePath, 'audit', 'traces');
+  return readdirSync(directory)
+    .filter((name) => /^\d{4}-\d{2}-\d{2}\.jsonl$/.test(name))
+    .sort()
+    .flatMap((name) => readFileSync(join(directory, name), 'utf8').split('\n').filter(Boolean))
+    .map((line) => TraceEnvelopeSchema.parse(JSON.parse(line)));
+}
+
+function expectedPromptHash(system: string, user: string): string {
+  return createHash('sha256')
+    .update(JSON.stringify(['ico-prompt-v1', system, user]), 'utf8')
+    .digest('hex');
+}
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -664,6 +688,21 @@ A secondary contradiction about evidence standards.
     const written = readFileSync(join(env.wsRoot, result.value.pages[0]!.outputPath), 'utf-8');
     expect(written).toContain('xb-0'); // from the intra-batch page
     expect(written).toContain('xb-3'); // from the reduce page
+
+    const calls = vi.mocked(client).createCompletion.mock.calls;
+    const modelCalls = calls.map(([system, user], index) => ({
+      phase: isReduceCall(system) ? 'reduce' : 'map',
+      ...(isReduceCall(system) ? {} : { batchIndex: index }),
+      attempt: 0,
+      responseModel: 'claude-sonnet-4-6',
+      promptHashVersion: 'ico-prompt-v1',
+      promptHash: expectedPromptHash(system, user),
+    }));
+    const trace = traceEnvelopes(env.wsRoot).find(
+      (entry) => entry.event_type === 'compile.contradict',
+    );
+    expect(trace?.payload['modelCalls']).toEqual(modelCalls);
+    expect(new Set(modelCalls.map((call) => call.promptHash)).size).toBe(calls.length);
 
     const rows = env.db
       .prepare<[], { count: number }>(`SELECT COUNT(*) AS count FROM compilations`)

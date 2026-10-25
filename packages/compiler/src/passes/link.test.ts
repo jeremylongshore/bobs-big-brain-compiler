@@ -6,16 +6,35 @@
  * parameter is required for interface consistency.
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { closeDatabase, type Database, initDatabase, initWorkspace, readTraces } from '@ico/kernel';
+import { type TraceEnvelope, TraceEnvelopeSchema } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
 import { addBacklinks } from './link.js';
+
+/** Inspect authoritative JSONL envelopes, independently of the SQLite index. */
+function traceEnvelopes(workspacePath: string): TraceEnvelope[] {
+  const directory = join(workspacePath, 'audit', 'traces');
+  return readdirSync(directory)
+    .filter((name) => /^\d{4}-\d{2}-\d{2}\.jsonl$/.test(name))
+    .sort()
+    .flatMap((name) => readFileSync(join(directory, name), 'utf8').split('\n').filter(Boolean))
+    .map((line) => TraceEnvelopeSchema.parse(JSON.parse(line)));
+}
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -193,6 +212,11 @@ describe('addBacklinks', () => {
     expect(tracesResult.ok).toBe(true);
     if (!tracesResult.ok) return;
     expect(tracesResult.value.length).toBeGreaterThanOrEqual(1);
+    const envelopes = traceEnvelopes(env.wsRoot).filter(
+      (entry) => entry.event_type === 'compile.link',
+    );
+    expect(envelopes.length).toBeGreaterThan(0);
+    for (const envelope of envelopes) expect(envelope.payload).not.toHaveProperty('modelCalls');
   });
 
   // -------------------------------------------------------------------------

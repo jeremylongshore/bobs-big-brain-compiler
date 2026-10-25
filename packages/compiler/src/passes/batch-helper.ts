@@ -463,6 +463,8 @@ export function ensureFrontmatterFence(content: string): string {
 
 /** A page after dedupe/merge, carrying its normalized key and stable ID. */
 export interface MergedPage {
+  /** Raw-page positions contributing body or list membership to this merge. */
+  inputIndices: number[];
   /** Normalized title key the page was grouped under. */
   key: string;
   /** Deterministic UUIDv5 stamped into the page frontmatter. */
@@ -498,19 +500,23 @@ export interface MergePagesOptions {
  */
 export function mergePages(rawPages: readonly string[], options: MergePagesOptions): MergedPage[] {
   const fallback = options.fallbackTitle ?? 'untitled';
-  const groups = new Map<string, { title: string; chosen: string; ids: string[] }>();
+  const groups = new Map<
+    string,
+    { title: string; chosen: string; ids: string[]; inputIndices: number[] }
+  >();
   const order: string[] = [];
 
-  for (const page of rawPages) {
+  for (const [inputIndex, page] of rawPages.entries()) {
     const title = extractFrontmatterField(page, 'title') ?? fallback;
     const key = normalizeTitle(title) || normalizeTitle(fallback) || 'untitled';
     const ids = parseFrontmatterList(page, options.listField);
 
     const existing = groups.get(key);
     if (existing === undefined) {
-      groups.set(key, { title, chosen: page, ids: [...ids] });
+      groups.set(key, { title, chosen: page, ids: [...ids], inputIndices: [inputIndex] });
       order.push(key);
     } else {
+      existing.inputIndices.push(inputIndex);
       // Keep the longest page as the canonical body/definition.
       if (page.length > existing.chosen.length) {
         existing.chosen = page;
@@ -533,6 +539,6 @@ export function mergePages(rawPages: readonly string[], options: MergePagesOptio
     // page parseable by the spool reader (bead ...-57c). Already-fenced pages
     // are returned unchanged.
     content = ensureFrontmatterFence(content);
-    return { key, id, title: group.title, content };
+    return { key, id, title: group.title, content, inputIndices: group.inputIndices };
   });
 }

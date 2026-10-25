@@ -5,7 +5,16 @@
  * ClaudeClient to avoid network calls.
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -195,6 +204,63 @@ describe('extractConcepts', () => {
     const conceptPath = join(env.wsRoot, conceptFiles[0]!.outputPath);
     expect(existsSync(conceptPath)).toBe(true);
     expect(conceptPath).toContain('wiki/concepts');
+  });
+
+  it('chains each merged contributor model and exact prompt instead of the last batch alone', async () => {
+    const secondPath = 'wiki/sources/second.md';
+    writeFileSync(
+      join(env.wsRoot, secondPath),
+      MOCK_SUMMARY_CONTENT.replace('My Research Paper', 'Second paper'),
+    );
+    const completion = vi
+      .fn<ClaudeClient['createCompletion']>()
+      .mockResolvedValueOnce(
+        ok({
+          content: MOCK_CONCEPT_PAGE,
+          inputTokens: 1,
+          outputTokens: 2,
+          model: 'model-first',
+          stopReason: 'end_turn',
+        }),
+      )
+      .mockResolvedValueOnce(
+        ok({
+          content: MOCK_CONCEPT_PAGE,
+          inputTokens: 3,
+          outputTokens: 4,
+          model: 'model-second',
+          stopReason: 'end_turn',
+        }),
+      );
+    const result = await extractConcepts(
+      { createCompletion: completion },
+      env.db,
+      env.wsRoot,
+      [SUMMARY_PATH, secondPath],
+      { batchSize: 1 },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw result.error;
+    expect(result.value.pages).toHaveLength(1);
+    const traceDir = join(env.wsRoot, 'audit', 'traces');
+    const lines = readdirSync(traceDir)
+      .filter((name) => name.endsWith('.jsonl'))
+      .flatMap((name) => readFileSync(join(traceDir, name), 'utf8').trim().split('\n'));
+    const trace = lines
+      .map((line) => JSON.parse(line) as { event_type: string; payload: Record<string, unknown> })
+      .find((entry) => entry.event_type === 'compile.extract');
+    const expected = completion.mock.calls.map(([system, user], batchIndex) => ({
+      phase: 'map',
+      attempt: 0,
+      batchIndex,
+      responseModel: batchIndex === 0 ? 'model-first' : 'model-second',
+      promptHashVersion: 'ico-prompt-v1',
+      promptHash: createHash('sha256')
+        .update(JSON.stringify(['ico-prompt-v1', system, user]), 'utf8')
+        .digest('hex'),
+    }));
+    expect(trace?.payload['modelCalls']).toEqual(expected);
+    expect(JSON.stringify(trace?.payload)).not.toContain(MOCK_SUMMARY_CONTENT);
   });
 
   // -------------------------------------------------------------------------

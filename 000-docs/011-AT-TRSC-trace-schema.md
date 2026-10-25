@@ -716,6 +716,58 @@ Records the result of a knowledge lint check.
 
 ---
 
+### 6.21 Compile model-call provenance (2026-10-25 extension)
+
+The five model-backed pass events `compile.summarize`, `compile.extract`,
+`compile.synthesize`, `compile.contradict` and `compile.gap` add a `modelCalls`
+array to their existing payload. This is an additive payload extension; the
+envelope, existing receipts and SQLite schema are unchanged. Older events can
+lack the array and are not backfilled.
+
+Each entry contains:
+
+| Field               | Meaning                                                         |
+| ------------------- | --------------------------------------------------------------- |
+| `phase`             | `summarize`, `map` or `reduce`                                  |
+| `attempt`           | Zero-based completion attempt in that phase/batch               |
+| `batchIndex`        | Zero-based map batch; absent for summary and reduce             |
+| `responseModel`     | The model string returned by the client adapter                 |
+| `promptHashVersion` | `ico-prompt-v1`                                                 |
+| `promptHash`        | Lowercase SHA-256 hexadecimal digest of the encoded prompt pair |
+
+The encoding is the UTF-8 bytes of
+`JSON.stringify(['ico-prompt-v1', systemPrompt, userPrompt])` using the exact
+JavaScript strings passed to `createCompletion`. No whitespace or Unicode
+normalization occurs. The tagged JSON array separates the two strings and
+preserves lone surrogates through JSON escapes. A changed prompt changes the
+commitment; changing only the reported model leaves the prompt hash unchanged.
+
+Summary receipts retain every completed validation attempt, including a rejected
+attempt preceding a successful retry, with each actual retry prompt. A final
+post-model validation rejection also retains that attempt history. Batched page
+receipts retain the calls that emitted raw pages merged into the final page,
+including shorter duplicates whose list entries were unioned. A call emitting
+multiple contributing pages appears once; separate calls remain separate even
+when their prompts and model IDs match. Contradiction reduce calls use their own
+system/user strings and phase. Calls producing no contributing page are not
+invented as contributors; this field is not a complete run-level call ledger.
+Post-model page rejection receipts carry the same contributor mapping.
+
+The deterministic `compile.link` event and pre-call `EMPTY_SOURCE` rejection
+receive no invented model identity. Existing page IDs, page content, source
+unions, token accounting and receipt-before-visibility ordering are preserved.
+This extension does not change the legacy compilation table's aggregate model
+field into per-page call lineage; use the trace array for that mapping.
+
+`responseModel` is client-reported metadata and can be an adapter fallback; it
+is not provider authentication or independent execution attestation. The hash
+does not reconstruct a prompt, conceal guessable inputs, or commit request
+options, transport framing, responses or credentials. No raw prompt or response
+is added by this extension. The existing tamper-evident chain can detect an
+edited predecessor through its successor; it does not prevent a local writer
+from rewriting and rehashing history. Reverting this feature stops adding the
+array to new events and does not migrate or rewrite earlier receipts.
+
 ## 7. Secret Field Deny-List
 
 Trace payloads must never contain secrets, credentials, or authentication material. The kernel enforces a deny-list at write time. Any event containing a denied field or value pattern is rejected — the field is stripped and a warning is logged.
