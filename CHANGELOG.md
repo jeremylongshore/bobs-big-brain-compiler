@@ -47,6 +47,8 @@
 
 ### Fixed
 
+- Preserve explicitly configured batch response-token ceilings above 8,000 while retaining the automatic scaling cap and per-call override priority.
+
 - Pass resolved workspace provider settings into `loadConfig`-based CLI clients so `.env`-only
   provider, wire, base URL, key and model values reach the selected transport.
   Environment variables retain precedence without exporting file settings into
@@ -487,8 +489,8 @@ consistency audit doc).
 **First stable release.** All 10 epics complete. The system is operator-ready:
 compiles a local-first knowledge base from raw sources, supports interactive
 Q&A grounded in compiled wiki, runs multi-agent research tasks, and generates
-durable artifacts — all with append-only audit traces and deterministic
-control-plane invariants.
+durable artifacts — all with append-only audit traces (by protocol; clarified 2026-10-25)
+and deterministic control-plane invariants.
 
 ### Added
 
