@@ -463,6 +463,8 @@ export function ensureFrontmatterFence(content: string): string {
 
 /** A page after dedupe/merge, carrying its normalized key and stable ID. */
 export interface MergedPage {
+  /** Raw-page positions contributing body or list membership to this merge. */
+  inputIndices: number[];
   /** Normalized title key the page was grouped under. */
   key: string;
   /** Deterministic UUIDv5 stamped into the page frontmatter. */
@@ -498,27 +500,48 @@ export interface MergePagesOptions {
  */
 export function mergePages(rawPages: readonly string[], options: MergePagesOptions): MergedPage[] {
   const fallback = options.fallbackTitle ?? 'untitled';
-  const groups = new Map<string, { title: string; chosen: string; ids: string[] }>();
+  const groups = new Map<
+    string,
+    {
+      title: string;
+      chosen: string;
+      chosenIndex: number;
+      ids: string[];
+      listInputIndices: number[];
+    }
+  >();
   const order: string[] = [];
 
-  for (const page of rawPages) {
+  for (const [inputIndex, page] of rawPages.entries()) {
     const title = extractFrontmatterField(page, 'title') ?? fallback;
     const key = normalizeTitle(title) || normalizeTitle(fallback) || 'untitled';
     const ids = parseFrontmatterList(page, options.listField);
 
     const existing = groups.get(key);
     if (existing === undefined) {
-      groups.set(key, { title, chosen: page, ids: [...ids] });
+      groups.set(key, {
+        title,
+        chosen: page,
+        chosenIndex: inputIndex,
+        ids: [...ids],
+        listInputIndices: ids.length > 0 ? [inputIndex] : [],
+      });
       order.push(key);
     } else {
       // Keep the longest page as the canonical body/definition.
       if (page.length > existing.chosen.length) {
         existing.chosen = page;
+        existing.chosenIndex = inputIndex;
         existing.title = title;
       }
+      let addedIds = false;
       for (const id of ids) {
-        if (!existing.ids.includes(id)) existing.ids.push(id);
+        if (!existing.ids.includes(id)) {
+          existing.ids.push(id);
+          addedIds = true;
+        }
       }
+      if (addedIds) existing.listInputIndices.push(inputIndex);
     }
   }
 
@@ -533,6 +556,12 @@ export function mergePages(rawPages: readonly string[], options: MergePagesOptio
     // page parseable by the spool reader (bead ...-57c). Already-fenced pages
     // are returned unchanged.
     content = ensureFrontmatterFence(content);
-    return { key, id, title: group.title, content };
+    // Only the chosen body and first suppliers of retained list entries
+    // contribute. Keep their original raw-page order, independent of which
+    // later body wins the longest-page comparison.
+    const inputIndices = [...new Set([group.chosenIndex, ...group.listInputIndices])].sort(
+      (a, b) => a - b,
+    );
+    return { key, id, title: group.title, content, inputIndices };
   });
 }

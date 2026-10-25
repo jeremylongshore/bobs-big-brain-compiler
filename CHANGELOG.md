@@ -45,6 +45,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- Record client-reported model IDs and versioned exact-prompt hashes in model-backed
+  compile traces, retaining retry attempts and all merged map/reduce contributors
+  without storing prompt text (`intentional-cognition-os-l13.13`).
+
 ### Fixed
 
 - Preserve explicitly configured batch response-token ceilings above 8,000 while retaining the automatic scaling cap and per-call override priority.

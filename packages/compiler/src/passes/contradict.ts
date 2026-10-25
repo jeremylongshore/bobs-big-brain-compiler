@@ -64,6 +64,11 @@ import {
   recordCompilationSources,
   resolveSummarySourceIds,
 } from './source-attribution.js';
+import {
+  contributingModelCalls,
+  type ModelCallProvenance,
+  modelCallProvenance,
+} from './trace-provenance.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -284,11 +289,12 @@ export async function detectContradictions(
   //    A single batch (small corpus) reproduces the old single-call behavior.
   const batches = chunkArray(summaries, batchSize);
   const rawPages: string[] = [];
+  const rawPageCalls: ModelCallProvenance[] = [];
   let inputTokens = 0;
   let outputTokens = 0;
   let responseModel = model;
 
-  for (const batch of batches) {
+  for (const [batchIndex, batch] of batches.entries()) {
     const summaryContent = batch.join('\n\n---\n\n');
     const userPrompt = buildUserPrompt({ compiledAt, model, summaryContent });
 
@@ -311,6 +317,11 @@ export async function detectContradictions(
     inputTokens += inTok;
     outputTokens += outTok;
     responseModel = respModel;
+    const callProvenance = modelCallProvenance(SYSTEM_PROMPT, userPrompt, respModel, {
+      phase: 'map',
+      batchIndex,
+      attempt: 0,
+    });
     // A hit token-ceiling silently drops pages — surface it loudly (bead u5t).
     if (wasTruncated(stopReason)) {
       process.stderr.write(
@@ -330,7 +341,10 @@ export async function detectContradictions(
 
     for (const page of content.split(PAGE_BREAK)) {
       const trimmed = page.trim();
-      if (trimmed.length > 0) rawPages.push(trimmed);
+      if (trimmed.length > 0) {
+        rawPages.push(trimmed);
+        rawPageCalls.push(callProvenance);
+      }
     }
   }
 
@@ -371,6 +385,12 @@ export async function detectContradictions(
       inputTokens += reduceIn;
       outputTokens += reduceOut;
       responseModel = reduceModel;
+      const reduceProvenance = modelCallProvenance(
+        REDUCE_SYSTEM_PROMPT,
+        reduceUserPrompt,
+        reduceModel,
+        { phase: 'reduce', attempt: 0 },
+      );
       if (wasTruncated(reduceStop)) {
         process.stderr.write(
           `[ico] WARNING: the cross-batch reduce response hit the ${maxTokens}-token ` +
@@ -392,6 +412,7 @@ export async function detectContradictions(
           // prompt; the reduce path validates explicitly.
           if (trimmed.length > 0 && extractFrontmatterField(trimmed, 'type') === 'contradiction') {
             rawPages.push(trimmed);
+            rawPageCalls.push(reduceProvenance);
           }
         }
       }
@@ -438,6 +459,7 @@ export async function detectContradictions(
     const outputCheck = checkModelOutput(page.content);
     if (!outputCheck.ok) {
       const rejectTrace = writeTrace(db, workspacePath, 'compile.validation.reject', {
+        modelCalls: contributingModelCalls(page.inputIndices, rawPageCalls),
         pass: 'compile.contradict',
         code: outputCheck.rejection.code,
         title: page.title,
@@ -532,6 +554,7 @@ export async function detectContradictions(
 
     // 7. Write trace event.
     const traceResult = writeTrace(db, workspacePath, 'compile.contradict', {
+      modelCalls: contributingModelCalls(page.inputIndices, rawPageCalls),
       compilationId,
       outputPath,
       tokensUsed,

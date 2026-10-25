@@ -30,6 +30,7 @@ import {
   type OutputRejectCode,
   stampPassProvenance,
 } from './output-filter.js';
+import { type ModelCallProvenance, modelCallProvenance } from './trace-provenance.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -229,6 +230,7 @@ export async function summarizeSource(
   let inputTokens = 0;
   let outputTokens = 0;
   let responseModel = model;
+  const modelCalls: ModelCallProvenance[] = [];
   let rejection: { code: OutputRejectCode; detail: string; excerpt: string } | null = null;
   let retried = false;
 
@@ -255,6 +257,12 @@ export async function summarizeSource(
     inputTokens += completionResult.value.inputTokens;
     outputTokens += completionResult.value.outputTokens;
     responseModel = completionResult.value.model;
+    modelCalls.push(
+      modelCallProvenance(SYSTEM_PROMPT, attemptPrompt, responseModel, {
+        phase: 'summarize',
+        attempt,
+      }),
+    );
 
     const junkCheck = checkModelOutput(content);
     if (!junkCheck.ok) {
@@ -291,6 +299,7 @@ export async function summarizeSource(
       detail: rejection.detail,
       excerpt: rejection.excerpt,
       retried,
+      modelCalls,
     });
     if (!rejectTrace.ok) {
       return err(rejectTrace.error);
@@ -365,6 +374,7 @@ export async function summarizeSource(
 
   // 8. Write trace event.
   const traceResult = writeTrace(db, workspacePath, 'compile.summarize', {
+    modelCalls,
     sourceId,
     outputPath,
     tokensUsed,
