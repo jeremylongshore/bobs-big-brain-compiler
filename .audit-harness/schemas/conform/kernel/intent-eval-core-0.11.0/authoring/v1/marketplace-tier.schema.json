@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jeremylongshore/intent-eval-core/schemas/authoring/v1/marketplace-tier.schema.json",
+  "title": "IS marketplace authoring tier — 3 universal folds + universalFolds composition",
+  "description": "The shared foundation every per-contract authoring schema (skill-frontmatter, plugin-manifest, agent-definition, mcp-config, hook-config, marketplace-catalog) inherits BY REFERENCE. Per ISEDC Session 8 charter DR-044 decision D7 (intent-eval-lab/000-docs/044-AT-DECR-isedc-council-session-8-sak-charter-2026-06-09.md), the marketplace tier is decomposed so that the THREE universal folds (deprecationRegistry, securityChecks, disclosureMarkers) are uniform across all six contracts, while `requiredFields` is specialized PER CONTRACT (a plugin-manifest's required set is not a skill's). The `universalFolds` $def is the allOf composition of exactly those three; each per-contract schema $refs it (by reference, not inline copy) and supplies its own `requiredFields` separately. The folds are intentionally open-world (no additionalProperties:false) — allOf composition requires each branch to tolerate fields the other branches add; closed-world checks belong in the per-contract schemas.",
+  "$comment": "PREDICATE valid_universalFolds(artifact) := deprecationRegistry(artifact) ∧ securityChecks(artifact) ∧ disclosureMarkers(artifact). Monotone; order-independent. A per-contract schema composes valid_C(artifact) := requiredFields_C(artifact) ∧ universalFolds(artifact) ∧ upstreamBase_C(artifact) ∧ overlay_C(artifact). securityChecks is UNIVERSAL-IMMUTABLE (D7(b)): add-only, never overridable, never subtracted. `requiredFields` was REMOVED from this foundation in the D7 refactor — it lives in each per-contract schema. Co-located changelogs: schemas/authoring/v1/CHANGELOG.md.",
+  "type": "object",
+  "$defs": {
+    "deprecationRegistry": {
+      "$comment": "UNIVERSAL FOLD 1/3 — field-deprecation migrations. Evolves via autonomous validator patch (SCHEMA_CHANGELOG NON-NEGOTIABLES item 6). A present deprecated key fails the fold; the message names the replacement. CHANGELOG: schemas/authoring/v1/CHANGELOG.md § deprecationRegistry. v1.0.0-draft: compatible-with → compatibility; when_to_use → description.",
+      "type": "object",
+      "not": {
+        "anyOf": [{ "required": ["compatible-with"] }, { "required": ["when_to_use"] }]
+      }
+    },
+    "securityChecks": {
+      "$comment": "UNIVERSAL FOLD 2/3 — UNIVERSAL-IMMUTABLE per DR-044 D7(b). Supply-chain hardening (CISO-owned). Add-only; never overridable by a per-contract schema; never subtracted. A CI meta-test asserts every contract $refs this fold by reference. name must not be a reserved word and must not contain XML angle brackets; description must not contain XML tags or shell-substitution sequences. CHANGELOG: schemas/authoring/v1/CHANGELOG.md § securityChecks. v1.0.0-draft.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "allOf": [
+            {
+              "not": {
+                "type": "string",
+                "enum": ["skill", "claude", "anthropic", "mcp", "plugin", "agent"]
+              }
+            },
+            { "not": { "type": "string", "pattern": "[<>]" } }
+          ]
+        },
+        "description": {
+          "not": { "type": "string", "pattern": "<[^>]+>|\\$\\{" }
+        }
+      }
+    },
+    "disclosureMarkers": {
+      "$comment": "UNIVERSAL FOLD 3/3 — progressive disclosure / token-economy (Karpathy-axis). description is bounded to a token budget (1536 chars). Only strings are constrained (non-strings pass — type is enforced by the per-contract schema, not this foundation). CHANGELOG: schemas/authoring/v1/CHANGELOG.md § disclosureMarkers. v1.0.0-draft.",
+      "type": "object",
+      "properties": {
+        "description": {
+          "not": { "type": "string", "minLength": 1537 }
+        }
+      }
+    },
+    "universalFolds": {
+      "$comment": "COMPOSITION — allOf of the three universal folds. Every per-contract schema $refs THIS (by reference). Adding/removing a fold is an architectural change requiring ISEDC review. CHANGELOG: schemas/authoring/v1/CHANGELOG.md § universalFolds (composition). v1.0.0-draft.",
+      "allOf": [
+        { "$ref": "#/$defs/deprecationRegistry" },
+        { "$ref": "#/$defs/securityChecks" },
+        { "$ref": "#/$defs/disclosureMarkers" }
+      ]
+    }
+  }
+}

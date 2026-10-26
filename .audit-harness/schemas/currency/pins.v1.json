@@ -1,0 +1,197 @@
+{
+  "pins_version": "currency-pins/v1",
+  "description": "Per-upstream-identity pin relation. Each upstream the harness/skills depend on carries ITS OWN pinned version + the date it was last verified against upstream (checked_at) + an advisory poll-freshness SLA (staleness_window_days, resolvable from the pin's class). The `currency` advisory report reads this datum and flags pins whose checked_at is older than their SLA — i.e. it makes the PIN'S OWN STALENESS detectable, without ever live-fetching. The SLA gates NOTHING except human attention: currency is advisory-only — it reports + (in /sync-testing-harness) opens PRs; it has no exit-code authority and never auto-fixes. Updating a pin (after a human re-verifies against upstream) is an engineer edit to this file + a fresh checked_at. Pins whose identity matches a surface in the intent-eval-lab upstream-surface registry (specs/upstream-surface-registry.v1.json, 16 monitored surfaces) use the registry surface id as their identity; where the registry declares no version, pinned_version is the sha256 prefix of the lab's vendored snapshot baseline (intent-eval-lab specs/snapshots/.sha/<surface>.sha).",
+  "$comment": "2026-06-12 [9k5h.10]: terminology — the former 'bounded-staleness window' framing is now the advisory 'poll-freshness SLA' (same datum, honest name: it is a polling-attention SLA, not a consistency bound, and it gates nothing). Renamed pins to lab-registry surface ids: 'mcp-spec' -> 'mcp-spec-docs', 'claude-code' -> 'claude-code-changelog' ('agentskills-spec' already matched). Added one pin per remaining registry surface (13 new; 16 registry pins total) + kept the 3 internal-contract pins (skill-md-schema, gate-result-predicate, anthropic-sdk). The per-pin 'class' field is an additive, backward-compatible v1 extension (window resolution: explicit staleness_window_days > class SLA > default_staleness_window_days), so no pins.v2.json bump is needed.",
+  "default_staleness_window_days": 90,
+  "staleness_classes": {
+    "spec-page": {
+      "staleness_window_days": 7,
+      "description": "Human-readable spec / reference doc pages (agentskills.io, modelcontextprotocol.io, code.claude.com + platform.claude.com .md shims). Re-verify weekly."
+    },
+    "schema-file": {
+      "staleness_window_days": 7,
+      "description": "Machine-readable schema files (e.g. the MCP schema.ts) — exact field-level diff possible upstream. Re-verify weekly."
+    },
+    "release-feed": {
+      "staleness_window_days": 3,
+      "description": "Release/version signals (GH releases.atom, commits.atom, npm version probes, changelogs, engineering-blog index) — earliest material-change signal, so the tightest SLA. Re-verify every 3 days."
+    },
+    "internal-contract": {
+      "staleness_window_days": null,
+      "description": "Intent Solutions internal contracts (not lab-registry surfaces). No shared class SLA; each pin carries its own staleness_window_days."
+    }
+  },
+  "pins": [
+    {
+      "identity": "agentskills-spec",
+      "class": "spec-page",
+      "pinned_version": "1.0.0",
+      "source": "https://agentskills.io/specification.md",
+      "checked_at": "2026-06-12",
+      "staleness_window_days": 7,
+      "notes": "Open SKILL.md standard (compatibility/metadata/license fields). Lab-registry surface (wave 0, official-spec)."
+    },
+    {
+      "identity": "platform-skills-overview",
+      "class": "spec-page",
+      "pinned_version": "sha256:0bd9758afca5",
+      "source": "https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview.md",
+      "checked_at": "2026-06-12",
+      "staleness_window_days": 7,
+      "notes": "Anthropic doc page about agent skills. Lab-registry surface (wave 0, anthropic-doc); version = vendored snapshot sha prefix."
+    },
+    {
+      "identity": "mcp-spec-docs",
+      "class": "spec-page",
+      "pinned_version": "2025-06-18",
+      "source": "https://modelcontextprotocol.io/specification/draft",
+      "checked_at": "2026-06-12",
+      "staleness_window_days": 7,
+      "notes": "MCP protocol spec revision the .mcp.json conform schema targets. Lab-registry surface (wave 1, official-spec); renamed from 'mcp-spec' 2026-06-12."
+    },
+    {
+      "identity": "claude-hooks",
+      "class": "spec-page",
+      "pinned_version": "sha256:0b644e2208f8",
+      "source": "https://code.claude.com/docs/en/hooks.md",
+      "checked_at": "2026-06-12",
+      "staleness_window_days": 7,
+      "notes": "Claude Code hooks reference (hook-config contract). Lab-registry surface (wave 1, reference); version = vendored snapshot sha prefix."
+    },
+    {
+      "identity": "claude-settings",
+      "class": "spec-page",
+      "pinned_version": "sha256:491b623ae274",
+      "source": "https://code.claude.com/docs/en/settings.md",
+      "checked_at": "2026-06-12",
+      "staleness_window_days": 7,
+      "notes": "Claude Code settings reference (hook-config contract). Lab-registry surface (wave 1, reference); version = vendored snapshot sha prefix."
+    },
+    {
+      "identity": "claude-slash-commands",
+      "class": "spec-page",
+      "pinned_version": "sha256:d7d367c7d004",
+      "source": "https://code.claude.com/docs/en/slash-commands.md",
+      "checked_at": "2026-06-12",
+      "staleness_window_days": 7,
+      "notes": "Claude Code slash-commands reference. Lab-registry surface (wave 1, reference); version = vendored snapshot sha prefix."
+    },
+    {
+      "identity": "plugins-reference",
+      "class": "spec-page",
+      "pinned_version": "sha256:bbb4618ec8b1",
+      "source": "https://code.claude.com/docs/en/plugins-reference.md",
+      "checked_at": "2026-06-12",
+      "staleness_window_days": 7,
+      "notes": "Claude Code plugin-manifest reference. Lab-registry surface (wave 2, reference); version = vendored snapshot sha prefix."
+    },
+    {
+      "identity": "sub-agents",
+      "class": "spec-page",
+      "pinned_version": "sha256:824162201ae4",
+      "source": "https://code.claude.com/docs/en/sub-agents.md",
+      "checked_at": "2026-06-12",
+      "staleness_window_days": 7,
+      "notes": "Claude Code sub-agents reference (agent-definition contract). Lab-registry surface (wave 2, reference); version = vendored snapshot sha prefix."
+    },
+    {
+      "identity": "plugin-marketplaces",
+      "class": "spec-page",
+      "pinned_version": "sha256:1f37e87ff344",
+      "source": "https://code.claude.com/docs/en/plugin-marketplaces.md",
+      "checked_at": "2026-06-12",
+      "staleness_window_days": 7,
+      "notes": "Claude Code marketplace-catalog reference. Lab-registry surface (wave 2, reference); version = vendored snapshot sha prefix."
+    },
+    {
+      "identity": "mcp-schema-ts",
+      "class": "schema-file",
+      "pinned_version": "sha256:1bf94a601817",
+      "source": "https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/main/schema/draft/schema.ts",
+      "checked_at": "2026-06-12",
+      "staleness_window_days": 7,
+      "notes": "MCP machine-readable schema (mcp-config contract; exact field-level diff possible). Lab-registry surface (wave 1, official-spec-machine-readable); version = vendored snapshot sha prefix."
+    },
+    {
+      "identity": "skills-releases",
+      "class": "release-feed",
+      "pinned_version": "sha256:8ab0fc2a54fa",
+      "source": "https://github.com/anthropics/skills/releases.atom + commits/main.atom",
+      "checked_at": "2026-06-12",
+      "staleness_window_days": 3,
+      "notes": "anthropics/skills release + commit feeds (skill-frontmatter contract). Lab-registry surface (wave 0, release-feed); version = vendored snapshot sha prefix."
+    },
+    {
+      "identity": "mcp-releases",
+      "class": "release-feed",
+      "pinned_version": "sha256:1b180712c47f",
+      "source": "https://github.com/modelcontextprotocol/modelcontextprotocol/releases.atom",
+      "checked_at": "2026-06-12",
+      "staleness_window_days": 3,
+      "notes": "MCP spec-repo release feed (mcp-config contract). Lab-registry surface (wave 2, release-feed); version = vendored snapshot sha prefix."
+    },
+    {
+      "identity": "claude-code-changelog",
+      "class": "release-feed",
+      "pinned_version": "2.1.152",
+      "source": "https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md",
+      "checked_at": "2026-06-12",
+      "staleness_window_days": 3,
+      "notes": "Claude Code release changelog (version-signal contract; 2.1.152 added disallowed-tools frontmatter). Lab-registry surface (wave 0, changelog); renamed from 'claude-code' 2026-06-12."
+    },
+    {
+      "identity": "claude-code-npm",
+      "class": "release-feed",
+      "pinned_version": "2.1.152",
+      "source": "npm view @anthropic-ai/claude-code version",
+      "checked_at": "2026-06-12",
+      "staleness_window_days": 3,
+      "notes": "Claude Code npm version probe (version-signal contract). Lab-registry surface (wave 0, changelog); version mirrors the last verified npm version."
+    },
+    {
+      "identity": "claude-code-releases",
+      "class": "release-feed",
+      "pinned_version": "sha256:556b4faba702",
+      "source": "https://github.com/anthropics/claude-code/releases.atom",
+      "checked_at": "2026-06-12",
+      "staleness_window_days": 3,
+      "notes": "Claude Code GH release feed (version-signal contract). Lab-registry surface (wave 2, release-feed); version = vendored snapshot sha prefix."
+    },
+    {
+      "identity": "anthropic-engineering",
+      "class": "release-feed",
+      "pinned_version": "sha256:f99507064aeb",
+      "source": "https://www.anthropic.com/engineering",
+      "checked_at": "2026-06-12",
+      "staleness_window_days": 3,
+      "notes": "Anthropic engineering-blog index (cross-cutting-signal contract). Lab-registry surface (wave 0, release-feed); version = vendored snapshot sha prefix."
+    },
+    {
+      "identity": "skill-md-schema",
+      "class": "internal-contract",
+      "pinned_version": "3.7.0",
+      "source": "claude-code-plugins 000-docs/SCHEMA_CHANGELOG.md",
+      "checked_at": "2026-06-06",
+      "staleness_window_days": 90,
+      "notes": "IS SKILL.md schema the conform skillmd-frontmatter floor tracks (full rubric stays in /validate-skillmd)."
+    },
+    {
+      "identity": "gate-result-predicate",
+      "class": "internal-contract",
+      "pinned_version": "v1",
+      "source": "@intentsolutions/core gate-result/v1 (https://evals.intentsolutions.io/gate-result/v1)",
+      "checked_at": "2026-06-06",
+      "staleness_window_days": 180,
+      "notes": "Evidence Bundle predicate every gate emits against. Immutable URI; bump = new version, never overwrite."
+    },
+    {
+      "identity": "anthropic-sdk",
+      "class": "internal-contract",
+      "pinned_version": "unverified",
+      "source": "https://github.com/anthropics/anthropic-sdk-python (+ -typescript)",
+      "checked_at": "2026-06-06",
+      "staleness_window_days": 90,
+      "notes": "Anthropic SDK surface referenced by downstream skills; pinned_version=unverified until first deliberate verification."
+    }
+  ]
+}

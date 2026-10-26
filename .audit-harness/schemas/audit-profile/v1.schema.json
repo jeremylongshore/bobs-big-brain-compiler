@@ -1,0 +1,294 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://evals.intentsolutions.io/audit-profile/v1.schema.json",
+  "title": "Audit Profile (v1)",
+  "description": "Closed, versioned, hash-bearing value describing the audit profile of a repository: the UNION of detected classifications, the resolved gate set (each with applicability + enforcement + dimension), and the explicit unresolved residue. Produced by `audit-harness classify` as read-only stdout JSON; the classifier NEVER mutates the repo. A profile is a deterministic function of (repo contents at commit_sha, the canonical dimension-to-gate registry pinned by registry_hash, and any engineer .audit-harness.yml overrides). Mirrors the gate-result/v1 closed-value conventions (additionalProperties:false, version-in-$id) so the two predicates compose in one Evidence Bundle.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "subject",
+    "classifier",
+    "registry_hash",
+    "timestamp",
+    "classifications",
+    "gates",
+    "unresolved"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "description": "Self-describing schema identity. MUST equal the version segment of $id.",
+      "const": "audit-profile/v1"
+    },
+    "subject": {
+      "description": "Identity of the repository (or monorepo package) the profile was computed for.",
+      "type": "object",
+      "required": [
+        "name",
+        "commit_sha"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Repository or package name (e.g. 'audit-harness', '@j-rig/core').",
+          "minLength": 1
+        },
+        "commit_sha": {
+          "type": "string",
+          "description": "Git commit SHA the classification was computed against. Full 40-hex or short 7-hex.",
+          "pattern": "^[a-f0-9]{7,40}$"
+        },
+        "root": {
+          "type": "string",
+          "description": "Repo-relative path of the classified root. '.' for the repo root; a package path (e.g. 'packages/core') for a monorepo member classified independently.",
+          "default": "."
+        }
+      }
+    },
+    "classifier": {
+      "type": "string",
+      "description": "Tool + semver identifier that produced the profile. Same shape as gate-result/v1 'runner'.",
+      "pattern": "^[a-z0-9][a-z0-9-]*@[0-9]+\\.[0-9]+\\.[0-9]+(-[A-Za-z0-9.-]+)?(\\+[A-Za-z0-9.-]+)?$",
+      "examples": [
+        "audit-harness@1.2.0"
+      ]
+    },
+    "registry_hash": {
+      "type": "string",
+      "description": "SHA-256 of the canonical dimension-to-gate registry datum the profile was resolved against, prefixed sha256:. The registry is the single canonical source of 'which gates apply to repo-type X'; layer-applicability.md and TESTING.md are projections of it. Recording its hash makes a profile reproducible against the exact registry version.",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 UTC timestamp. Moment the classifier emitted the profile."
+    },
+    "classifications": {
+      "type": "array",
+      "description": "The UNION of all repo-type classifications detected (NOT a single winner). A repo that is a TS monorepo AND ships SKILL.md AND an MCP server carries all three entries; picking one silently drops the others' gates (a false-negative, worse than a false-positive).",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/classification"
+      }
+    },
+    "dimensions": {
+      "type": "array",
+      "description": "Convenience projection: the distinct audit dimensions covered by the resolved gates. Derivable from gates[].dimension; consumers MUST treat gates[] as authoritative.",
+      "items": {
+        "$ref": "#/$defs/dimension"
+      },
+      "uniqueItems": true
+    },
+    "gates": {
+      "type": "array",
+      "description": "The resolved gate set for this repo: every gate the registry maps to the detected classifications, each tagged with applicability (from the registry) and enforcement (advisory by default; blocking only when engineer-pinned in TESTING.md and FP-rate-gated).",
+      "items": {
+        "$ref": "#/$defs/gate"
+      }
+    },
+    "unresolved": {
+      "type": "array",
+      "description": "The explicit residue the DETERMINISTIC classifier could not resolve. This is the ONLY surface a Claude inspector (/audit-tests) may refine — it never co-authors the deterministic classification value, so CI stays reproducible. An empty array means a fully deterministic profile.",
+      "items": {
+        "$ref": "#/$defs/unresolved_item"
+      }
+    },
+    "overrides": {
+      "type": "object",
+      "description": "Engineer-owned .audit-harness.yml directives that influenced this profile (classification pins, per-gate advisory/disable toggles, kill-switch). Informative provenance; the effect is already baked into classifications[] and gates[].",
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Path of the override file applied, repo-relative.",
+          "examples": [
+            ".audit-harness.yml"
+          ]
+        },
+        "override_hash": {
+          "type": "string",
+          "description": "SHA-256 of the applied override file, prefixed sha256:.",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "kill_switch": {
+          "type": "boolean",
+          "description": "True when AUDIT_HARNESS_DISABLE=1 or the override file disabled all gates. A killed profile still emits classifications for visibility but marks every gate enforcement=disabled.",
+          "default": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "dimension": {
+      "type": "string",
+      "description": "The comprehensive audit dimensions. testing-depth = the 7-layer pyramid; conformance = artifact/schema/protocol validation; currency = upstream-drift (advisory only); security = supply-chain; hygiene = repo docs/links/changelog; skill-quality = behavioral verdicts consumed from j-rig.",
+      "enum": [
+        "testing-depth",
+        "conformance",
+        "currency",
+        "security",
+        "hygiene",
+        "skill-quality"
+      ]
+    },
+    "classification": {
+      "type": "object",
+      "required": [
+        "kind",
+        "confidence"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "Repo-type or artifact-kind classification. The first block mirrors layer-applicability.md repo types; the second covers Claude-ecosystem artifact kinds; 'regulated' is an overlay that escalates gate severity.",
+          "enum": [
+            "service",
+            "api",
+            "frontend",
+            "cli",
+            "library",
+            "embedded",
+            "monorepo",
+            "regulated",
+            "skill",
+            "agent",
+            "hook",
+            "mcp",
+            "plugin",
+            "marketplace",
+            "action",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "type": "string",
+          "description": "How the classification was reached. 'declared' = an explicit engineer override/marker; 'detected' = an unambiguous deterministic signal; 'inferred' = a weaker heuristic; 'unresolved' = the classifier could not decide (a matching entry MUST appear in unresolved[]).",
+          "enum": [
+            "declared",
+            "detected",
+            "inferred",
+            "unresolved"
+          ]
+        },
+        "signals": {
+          "type": "array",
+          "description": "Deterministic evidence for the classification (e.g. 'package.json:react', 'SKILL.md present', 'pnpm-workspace.yaml').",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "required": [
+        "gate_id",
+        "dimension",
+        "applicability",
+        "enforcement"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "gate_id": {
+          "type": "string",
+          "description": "Pipeline-hop-qualified gate identifier, same regex as gate-result/v1 gate_id (tool:side:gate-id). The gate-result row a run later emits for this gate MUST carry the same gate_id.",
+          "pattern": "^[a-z0-9][a-z0-9-]*:(client|server|ci|sandbox|local):[a-zA-Z0-9][a-zA-Z0-9.-]*$",
+          "examples": [
+            "audit-harness:ci:crap-score",
+            "audit-harness:local:conform-skillmd",
+            "audit-harness:ci:secrets-gitleaks"
+          ]
+        },
+        "dimension": {
+          "$ref": "#/$defs/dimension"
+        },
+        "applicability": {
+          "type": "string",
+          "description": "From the registry, given the detected classifications. required = P0 (✅); recommended = P1 advisory (⭕); conditional = fires P0/P1 only if a sibling signal is present (⚠); waived = not run for this repo type (❌).",
+          "enum": [
+            "required",
+            "recommended",
+            "conditional",
+            "waived"
+          ]
+        },
+        "enforcement": {
+          "type": "string",
+          "description": "What a FAIL does. New gates ship 'advisory' (exit 0, finding logged). 'blocking' is earned: an engineer pins it in the hash-pinned TESTING.md after the gate shows a measured false-positive rate below the stated bar on the IEP corpus. 'disabled' = waived or kill-switched.",
+          "enum": [
+            "blocking",
+            "advisory",
+            "disabled"
+          ]
+        },
+        "result_class_default": {
+          "type": "string",
+          "description": "The result class a successful no-finding run would emit (informative). INDETERMINATE is reserved for infra failures (≠ policy failure): pure-local policy gates fail closed (FAIL); network-touching checks fail open/advisory (INDETERMINATE).",
+          "enum": [
+            "PASS",
+            "FAIL",
+            "ADVISORY",
+            "NOT_APPLICABLE",
+            "INDETERMINATE"
+          ]
+        },
+        "tool": {
+          "type": "string",
+          "description": "External tool this gate shells out to, if any (e.g. 'gitleaks', 'osv-scanner', 'spectral', 'ajv', 'markdownlint', 'lychee'). Absent for native/policy gates. Missing tools are unmeasured/advisory by default. A runner's explicit fail-closed mode may instead FAIL when the gate is applicable; scan --fail-closed does this for OSV when a supported dependency input exists.",
+          "examples": [
+            "gitleaks",
+            "osv-scanner",
+            "spectral"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "applicability": {
+                "const": "waived"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "enforcement": {
+                "const": "disabled"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "unresolved_item": {
+      "type": "object",
+      "required": [
+        "kind",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "What could not be resolved (e.g. 'repo-type', 'monorepo-package-boundary', 'is-published-library').",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "description": "Why the deterministic classifier abstained — the question a human (or /audit-tests) must answer.",
+          "minLength": 1
+        },
+        "candidates": {
+          "type": "array",
+          "description": "The candidate classifications the classifier was torn between, if any.",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

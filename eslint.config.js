@@ -13,6 +13,16 @@ export default tseslint.config(
   // --- Base JS recommended (applies to all non-ignored files) ---
   js.configs.recommended,
 
+  // The official vendored CLI is a Node CommonJS entry point.
+  // Keep recommended rules active while matching its actual module environment.
+  {
+    files: ['.audit-harness/bin/audit-harness.js'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: globals.node,
+    },
+  },
+
   // --- TypeScript with type-checking — scoped to .ts files only ---
   {
     files: ['**/*.ts'],

@@ -10,7 +10,7 @@ SCRIPTS="${HARNESS_DIR}/scripts"
 
 if [[ ! -d "${SCRIPTS}" ]]; then
   echo "✗ audit-harness: scripts not found at ${SCRIPTS}" >&2
-  echo "  re-run the installer: curl -sSL https://raw.githubusercontent.com/jeremylongshore/audit-harness/main/install.sh | bash" >&2
+  echo "  re-run the installer: curl -sSL https://raw.githubusercontent.com/jeremylongshore/intent-audit-harness/main/install.sh | bash" >&2
   exit 2
 fi
 
@@ -30,6 +30,10 @@ Commands:
   bias                     Count test-bias patterns
   gherkin-lint             Advisory Gherkin quality check
   crap [args...]           CRAP scorer (requires python3 + radon/gocyclo)
+  classify [repo]          Read-only repo classifier -> audit-profile/v1 (python3)
+  conform [repo] [--strict] [--tier floor|marketplace]
+                           Read-only conformance gate-runner -> gate-result/v1 rows,
+                           against the schemas vendored in .audit-harness/schemas/
   --version, -v            Print installed version
   --help, -h               This help
 USAGE
@@ -47,6 +51,8 @@ case "${cmd}" in
   bias)         exec bash "${SCRIPTS}/bias-count.sh" "$@" ;;
   gherkin-lint) exec bash "${SCRIPTS}/gherkin-lint.sh" "$@" ;;
   crap)         exec python3 "${SCRIPTS}/crap-score.py" "$@" ;;
+  classify)     exec python3 "${SCRIPTS}/classify.py" "$@" ;;
+  conform)      exec python3 "${SCRIPTS}/conform.py" "$@" ;;
   --version|-v) cat "${HARNESS_DIR}/VERSION" 2>/dev/null || echo "unknown" ;;
   --help|-h|'') usage; exit 0 ;;
   *)

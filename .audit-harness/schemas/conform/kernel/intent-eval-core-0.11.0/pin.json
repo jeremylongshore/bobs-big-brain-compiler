@@ -1,0 +1,20 @@
+{
+  "$comment": "Pin record for the vendored, UNMODIFIED subset of the kernel's authoring/v1 skill-frontmatter contract. conform.py --tier marketplace refuses to use these files unless every sha256 below matches; this file's own sha256 is the policy_hash of every marketplace-tier row. Refresh: npm pack @intentsolutions/core@<new>, copy package/schemas/authoring/v1/<same paths> byte-for-byte, regenerate this file, re-pin .harness-hash. Never hand-edit a vendored schema.",
+  "package": "@intentsolutions/core",
+  "version": "0.11.0",
+  "source": "https://registry.npmjs.org/@intentsolutions/core/-/core-0.11.0.tgz",
+  "tarball_sha256": "bb62e132dfc08a02ab3b821569f3f4d57205612b44fc41732bce85c1f2486756",
+  "integrity": "sha512-c5SqMWOyB+47WZk+E/R4Ytru+TPG+A3t3kIYam2IZMipKS+PXc9yryG0+1/fn+YpF4I1DJdoA3d8EQ15WrTHYg==",
+  "tarball_path_prefix": "package/ (LICENSE) and package/schemas/ (authoring/v1/*)",
+  "license": "Apache-2.0",
+  "entries": {
+    "skillmd": "authoring/v1/skill-frontmatter.schema.json"
+  },
+  "files": {
+    "LICENSE": "sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "authoring/v1/is-overlay/skill-frontmatter.v1.json": "sha256:cfd2da92e71246d6d26abfbff49beef0bb6dcd3b30af64107ae636d0cbc53fc3",
+    "authoring/v1/marketplace-tier.schema.json": "sha256:ae6ce3351335fd829a7f70b6f4094fed0b95607baa185ac1b4621a87e2c7017c",
+    "authoring/v1/skill-frontmatter.schema.json": "sha256:3a02f3eba5aef870349d94e49ccbd8d49352452ebc70aff80e4d7c3ae3b8b166",
+    "authoring/v1/upstream-base/skill-frontmatter.v1.json": "sha256:32ccd48d6aff5484b763372701ceccb63a5bef1c8acd24d50a5fc045215d9b79"
+  }
+}

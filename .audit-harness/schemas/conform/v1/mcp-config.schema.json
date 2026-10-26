@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://evals.intentsolutions.io/conform/v1/mcp-config.schema.json",
+  "title": ".mcp.json MCP server config — deterministic structural floor (conform/v1)",
+  "description": "The DETERMINISTIC STRUCTURAL FLOOR for a Claude .mcp.json: it parses, declares an mcpServers map, and each declared server is launchable (carries either a `command` for a stdio server or a `url` for a remote sse/http server). Server entries keep additionalProperties:true for forward-compat with newer transport fields; the floor only asserts the launch contract + types of known keys.",
+  "type": "object",
+  "required": ["mcpServers"],
+  "additionalProperties": true,
+  "properties": {
+    "mcpServers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true,
+        "anyOf": [
+          { "required": ["command"] },
+          { "required": ["url"] }
+        ],
+        "properties": {
+          "command": { "type": "string", "minLength": 1 },
+          "args": { "type": "array", "items": { "type": "string" } },
+          "env": { "type": "object" },
+          "url": { "type": "string", "minLength": 1 },
+          "type": { "type": "string", "enum": ["stdio", "sse", "http"] },
+          "headers": { "type": "object" },
+          "cwd": { "type": "string" }
+        }
+      }
+    }
+  }
+}
