@@ -1,6 +1,7 @@
 """Hermetic process proofs; never load the operator's brain or credentials."""
 
 import importlib.util
+import datetime as dt
 import fcntl
 import json
 import os
@@ -90,6 +91,156 @@ if os.environ.get("FIXTURE_OUTCOME")=="success":
     def run_wrapper(self):
         return subprocess.run(["bash", str(HERE / "teamkb-compile-daily.sh")], env=self.env,
                               capture_output=True, text=True, timeout=15)
+
+    def mode_probe(self, history, state=None, override=None, soak="3", verified_history=False,
+                   dry_run=False, raw_tail="", already_verified=False):
+        """Stop at a deliberately denied fixture preflight, before model/MCP work."""
+        self.decisions.write_text("".join(json.dumps(row) + "\n" for row in history) + raw_tail)
+        mode_file = self.root / ".local/state/teamkb-compile-daily/mode"
+        mode_file.parent.mkdir(parents=True, exist_ok=True)
+        if state is not None:
+            mode_file.write_text(state + "\n")
+        if verified_history:
+            for row in history:
+                date = row.get("date") if isinstance(row, dict) else None
+                if not isinstance(date, str):
+                    continue
+                try:
+                    digest = proof.decision_hash(self.decisions, date, "digest")
+                except (ValueError, TypeError):
+                    continue
+                if digest:
+                    (mode_file.parent / f"verified-{date}.json").write_text(json.dumps({
+                        "event": "compile_verified", "date": date, "mode": "digest",
+                        "decision_sha256": digest, "audit": {"ok": True}}))
+        self.preflight.write_text("#!/bin/sh\nexit 23\n")
+        env = {"HOME": str(self.root), "PATH": "/usr/bin:/bin", "LANG": "C",
+               "TEAMKB_HOME": str(self.root / ".teamkb"),
+               "TEAMKB_COMPILE_DATE": "2026-09-08",
+               "TEAMKB_COMPILE_SCRATCH": str(self.root / "scratch"),
+               "TEAMKB_C8_PREFLIGHT": str(self.preflight),
+               "TEAMKB_C8_GATE": str(self.gate),
+               "TEAMKB_COMPILE_SOAK_NIGHTS": soak,
+               "TEAMKB_ALERT_FLOOR": str(self.root / "absent-alert-floor.sh"),
+               "MINIMAX_API_KEY": "fixture-key-never-log",
+               "MINIMAX_SOPS_FILE": str(self.root / "absent"),
+               "CLAUDE_BIN": str(self.agent), "TEAMKB_AGENT": "minimax"}
+        if override is not None:
+            env["TEAMKB_COMPILE_MODE"] = override
+        if dry_run:
+            env["TEAMKB_COMPILE_DRYRUN"] = "1"
+        result = subprocess.run(["bash", str(HERE / "teamkb-compile-daily.sh")],
+                                env=env, capture_output=True, text=True, timeout=10)
+        if already_verified:
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("Audit record already exists", result.stdout)
+        else:
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertIn("C8-live preflight failed", result.stdout)
+        self.assertFalse((self.root / "agent-ran").exists())
+        return result, mode_file
+
+    def test_failed_digest_rows_do_not_graduate(self):
+        history = [{"date": f"2026-09-0{n}", "mode": "digest", "error": "provider"}
+                   for n in (1, 2, 3)]
+        result, mode_file = self.mode_probe(history)
+        self.assertIn("mode=digest", result.stdout)
+        self.assertNotIn("SELF-GRADUATED", result.stdout)
+        self.assertEqual(mode_file.read_text().strip(), "digest")
+
+    @staticmethod
+    def digest_outcome(date):
+        end = (dt.date.fromisoformat(date) + dt.timedelta(days=1)).isoformat()
+        return {"date": date, "window": {"start": date, "end": end},
+                "mode": "digest", "govern": None, "candidates": []}
+
+    def test_mode_resolution_default_state_and_override(self):
+        for state, override, expected, source in (
+                (None, None, "digest", "default(seeded)"),
+                ("auto", None, "auto", "state-file"),
+                ("digest", "auto", "auto", "env-override"),
+                ("auto", "digest", "digest", "env-override"),
+                ("invalid", None, "digest", "state-file"),
+                ("digest", "invalid", "digest", "env-override")):
+            with self.subTest(state=state, override=override):
+                mode_file = self.root / ".local/state/teamkb-compile-daily/mode"
+                mode_file.unlink(missing_ok=True)
+                result, mode_file = self.mode_probe([], state=state, override=override)
+                self.assertIn(f"mode={expected} src={source}", result.stdout)
+                self.assertEqual(mode_file.read_text().strip(), state or "digest")
+
+    def test_verified_digest_soak_below_at_and_above_threshold(self):
+        for count in (2, 3, 4):
+            with self.subTest(count=count):
+                history = [self.digest_outcome(f"2026-09-0{n}") for n in range(1, count + 1)]
+                result, mode_file = self.mode_probe(history, state="digest", verified_history=True)
+                mode = "auto" if count >= 3 else "digest"
+                self.assertIn(f"mode={mode}", result.stdout)
+                self.assertIn(f"soak={count}/3", result.stdout)
+                self.assertEqual(mode_file.read_text().strip(), mode)
+
+    def test_repeated_digest_rows_count_as_one_night(self):
+        history = [self.digest_outcome("2026-09-01")] * 3
+        result, mode_file = self.mode_probe(history, verified_history=True)
+        self.assertIn("soak=1/3", result.stdout)
+        self.assertEqual(mode_file.read_text().strip(), "digest")
+
+    def test_valid_digest_without_verification_is_not_a_clean_night(self):
+        history = [self.digest_outcome(f"2026-09-0{n}") for n in (1, 2, 3)]
+        result, mode_file = self.mode_probe(history)
+        self.assertIn("soak=0/3", result.stdout)
+        self.assertEqual(mode_file.read_text().strip(), "digest")
+
+    def test_only_completed_valid_error_free_digest_dates_count(self):
+        bad_window = self.digest_outcome("2026-09-03")
+        bad_window["window"]["end"] = "2026-09-03"
+        error = self.digest_outcome("2026-09-04")
+        error["error"] = "verification failed"
+        history = [self.digest_outcome("2026-09-01"),
+                   {"date": "2026-09-02", "mode": "digest", "error": "provider"},
+                   bad_window, error, record("2026-09-05"),
+                   self.digest_outcome("2026-09-08"), self.digest_outcome("2026-09-09"),
+                   {"date": "not-a-date", "mode": "digest", "candidates": []},
+                   {"date": 123, "mode": "digest"}, ["not an outcome"]]
+        result, mode_file = self.mode_probe(history, verified_history=True,
+                                          raw_tail='{broken "mode": "digest"\n', already_verified=True)
+        self.assertIn("soak=1/3", result.stdout)
+        self.assertEqual(mode_file.read_text().strip(), "digest")
+
+    def test_changed_digest_decision_cannot_reuse_earlier_read_proof(self):
+        history = [self.digest_outcome(f"2026-09-0{n}") for n in (1, 2, 3)]
+        _, mode_file = self.mode_probe(history, state="digest", verified_history=True, dry_run=True)
+        history[0]["candidates"] = [{"text": "changed fixture decision"}]
+        result, mode_file = self.mode_probe(history, state="digest")
+        self.assertIn("soak=2/3", result.stdout)
+        self.assertEqual(mode_file.read_text().strip(), "digest")
+
+    def test_explicit_digest_override_does_not_graduate_or_overwrite_state(self):
+        history = [self.digest_outcome(f"2026-09-0{n}") for n in (1, 2, 3)]
+        result, mode_file = self.mode_probe(history, state="digest", override="digest", verified_history=True)
+        self.assertIn("mode=digest src=env-override", result.stdout)
+        self.assertNotIn("SELF-GRADUATED", result.stdout)
+        self.assertEqual(mode_file.read_text().strip(), "digest")
+
+    def test_dry_run_does_not_persist_graduation_but_real_probe_does(self):
+        history = [self.digest_outcome(f"2026-09-0{n}") for n in (1, 2, 3)]
+        result, mode_file = self.mode_probe(history, state="digest", verified_history=True, dry_run=True)
+        self.assertIn("graduated=1", result.stdout)
+        self.assertEqual(mode_file.read_text().strip(), "digest")
+        result, mode_file = self.mode_probe(history, verified_history=True)
+        self.assertIn("graduated=1", result.stdout)
+        self.assertEqual(mode_file.read_text().strip(), "auto")
+        result, mode_file = self.mode_probe([])
+        self.assertIn("mode=auto src=state-file", result.stdout)
+        self.assertNotIn("SELF-GRADUATED", result.stdout)
+
+    def test_dispatch_rejects_invalid_mode_before_starting_agent(self):
+        env = {"HOME": str(self.root), "PATH": "/usr/bin:/bin", "TEAMKB_COMPILE_MODE": "invalid"}
+        result = subprocess.run(["python3", str(HERE / "nightly-entry.py")], env=env,
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("invalid or unavailable persistent state", result.stderr)
+        self.assertFalse((self.root / "agent-ran").exists())
 
     def test_exit_zero_without_governed_outcome_is_failure(self):
         result = self.run_wrapper()
