@@ -2,8 +2,8 @@
 # Nightly autonomous /teamkb-compile — compiles yesterday's work into the governed brain.
 #
 # REPO-CANONICAL COPY (bead intentional-cognition-os-l13.9). This is the versioned
-# distiller payload: the umbrella installs reviewed Git objects into a
-# commit-addressed bundle; its ~/bin entry verifies that bundle before delegation.
+# distiller payload for the separately governed umbrella bundle flow;
+# installed-copy behavior is defined by that flow.
 # Edit this source, not an installed runtime copy.
 #
 # Runs LOCALLY (cloud Routines can't reach the tailnet-bound brain / local ~/.teamkb).

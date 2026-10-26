@@ -53,11 +53,15 @@ def completed(path, date, mode):
     return any(valid_record(row, date, mode) for row in records(path))
 
 
+def record_hash(row):
+    return hashlib.sha256(json.dumps(row, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
 def decision_hash(path, date, mode):
     matching = [row for row in records(path) if valid_record(row, date, mode)]
     if not matching:
         return None
-    return hashlib.sha256(json.dumps(matching[-1], sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return record_hash(matching[-1])
 
 
 def verification_matches(digest, date, mode, receipts):
@@ -99,7 +103,7 @@ def clean_digest_nights(path, before, receipts):
     for date, row in latest.items():
         if row.get("error") is not None:
             continue
-        digest = hashlib.sha256(json.dumps(row, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        digest = record_hash(row)
         if verification_matches(digest, date, "digest", receipts):
             count += 1
     return count
