@@ -5,13 +5,21 @@
 **Author:** Jeremy Longshore — Intent Solutions
 **Date:** 2026-04-06
 **Version:** 1.0.0
-**Status:** Frozen for Phase 1
+**Status:** Maintained reference; original Phase 1 examples retain historical scope.
+**Source checked:** 2026-10-26, Compiler `9dc7488`.
+
+The current envelope/writer are `packages/types/src/schemas.ts` and
+`packages/kernel/src/traces.ts`. The original per-operation catalog below is a
+design reference, not proof that every old payload example is emitted today.
+Sections 6.5–6.6 describe the current ask surfaces; 6.21 describes the delivered
+compile lineage extension. The writer accepts string event names and arbitrary
+redacted metadata rather than enforcing the catalog's per-event schemas.
 
 ---
 
 ## 1. Purpose
 
-This document defines the standard envelope format for all JSONL trace events emitted by Intentional Cognition OS. Every event written to `workspace/audit/traces/` conforms to this schema. No exceptions.
+This document defines the standard envelope format for all JSONL trace events emitted by Intentional Cognition OS. The shared envelope is described below; per-operation payloads are defined by their emitters, not by a runtime validator generated from this document.
 
 Traces are the substrate for all future learning (Blueprint Section 5.6). They enable context refinement, harness improvement, and future learning analysis. Without structured, consistent traces, the system cannot improve.
 
@@ -40,14 +48,14 @@ workspace/audit/traces/
 
 Every trace event is a single JSON object occupying exactly one line. All events share the same envelope structure.
 
-| Field            | Type                         | Required | Description                                                                                                                                                                        |
-| ---------------- | ---------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `timestamp`      | string (ISO 8601)            | Yes      | UTC timestamp with millisecond precision. Format: `YYYY-MM-DDTHH:mm:ss.sssZ`                                                                                                       |
-| `event_type`     | string                       | Yes      | Dot-free identifier from the enumerated event type list (Section 5)                                                                                                                |
-| `event_id`       | string (UUIDv4)              | Yes      | Unique identifier for this event                                                                                                                                                   |
-| `correlation_id` | string (UUIDv4)              | No       | Groups related events. All events in a single `ico ask` flow share one correlation_id. All events in a task lifecycle share one correlation_id. Omit when the event is standalone. |
-| `payload`        | object                       | Yes      | Typed payload specific to the event_type. Schema defined per type in Section 6.                                                                                                    |
-| `prev_hash`      | string (SHA-256 hex) or null | Yes      | SHA-256 hex digest of the previous event line in the same file. `null` for the first event of each file (chain anchor).                                                            |
+| Field            | Type                         | Required | Description                                                                                                                                             |
+| ---------------- | ---------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `timestamp`      | string (ISO 8601)            | Yes      | UTC timestamp with millisecond precision. Format: `YYYY-MM-DDTHH:mm:ss.sssZ`                                                                            |
+| `event_type`     | string                       | Yes      | String event identifier; names may contain dots; Section 5 is a non-exhaustive catalog                                                                  |
+| `event_id`       | string (UUIDv4)              | Yes      | Unique identifier for this event                                                                                                                        |
+| `correlation_id` | string (UUIDv4)              | Yes      | Nullable correlation value supplied by the caller. The current ask trace uses the writer default null; do not invent a start/complete pair.             |
+| `payload`        | object                       | Yes      | Caller-supplied metadata after secret redaction; see current emitters and Section 6 scope notes.                                                        |
+| `prev_hash`      | string (SHA-256 hex) or null | Yes      | SHA-256 of the previous raw event line, carrying across UTC day files; null at genesis. Legacy unlinked day boundaries have explicit verifier handling. |
 
 **Field ordering:** Fields must appear in the order listed above. This is not enforced at parse time but is enforced at write time for consistent hashing.
 
@@ -73,16 +81,16 @@ Every trace event is a single JSON object occupying exactly one line. All events
 
 ## 4. Integrity Chain
 
-Each trace file forms an independent hash chain. The chain provides tamper evidence and ordering guarantees.
+The current chain carries across UTC day files. Hash links provide integrity, ordering and rewrite detection against retained evidence; a writer able to replace all local witnesses can evade local checks.
 
 **Algorithm:** SHA-256 of the raw JSON line bytes (UTF-8 encoded), excluding the trailing newline character.
 
 **Chain rules:**
 
-1. The first event in each daily file has `prev_hash: null`. This is the chain anchor.
-2. Every subsequent event's `prev_hash` is the SHA-256 hex digest of the complete previous line (the raw bytes of the JSON object, before the LF).
-3. To verify the chain, read the file line by line, compute SHA-256 of each line, and confirm the next line's `prev_hash` matches.
-4. A broken chain indicates tampering, corruption, or a write failure. The kernel logs a warning and starts a new anchor at the break point.
+1. Genesis uses `prev_hash: null` only when no earlier non-empty day file exists.
+2. Later events hash the complete previous raw JSON line, excluding its LF.
+3. The first event in a new day hashes the last line of the latest earlier non-empty day file. Empty files do not reset the chain.
+4. The verifier reports breaks; it does not silently rehash or repair old files. Its handling of disclosed legacy null day boundaries is separate from the current writer contract.
 
 **Verification example:**
 
@@ -100,36 +108,35 @@ Line 3: {"timestamp":"2026-04-06T00:05:44.000Z","event_type":"compilation.comple
 
 ## 5. Event Type Enumeration
 
-All valid event types. The kernel rejects any event with an `event_type` not in this list.
+Historical catalog plus the corrected ask entry. This is not exhaustive: current emitters also include maintenance, spool, audit and orchestrator events. The writer does not reject a name merely because it is absent here.
 
-| Event Type             | Layer | Description                                          |
-| ---------------------- | ----- | ---------------------------------------------------- |
-| `ingest`               | L1    | Source file ingested into raw corpus                 |
-| `compilation.start`    | L2    | Compilation pass initiated                           |
-| `compilation.complete` | L2    | Compilation pass finished                            |
-| `retrieval`            | L2    | Knowledge retrieved to answer a query or feed a task |
-| `ask.start`            | L2/L3 | User question received, processing begins            |
-| `ask.complete`         | L2/L3 | Answer delivered to user                             |
-| `render.start`         | L4    | Artifact rendering initiated                         |
-| `render.complete`      | L4    | Artifact rendering finished                          |
-| `promotion`            | L2/L4 | Artifact promoted from L4 to L2                      |
-| `task.created`         | L3    | Episodic research task workspace created             |
-| `task.transition`      | L3    | Task moved between lifecycle states                  |
-| `task.completed`       | L3    | Task reached completed state                         |
-| `task.archived`        | L3    | Task workspace archived                              |
-| `recall.generate`      | L5    | Recall material generated from compiled knowledge    |
-| `recall.quiz`          | L5    | Quiz session initiated                               |
-| `recall.result`        | L5    | Quiz answer recorded with retention score            |
-| `eval.run`             | L6    | Evaluation spec execution started                    |
-| `eval.result`          | L6    | Evaluation spec result recorded                      |
-| `lint.run`             | L6    | Knowledge lint check started                         |
-| `lint.result`          | L6    | Knowledge lint check result recorded                 |
+| Event Type             | Layer | Description                                                                  |
+| ---------------------- | ----- | ---------------------------------------------------------------------------- |
+| `ingest`               | L1    | Source file ingested into raw corpus                                         |
+| `compilation.start`    | L2    | Compilation pass initiated                                                   |
+| `compilation.complete` | L2    | Compilation pass finished                                                    |
+| `retrieval`            | L2    | Knowledge retrieved to answer a query or feed a task                         |
+| `ask`                  | L2/L3 | Successful question flow records retrieved paths and integer citation counts |
+| `render.start`         | L4    | Artifact rendering initiated                                                 |
+| `render.complete`      | L4    | Artifact rendering finished                                                  |
+| `promotion`            | L2/L4 | Artifact promoted from L4 to L2                                              |
+| `task.created`         | L3    | Episodic research task workspace created                                     |
+| `task.transition`      | L3    | Task moved between lifecycle states                                          |
+| `task.completed`       | L3    | Task reached completed state                                                 |
+| `task.archived`        | L3    | Task workspace archived                                                      |
+| `recall.generate`      | L5    | Recall material generated from compiled knowledge                            |
+| `recall.quiz`          | L5    | Quiz session initiated                                                       |
+| `recall.result`        | L5    | Quiz answer recorded with retention score                                    |
+| `eval.run`             | L6    | Evaluation spec execution started                                            |
+| `eval.result`          | L6    | Evaluation spec result recorded                                              |
+| `lint.run`             | L6    | Knowledge lint check started                                                 |
+| `lint.result`          | L6    | Knowledge lint check result recorded                                         |
 
 ---
 
 ## 6. Payload Schemas and Examples
 
-Each event type has a typed payload. The payload object contains only the fields listed for that type. Unknown fields are stripped at write time.
+The older per-event examples are historical design shapes, not enforced payload validators. Current ask and compile-lineage contracts are identified below. `writeTrace` redacts known secrets but does not strip arbitrary fields based on this catalog.
 
 All example JSONL lines below use realistic but fictional data. SHA-256 hashes are abbreviated for readability in descriptions but shown in full in examples.
 
@@ -255,61 +262,55 @@ Records a knowledge retrieval event during query answering or task execution.
 }
 ```
 
-### 6.5 ask.start
+### 6.5 ask
 
-Records the start of a user question flow.
+The successful CLI ask path calls `writeTrace` once with event name `ask`
+(`packages/cli/src/commands/ask.ts`). It does not emit a start/completion pair.
+The call does not supply a correlation ID, so the writer records null.
 
-| Field      | Type   | Required | Description                                                    |
-| ---------- | ------ | -------- | -------------------------------------------------------------- |
-| `question` | string | Yes      | The user's question                                            |
-| `mode`     | string | Yes      | `simple` (direct answer) or `research` (creates episodic task) |
+| Field                 | Type     | Meaning                                                              |
+| --------------------- | -------- | -------------------------------------------------------------------- |
+| `question`            | string   | User question.                                                       |
+| `questionType`        | string   | Analysis classification.                                             |
+| `retrievedPages`      | string[] | Retrieved page paths, not a guarantee that the model used each page. |
+| `answerLength`        | integer  | Answer string length.                                                |
+| `citationCount`       | integer  | Extracted citation count.                                            |
+| `tokensUsed`          | integer  | Input plus output tokens.                                            |
+| `latencyMs`           | integer  | Elapsed ask duration.                                                |
+| `verifiedCitations`   | integer  | Reference checks that succeeded.                                     |
+| `unverifiedCitations` | integer  | Reference checks that failed.                                        |
 
-```jsonl
+Illustrative payload fragment, not a captured receipt:
+
+```json
 {
-  "timestamp": "2026-04-06T09:15:00.000Z",
-  "event_type": "ask.start",
-  "event_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-  "correlation_id": "d1e2f3a4-b5c6-4d7e-8f9a-0b1c2d3e4f5a",
-  "payload": {
-    "question": "How does the transformer self-attention mechanism compare to recurrent approaches?",
-    "mode": "simple"
-  },
-  "prev_hash": "d6f5e4c3b2a1d0c9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5"
+  "question": "What is the current deployment decision?",
+  "questionType": "factual",
+  "retrievedPages": ["topics/deployment.md"],
+  "answerLength": 120,
+  "citationCount": 1,
+  "tokensUsed": 900,
+  "latencyMs": 1500,
+  "verifiedCitations": 1,
+  "unverifiedCitations": 0
 }
 ```
 
-### 6.6 ask.complete
+The CLI calls the writer after generation and reference verification; this is
+not evidence that every failed ask attempt has its own trace. A valid citation
+reference does not establish factual truth or actual model use of that fact.
 
-Records the completion of a user question flow.
+### 6.6 Separate ask JSON answer
 
-| Field           | Type     | Required | Description                                             |
-| --------------- | -------- | -------- | ------------------------------------------------------- |
-| `question`      | string   | Yes      | The user's question (repeated for grep-ability)         |
-| `mode`          | string   | Yes      | `simple` or `research`                                  |
-| `duration_ms`   | integer  | Yes      | Wall-clock duration from ask.start                      |
-| `tokens_used`   | integer  | No       | Total tokens consumed                                   |
-| `sources_cited` | string[] | Yes      | Workspace-relative paths of sources cited in the answer |
-| `task_id`       | string   | No       | Task ID if mode was `research`                          |
+`ico ask --json` writes a separate answer record to stdout. Unlike the trace,
+this record includes per-citation objects (`source`, `title`, `verified`) and
+`provenance_chain` entries. Its summary fields use snake_case, including
+`verified_citations`, `unverified_citations` and `latency_ms`. Retain that output
+separately when details are needed; the integer trace counts cannot reconstruct
+it. Inline answer citations use `[source: <page-title>]`, where the title is
+from compiled frontmatter, not necessarily the filename.
 
-```jsonl
-{
-  "timestamp": "2026-04-06T09:15:08.234Z",
-  "event_type": "ask.complete",
-  "event_id": "7c9e6680-7425-40de-944b-e07fc1f90ae7",
-  "correlation_id": "d1e2f3a4-b5c6-4d7e-8f9a-0b1c2d3e4f5a",
-  "payload": {
-    "question": "How does the transformer self-attention mechanism compare to recurrent approaches?",
-    "mode": "simple",
-    "duration_ms": 8234,
-    "tokens_used": 3150,
-    "sources_cited": [
-      "workspace/wiki/sources/attention-is-all-you-need.md",
-      "workspace/wiki/concepts/self-attention.md"
-    ]
-  },
-  "prev_hash": "e7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3c2b1a0d9c8b7a6"
-}
-```
+---
 
 ### 6.7 render.start
 
@@ -770,155 +771,43 @@ edited predecessor through its successor; it does not prevent a local writer
 from rewriting and rehashing history. Reverting this feature stops adding the
 array to new events and does not migrate or rewrite earlier receipts.
 
-## 7. Secret Field Deny-List
+## 7. Secret redaction contract
 
-Trace payloads must never contain secrets, credentials, or authentication material. The kernel enforces a deny-list at write time. Any event containing a denied field or value pattern is rejected — the field is stripped and a warning is logged.
+`writeTrace` calls `redactSecrets` from `packages/kernel/src/config.ts` before
+serializing metadata. The implementation replaces matched values with
+`[REDACTED]`; it does not reject the whole event or remove the field.
 
-### 7.1 Denied field names
+- Field names are checked against the exact case-sensitive set: `apikey`, `api_key`, `apiKey`, `authorization`, `token`, `secret`, `password`, `credential`.
+- String prefixes are matched by `/^sk-ant-/`, `/^sk-/` and `/^Bearer\s/`.
+- Nested objects and array contents are processed recursively by the helper.
+- This is a finite matcher, not exhaustive secret detection. Embedded secrets, other key names or unsupported token formats may be retained. Do not put credentials or sensitive raw content in trace payloads.
+- The current writer does not append an automatic `_deny_list_violation` event or reject unknown event-specific payload fields.
 
-The following field names are prohibited at any depth within the `payload` object:
-
-| Field Name      | Reason                               |
-| --------------- | ------------------------------------ |
-| `apiKey`        | API credentials                      |
-| `api_key`       | API credentials (snake_case variant) |
-| `authorization` | Auth headers                         |
-| `token`         | Session or API tokens                |
-| `secret`        | Generic secret storage               |
-| `password`      | User credentials                     |
-| `credential`    | Generic credential storage           |
-| `private_key`   | Cryptographic material               |
-| `access_token`  | OAuth tokens                         |
-| `refresh_token` | OAuth refresh tokens                 |
-
-### 7.2 Denied value patterns
-
-The following regex patterns are matched against all string values in the payload. If any value matches, the field is stripped.
-
-| Pattern                  | Matches                       |
-| ------------------------ | ----------------------------- |
-| `^sk-ant-[a-zA-Z0-9-]+$` | Anthropic API keys            |
-| `^Bearer .+$`            | Bearer token values           |
-| `^sk-[a-zA-Z0-9-]+$`     | OpenAI-style API keys         |
-| `^ghp_[a-zA-Z0-9]+$`     | GitHub personal access tokens |
-| `^ghu_[a-zA-Z0-9]+$`     | GitHub user tokens            |
-| `^xoxb-[a-zA-Z0-9-]+$`   | Slack bot tokens              |
-
-### 7.3 Enforcement behavior
-
-1. Before writing an event, the kernel walks all fields in the `payload` object recursively.
-2. Any field whose name matches the denied field list (case-insensitive) is removed.
-3. Any string value matching a denied pattern is removed (the containing field is stripped).
-4. The event is written with the stripped payload.
-5. A separate warning event is appended to the same trace file recording what was stripped.
-
-### 7.4 Rejection examples
-
-**Input event with denied fields:**
-
-```json
-{
-  "timestamp": "2026-04-06T17:00:00.000Z",
-  "event_type": "compilation.start",
-  "event_id": "2f3a4b5c-6d7e-4f8a-9b0c-1d2e3f4a5b6c",
-  "correlation_id": null,
-  "payload": {
-    "pass_type": "summarize",
-    "target": "workspace/raw/papers/example.pdf",
-    "source_count": 1,
-    "apiKey": "sk-ant-api03-REDACTED",
-    "authorization": "Bearer eyJhbGciOiJIUzI1NiIs..."
-  },
-  "prev_hash": "b2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1"
-}
-```
-
-**What gets written (denied fields stripped):**
-
-```json
-{
-  "timestamp": "2026-04-06T17:00:00.000Z",
-  "event_type": "compilation.start",
-  "event_id": "2f3a4b5c-6d7e-4f8a-9b0c-1d2e3f4a5b6c",
-  "correlation_id": null,
-  "payload": {
-    "pass_type": "summarize",
-    "target": "workspace/raw/papers/example.pdf",
-    "source_count": 1
-  },
-  "prev_hash": "b2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1"
-}
-```
-
-**Warning event appended immediately after:**
-
-```json
-{
-  "timestamp": "2026-04-06T17:00:00.001Z",
-  "event_type": "_deny_list_violation",
-  "event_id": "3a4b5c6d-7e8f-4a9b-0c1d-2e3f4a5b6c7d",
-  "correlation_id": null,
-  "payload": {
-    "original_event_id": "2f3a4b5c-6d7e-4f8a-9b0c-1d2e3f4a5b6c",
-    "stripped_fields": ["apiKey", "authorization"],
-    "reason": "Secret field deny-list enforcement"
-  },
-  "prev_hash": "<hash of the stripped event line>"
-}
-```
-
-**Input event with denied value pattern:**
-
-```json
-{
-  "timestamp": "2026-04-06T17:01:00.000Z",
-  "event_type": "ingest",
-  "event_id": "4b5c6d7e-8f9a-4b0c-1d2e-3f4a5b6c7d8e",
-  "correlation_id": null,
-  "payload": {
-    "source_path": "workspace/raw/notes/meeting.md",
-    "source_type": "markdown",
-    "content_hash": "sha256:abc123",
-    "byte_size": 2048,
-    "notes": "Used token sk-ant-api03-abc123def456 to fetch this"
-  },
-  "prev_hash": "c3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2"
-}
-```
-
-**What gets written (value-matched field stripped):**
-
-```json
-{
-  "timestamp": "2026-04-06T17:01:00.000Z",
-  "event_type": "ingest",
-  "event_id": "4b5c6d7e-8f9a-4b0c-1d2e-3f4a5b6c7d8e",
-  "correlation_id": null,
-  "payload": {
-    "source_path": "workspace/raw/notes/meeting.md",
-    "source_type": "markdown",
-    "content_hash": "sha256:abc123",
-    "byte_size": 2048
-  },
-  "prev_hash": "c3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2"
-}
-```
+This redaction boundary is distinct from the downstream Registrar's disclosure
+policy. In particular, the Compiler spool currently emits
+`prePolicyFlags.potentialSecret: false`; that flag is not proof that its content
+was comprehensively secret-scanned.
 
 ---
 
 ## 8. Learning Model Support
 
+These are proposed analysis uses, not shipped automated learning or current
+quality measurements. Beyond the corrected ask rows, historical event names and
+payload fields in this table must be reconciled with their actual emitter before
+use.
+
 Traces are the shared substrate for all three learning layers defined in Blueprint Section 5.6. This section maps trace events to learning uses.
 
 ### 8.1 Context refinement (Now — Phases 1-4)
 
-| Question                                                    | Answered by                                                                |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Which compilation schemas produce good summaries?           | `compilation.complete` duration + `eval.result` scores correlated by topic |
-| Which topics have high retrieval hit rates?                 | `retrieval` events grouped by result paths                                 |
-| Which recall items are retained vs forgotten?               | `recall.result` events grouped by concept, tracked over time               |
-| Which sources are most-cited?                               | `ask.complete` `sources_cited` fields aggregated                           |
-| Where do users ask questions the system cannot answer well? | `ask.complete` events with low source counts or long durations             |
+| Question                                                    | Answered by                                                                                |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Which compilation schemas produce good summaries?           | `compilation.complete` duration + `eval.result` scores correlated by topic                 |
+| Which topics have high retrieval hit rates?                 | `retrieval` events grouped by result paths                                                 |
+| Which recall items are retained vs forgotten?               | `recall.result` events grouped by concept, tracked over time                               |
+| Which sources are most-cited?                               | Separately retained ask JSON `citations`; trace counts alone do not identify cited sources |
+| Where do users ask questions the system cannot answer well? | `ask` counts and `latencyMs`; interpret alongside the retained answer                      |
 
 ### 8.2 Harness improvement (Later — Phase 3+)
 
@@ -931,25 +820,20 @@ Traces are the shared substrate for all three learning layers defined in Bluepri
 
 ### 8.3 Future learning analysis (Much later, if ever)
 
-| Question                                | Answered by                                                           |
-| --------------------------------------- | --------------------------------------------------------------------- |
-| Training signal for compilation quality | `compilation.complete` paired with `eval.result` for the same targets |
-| Retrieval relevance signal              | `retrieval` scores correlated with downstream `ask.complete` quality  |
-| End-to-end workflow effectiveness       | Full correlation chains from `ingest` through `task.completed`        |
+| Question                                | Answered by                                                                                                          |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Training signal for compilation quality | `compilation.complete` paired with `eval.result` for the same targets                                                |
+| Retrieval relevance signal              | Retained retrieval/answer evidence with an explicit correlation strategy; ask has no start/complete correlation pair |
+| End-to-end workflow effectiveness       | Full correlation chains from `ingest` through `task.completed`                                                       |
 
 ---
 
 ## 9. Internal Event Types
 
-The following event types are reserved for system-internal use. They are not triggered by user commands.
-
-| Event Type             | Description                                                    |
-| ---------------------- | -------------------------------------------------------------- |
-| `_deny_list_violation` | Secret field deny-list enforcement triggered (see Section 7.4) |
-| `_chain_break`         | Integrity chain break detected during verification             |
-| `_schema_violation`    | Event payload failed schema validation                         |
-
-Internal event types are prefixed with `_` and are never exposed in user-facing summaries. They are included in trace files for operational debugging.
+The original design reserved `_deny_list_violation`, `_chain_break` and
+`_schema_violation`. They are historical names, not evidence that the current
+writer emits them automatically. Verification results and redaction behavior
+must be checked at their actual implementation surfaces.
 
 ---
 
@@ -957,14 +841,16 @@ Internal event types are prefixed with `_` and are never exposed in user-facing 
 
 ### 10.1 Write path
 
-1. Caller constructs an event object with all required envelope fields except `prev_hash`.
-2. Kernel reads the last line of today's trace file (or determines this is the first event).
-3. Kernel computes SHA-256 of the last line, or sets `null` for chain anchor.
-4. Kernel sets `prev_hash` on the event.
-5. Kernel walks `payload` for deny-list violations, strips as needed.
-6. Kernel serializes the event to a single JSON line (deterministic key order, no whitespace).
-7. Kernel appends the line + LF to the trace file.
-8. If deny-list fields were stripped, kernel appends a `_deny_list_violation` event immediately after.
+1. Caller supplies an event name, metadata and optional correlation/summary options.
+2. The writer redacts metadata, creates timestamp/UUID and opens the current UTC trace directory.
+3. A SQLite exclusive transaction serializes predecessor lookup, JSONL append and trace-index insertion across writers sharing that database.
+4. The writer hashes today's last line or the most recent earlier non-empty day's last line, then constructs the envelope.
+5. It opens the file with `O_CREAT | O_APPEND | O_WRONLY`, uses `fstatSync` and `writeSync` on that descriptor, then inserts the SQL index row.
+6. A separate best-effort human-readable audit log append follows. It is not part of the JSONL integrity chain.
+
+SQLite locking does not make filesystem append and SQL commit a single atomic
+storage transaction. Verification cross-checks the retained file/index evidence;
+this reference does not promise automatic repair after a partial failure.
 
 ### 10.2 Read path
 
@@ -980,75 +866,33 @@ Trace files are never deleted by the system. Retention policy is operator-contro
 
 ### 10.4 Concurrency
 
-In local mode (Phases 1-4), writes are serialized through the kernel. One writer, protocol-level append-only. No locking required beyond single-process guarantees from Node.js event loop.
-
-In remote mode (Phase 5), write serialization becomes a distributed concern. This is deferred.
+The current writer uses SQLite's exclusive transaction around predecessor
+selection, append and index insertion, rather than relying only on the Node
+event loop. This coordinates processes sharing the same database. A separate
+remote Compiler workspace service remains a historical plan, not this contract.
 
 ---
 
-## 11. Zod Schema Reference
+## 11. Zod schema reference
 
-The following is the planned Zod schema structure for implementation in `packages/types/`. This is a reference — the actual implementation will live in code, not in this document.
+The actual shared schema is `TraceEnvelopeSchema` in
+`packages/types/src/schemas.ts`:
 
 ```typescript
-import { z } from 'zod';
-
-// Envelope
-const TraceEnvelope = z.object({
+export const TraceEnvelopeSchema = z.object({
   timestamp: z.string().datetime(),
   event_type: z.string(),
   event_id: z.string().uuid(),
   correlation_id: z.string().uuid().nullable(),
-  payload: z.record(z.unknown()),
-  prev_hash: z
-    .string()
-    .regex(/^[a-f0-9]{64}$/)
-    .nullable(),
+  payload: z.record(z.string(), z.unknown()),
+  prev_hash: z.string().nullable(),
 });
-
-// Example payload schema: ingest
-const IngestPayload = z.object({
-  source_path: z.string(),
-  source_type: z.enum(['pdf', 'markdown', 'html', 'text', 'json', 'csv']),
-  content_hash: z.string().regex(/^sha256:[a-f0-9]{64}$/),
-  byte_size: z.number().int().positive(),
-  mount_name: z.string().optional(),
-  title: z.string().optional(),
-});
-
-// Example payload schema: compilation.complete
-const CompilationCompletePayload = z.object({
-  pass_type: z.enum(['summarize', 'extract', 'synthesize', 'link', 'contradict', 'gap']),
-  target: z.string(),
-  output_paths: z.array(z.string()),
-  duration_ms: z.number().int().nonnegative(),
-  tokens_used: z.number().int().nonnegative().optional(),
-});
-
-// Deny-list field names (case-insensitive match)
-const DENIED_FIELD_NAMES = [
-  'apikey',
-  'api_key',
-  'authorization',
-  'token',
-  'secret',
-  'password',
-  'credential',
-  'private_key',
-  'access_token',
-  'refresh_token',
-] as const;
-
-// Deny-list value patterns
-const DENIED_VALUE_PATTERNS = [
-  /^sk-ant-[a-zA-Z0-9-]+$/,
-  /^Bearer .+$/,
-  /^sk-[a-zA-Z0-9-]+$/,
-  /^ghp_[a-zA-Z0-9]+$/,
-  /^ghu_[a-zA-Z0-9]+$/,
-  /^xoxb-[a-zA-Z0-9-]+$/,
-];
 ```
+
+This definition does not impose an event enum or per-event payload schema.
+The writer constructs its envelope directly; the schema's presence is not proof
+that every write path invokes `parse`. Hash formatting/linkage is a verifier
+concern in addition to this permissive envelope shape.
 
 ---
 
@@ -1060,48 +904,32 @@ A minimal but complete trace file showing the integrity chain across three event
 
 ```jsonl
 {"timestamp":"2026-04-06T08:00:01.123Z","event_type":"ingest","event_id":"f47ac10b-58cc-4372-a567-0e02b2c3d479","correlation_id":null,"payload":{"source_path":"workspace/raw/papers/attention-is-all-you-need.pdf","source_type":"pdf","content_hash":"sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08","byte_size":2103456,"title":"Attention Is All You Need"},"prev_hash":null}
-{"timestamp":"2026-04-06T08:01:00.000Z","event_type":"compilation.start","event_id":"6ba7b810-9dad-11d1-80b4-00c04fd430c8","correlation_id":"c9bf9e57-1685-4c89-bafb-ff5af830be8a","payload":{"pass_type":"summarize","target":"workspace/raw/papers/attention-is-all-you-need.pdf","source_count":1},"prev_hash":"8b3e0a7f1c2d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f"}
-{"timestamp":"2026-04-06T08:01:22.456Z","event_type":"compilation.complete","event_id":"6ba7b811-9dad-11d1-80b4-00c04fd430c8","correlation_id":"c9bf9e57-1685-4c89-bafb-ff5af830be8a","payload":{"pass_type":"summarize","target":"workspace/raw/papers/attention-is-all-you-need.pdf","output_paths":["workspace/wiki/sources/attention-is-all-you-need.md"],"duration_ms":22456,"tokens_used":4821},"prev_hash":"4a2c8e1f3b5d7a9c0e2f4b6d8a1c3e5f7b9d0a2c4e6f8b1d3a5c7e9f0b2d4a6c"}
+{"timestamp":"2026-04-06T08:01:00.000Z","event_type":"compilation.start","event_id":"6ba7b810-9dad-11d1-80b4-00c04fd430c8","correlation_id":"c9bf9e57-1685-4c89-bafb-ff5af830be8a","payload":{"pass_type":"summarize","target":"workspace/raw/papers/attention-is-all-you-need.pdf","source_count":1},"prev_hash":"f472fb73363b5cfdbabf843c6ed948eff4f0478cdfdd2320800d7ac8c47551ea"}
+{"timestamp":"2026-04-06T08:01:22.456Z","event_type":"compilation.complete","event_id":"6ba7b811-9dad-11d1-80b4-00c04fd430c8","correlation_id":"c9bf9e57-1685-4c89-bafb-ff5af830be8a","payload":{"pass_type":"summarize","target":"workspace/raw/papers/attention-is-all-you-need.pdf","output_paths":["workspace/wiki/sources/attention-is-all-you-need.md"],"duration_ms":22456,"tokens_used":4821},"prev_hash":"dd15f7612efec07e80cd16965fa435989b668e1d64d34c184c6fa22f51446332"}
 ```
 
-**Chain verification:**
-
-1. Line 1: `prev_hash` is `null` (chain anchor, first event of the day).
-2. Line 2: `prev_hash` equals SHA-256 of the raw bytes of Line 1.
-3. Line 3: `prev_hash` equals SHA-256 of the raw bytes of Line 2.
-
-To verify programmatically:
+**Verification scope:** the fictional lines above illustrate a genesis fragment;
+they are not production run evidence. For the actual workspace, use the real
+verifier, which handles UTC day boundaries and the broader evidence surfaces:
 
 ```bash
-# Read lines, compute hashes, compare
-node -e "
-const crypto = require('crypto');
-const fs = require('fs');
-const lines = fs.readFileSync('workspace/audit/traces/2026-04-06.jsonl', 'utf8').trim().split('\n');
-let prevHash = null;
-for (const line of lines) {
-  const event = JSON.parse(line);
-  if (event.prev_hash !== prevHash) {
-    console.error('CHAIN BREAK at', event.event_id);
-    process.exit(1);
-  }
-  prevHash = crypto.createHash('sha256').update(line).digest('hex');
-}
-console.log('Chain intact:', lines.length, 'events verified');
-"
+ico audit verify --workspace workspace --json
 ```
+
+`--chain-only` deliberately omits the database, provenance and anchor checks; do
+not report that narrower result as full verification or Registrar acceptance.
 
 ---
 
 ## Appendix A: Event Type Quick Reference
 
-For grep and tooling. All event types on one line:
+Historical catalog plus current ask name, useful for grep; not an exhaustive runtime enum:
 
 ```
-ingest compilation.start compilation.complete retrieval ask.start ask.complete render.start render.complete promotion task.created task.transition task.completed task.archived recall.generate recall.quiz recall.result eval.run eval.result lint.run lint.result
+ingest compilation.start compilation.complete retrieval ask render.start render.complete promotion task.created task.transition task.completed task.archived recall.generate recall.quiz recall.result eval.run eval.result lint.run lint.result
 ```
 
-Internal types (prefixed with `_`):
+Historical reserved internal names; automatic emission is not established:
 
 ```
 _deny_list_violation _chain_break _schema_violation

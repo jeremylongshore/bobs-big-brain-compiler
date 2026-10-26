@@ -7,6 +7,18 @@ Version numbers follow the blueprint version, not the software release.
 
 ## [Unreleased]
 
+### Documentation correction — 2026-10-26
+
+Reconcile the Phase 1 trace reference and entry points with source `9dc7488`
+(Bead `compile-then-govern-eqw.6.2`). Current ask emits one count-bearing event;
+JSON answer citations are a separate surface. Trace links cross UTC day files,
+SQLite exclusive transactions serialize writers, and redaction is the finite
+helper implemented in kernel config. The envelope schema does not enforce the
+old event/payload catalog. Preserve dated status/audit/thesis/plan observations
+with explicit implementation notes. Provider, CLI/package/release and research
+rendering descriptions follow the code; no runtime, contract, model, release or
+live deployment changes are introduced by this documentation reconciliation.
+
 ### Changed
 
 - **INTKB contract snapshot resynced for write-time provenance** (2026-07-19, GSB Wave-2 H1). `packages/types/src/__contract__/intkb-memory-candidate-snapshot.ts` re-vendored byte-equivalent from `bobs-big-brain-registrar` branch `feat/h1-h5-origin-token-schema`, folding in every delta since the 2026-05-24 (v0.6.0) snapshot: the pinned `schemaVersion` literal `'1'` (5bm.6 — a v2 line now FAILS `safeParse` instead of being silently stripped, and the old "INTKB strips schemaVersion" contract test flipped accordingly), the 6-value `CandidateStatus` terminal-marker enum (B1), `metadata.proposedByRole` (R8), and the new OPTIONAL `origin { tokenHmac, channel, mintedAt }` attestation (H1). **ICO's emitter is deliberately unchanged**: spool lines carry no `origin` and govern as `unattested` on the INTKB side (accept-with-flag backward compatibility, registrar `000-docs/046-AT-DECR`); `origin` sits outside the UUID-v5 id derivation, so the content-stable spool id contract is untouched. New contract tests cover origin-less emissions, well-formed/malformed origin shapes, v2 rejection, and id stability with/without origin. NOTE for the `ziz.6` tripwire: this is the second post-v1 INTKB schema change absorbed by resync — evaluate extracting the shared schema package.

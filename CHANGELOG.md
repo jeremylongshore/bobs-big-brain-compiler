@@ -513,7 +513,7 @@ control-plane invariants.
 
 _2026-10-25 clarification: the release text above is historical, not a current readiness
 assessment. Local integrity, ordering and rewrite detection follow the
-[hash-chained trace protocol](packages/kernel/src/traces.ts); receipts do not establish
+[hash-chained trace protocol](https://github.com/jeremylongshore/bobs-big-brain-compiler/blob/main/packages/kernel/src/traces.ts); receipts do not establish
 the truth of generated content._
 
 ### Added

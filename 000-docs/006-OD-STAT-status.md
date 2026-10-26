@@ -1,5 +1,14 @@
 # Status: intentional-cognition-os
 
+> Source reconciliation, 2026-10-26: the body below is a historical status and
+> metrics snapshot, not the current backlog or acceptance result. Source at
+> `9dc7488` has 1.23.1 release manifests, 17 top-level CLI groups and five packages.
+> Spool emission, demo and audit verification are implemented. The current ask
+> emitter records one `ask` event with integer citation counts, not the original
+> `ask.start`/`ask.complete` pair shown below. Use README and trace spec 011 for
+> current guidance; retain the original dated metrics as historical evidence.
+> Fresh gate results must name their own run and commit.
+
 > Compile knowledge for the machine. Distill understanding for the human.
 
 **Last Updated:** 2026-08-02

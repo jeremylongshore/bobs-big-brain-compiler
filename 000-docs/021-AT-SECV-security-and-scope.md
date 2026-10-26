@@ -7,6 +7,18 @@
 **Version:** 1.0.0
 **Status:** Frozen for Phase 1
 
+> Implementation note, 2026-10-26 (`9dc7488`): this is the original Phase 1
+> security design, not a current security certification. The npm availability
+> observation below is dated 2026-04-06; the CLI now has release manifests at
+> 1.23.1 and the publish name `intentional-cognition-os`. The repository has a
+> dog-food Claude plugin under `plugin/`; that is distinct from the planned
+> general extension API. Current provider support is not Anthropic-only.
+> Link-pass backlinks are deterministic; final report rendering can call the
+> selected model. `redactSecrets` is a finite field/prefix matcher, not the
+> exhaustive deny-list described here; see trace reference 011 for its actual
+> scope. Spool `potentialSecret: false` is not a complete disclosure scan.
+> XML delimiters are a mitigation, not proof that injection cannot succeed.
+
 ---
 
 ## 1. Prompt Injection Defense

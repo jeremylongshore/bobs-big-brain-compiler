@@ -11,6 +11,16 @@ related_specs:
 
 # Trace Coverage Audit (E10-B04)
 
+> Source reconciliation, 2026-10-26: this is the original dated audit, not a new
+> run. Its ask start/completion and correlation claims do not match the current
+> emitter at `9dc7488`: CLI ask writes one `ask` event with integer
+> `verifiedCitations`/`unverifiedCitations` and the default null correlation ID.
+> Per-citation objects are in separately retained `ask --json` output. Current
+> trace files link across UTC day boundaries; the catalog does not validate
+> every payload at runtime. See the corrected 011 reference and actual writer.
+> The original observations and test claims below are retained without rerunning
+> or ratifying them.
+
 **Date:** 2026-05-15
 **Bead:** intentional-cognition-os-2rd.4 (E10-B04)
 **Trigger:** Epic 10 mandate — every CLI command must leave a queryable audit footprint.

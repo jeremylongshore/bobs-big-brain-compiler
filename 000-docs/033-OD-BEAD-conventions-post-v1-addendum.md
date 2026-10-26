@@ -24,7 +24,7 @@ The original 014-OD-BEAD v1.0.0 convention used coded titles like `E11-B07 — s
    - ❌ `epic:11`, `type:test`, `area:ci`
    - ✅ `test-hygiene`, `mutation`, `coverage`, `gherkin`, `ci-lint`, `bead-tooling`, `gh-mirror`
 
-4. **Every bead with deliverable code gets a matching GitHub issue, and a matching Plane issue when the project has Plane mapped.** Use `bd-sync link <bead> --gh OWNER/REPO#N --plane PROJECT-N` to plant the cross-refs in all three records. ICOS maps to Plane project `ICOS` (UUID in [reference_plane_setup.md](../../.claude/projects/-home-jeremy-000-projects-intentional-cognition-os/memory/reference_plane_setup.md), not committed).
+4. **Every bead with deliverable code gets a matching GitHub issue, and a matching Plane issue when the project has Plane mapped.** Use `bd-sync link <bead> --gh OWNER/REPO#N --plane PROJECT-N` to plant the cross-refs in all three records. ICOS maps to Plane project `ICOS` (UUID in operator-maintained Plane mapping, not repository evidence).
 
 5. **Use `bd-sync note <bead> "..."` mid-flight to record milestones, surprises, and decisions.** A bead that opens silent, sits silent, and closes silent is an anti-pattern — it leaves no audit trail for the next reader. Note the moment-of-discovery facts, not the routine work.
 
@@ -53,9 +53,17 @@ The six v0.2-era beads with autogen-only titles (`er2`, `ytq`, `7xp`, `p6w`, `nw
 
 The plain-English convention will propagate to other Intent Solutions projects (braves, claude-code-plugins, kobiton, etc.) on their next refresh — they are not required to retitle existing beads, but new beads in those projects should follow this rule once the global default in `~/.claude/CLAUDE.md` has the addendum landed.
 
+## Current workflow note, 2026-10-26
+
+Plain-English titles remain useful; actual issue handles are valid durable
+references in Beads and PRs. Follow current `AGENTS.md`, `bd prime` and the
+installed CLI for operations. The Dolt database is authoritative; passive JSONL
+exports and historical mirror tooling are not a substitute for database sync.
+External operator configuration is not a portable repository path.
+
 ## Cross-references
 
 - [014-OD-BEAD-bead-conventions.md](014-OD-BEAD-bead-conventions.md) — Original v1.0.0 convention (historical).
-- [BEADS-SETUP-PROMPT.md](../../BEADS-SETUP-PROMPT.md) — Repo-bootstrap prompt; should be updated to teach this rule from day one for new projects.
+- Repository `AGENTS.md` and the installed Beads skill — current bootstrap and tracking workflow.
 - `~/.claude/CLAUDE.md` § "Bead naming — plain English only" — The global default that this addendum mirrors at the project level.
 - `~/bin/bd-sync` — The three-layer mirror tool that uses bead notes to fan operations across GitHub + Plane.
