@@ -1,0 +1,224 @@
+{
+  "purpose": "BBB local source supplement; not upstream payload and not a signed attestation",
+  "release": "v1.5.1",
+  "sourceRepository": "https://github.com/jeremylongshore/intent-audit-harness",
+  "sourceCommit": "0a6d6e0e76b7f76bcc5bcfd2b7c7cf8ab75e405f",
+  "annotatedTagObject": "e73f019f8207a4ac142978cc84fcc713eb7928ae",
+  "sourceArchive": {
+    "url": "https://codeload.github.com/jeremylongshore/intent-audit-harness/tar.gz/0a6d6e0e76b7f76bcc5bcfd2b7c7cf8ab75e405f",
+    "observedSha256": "531d6f8255ad300b4ca33356cfecf4f165c6213d366fc2d36d9cde50f66d5a33",
+    "scope": "Digest of observed downloaded bytes; generated archive packaging may change independently of the source commit."
+  },
+  "installer": {
+    "upstreamPath": "install.sh",
+    "sha256": "4803e2912bbcfb2ef8f28211ebaab75cd719b8e25ca24c7f52aaa2a5b887a42a"
+  },
+  "copiedPayloads": {
+    "CHANGELOG.md": {
+      "upstreamPath": "CHANGELOG.md",
+      "sha256": "22718eeaaaedb65341fcc3edfafe503d7c2e82a9ba1ee026e55741ac0ce669f4"
+    },
+    "LICENSE": {
+      "upstreamPath": "LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    "NOTICE": {
+      "upstreamPath": "NOTICE",
+      "sha256": "b100756807190583592a9a5631856d7537cad860ffd20019f2249507c9413bf8"
+    },
+    "README.md": {
+      "upstreamPath": "README.md",
+      "sha256": "9277fb998b25c001a90daa66315a4e2bed694ee6186681dfbd2984206409f3e8"
+    },
+    "bin/audit-harness.js": {
+      "upstreamPath": "bin/audit-harness.js",
+      "sha256": "7b28f6f1487b33de07958358c511fba180730fe811fa2ad3db7fc0822bed412c"
+    },
+    "configs/README.md": {
+      "upstreamPath": ".audit-harness-configs/README.md",
+      "sha256": "d1840632e1378aeac26168d58428ebb31f90cacecc33f12cd2ca48d8ee24bf5d"
+    },
+    "configs/markdownlint.yaml": {
+      "upstreamPath": ".audit-harness-configs/markdownlint.yaml",
+      "sha256": "4eab9c7aa9144d3aa94ff2c1a7eff983068ad941e5b0fd6532b38950612f8caa"
+    },
+    "configs/ruff.toml": {
+      "upstreamPath": ".audit-harness-configs/ruff.toml",
+      "sha256": "c76ab4034ed163d7ecb22842382e58fbec5a23acf9d11cb882f88acc36589ebf"
+    },
+    "configs/shellcheckrc": {
+      "upstreamPath": ".audit-harness-configs/shellcheckrc",
+      "sha256": "c61545455a1e0bdfba6876acad9c25e7293551fbbd1d2974a259e2deea527eb9"
+    },
+    "configs/yamllint.yaml": {
+      "upstreamPath": ".audit-harness-configs/yamllint.yaml",
+      "sha256": "6c046534bee9af7818678872ac6231d271192c7b941ff7b3f75f9bf660dff98e"
+    },
+    "package.json": {
+      "upstreamPath": "package.json",
+      "sha256": "b0d3026fda8a9d67d93ecfbff5c9fd158e764b021606d1a1a24d325d75467da3"
+    },
+    "schemas/audit-profile/layer-applicability.md": {
+      "upstreamPath": "schemas/audit-profile/layer-applicability.md",
+      "sha256": "a5da1d53a81dd4718ae0293c7bf672613506aa671086111dde60fb0903a685bd"
+    },
+    "schemas/audit-profile/registry.v1.json": {
+      "upstreamPath": "schemas/audit-profile/registry.v1.json",
+      "sha256": "ffbc75700fb5eb501cb47f1e4038f47ab95ae1fba534b38095e1fe7820c80ed1"
+    },
+    "schemas/audit-profile/v1.schema.json": {
+      "upstreamPath": "schemas/audit-profile/v1.schema.json",
+      "sha256": "465acce129613428d8473b8987a31d36817ef1fa4435b4625b45f54e787babc1"
+    },
+    "schemas/conform/kernel/intent-eval-core-0.11.0/LICENSE": {
+      "upstreamPath": "schemas/conform/kernel/intent-eval-core-0.11.0/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    "schemas/conform/kernel/intent-eval-core-0.11.0/authoring/v1/is-overlay/skill-frontmatter.v1.json": {
+      "upstreamPath": "schemas/conform/kernel/intent-eval-core-0.11.0/authoring/v1/is-overlay/skill-frontmatter.v1.json",
+      "sha256": "cfd2da92e71246d6d26abfbff49beef0bb6dcd3b30af64107ae636d0cbc53fc3"
+    },
+    "schemas/conform/kernel/intent-eval-core-0.11.0/authoring/v1/marketplace-tier.schema.json": {
+      "upstreamPath": "schemas/conform/kernel/intent-eval-core-0.11.0/authoring/v1/marketplace-tier.schema.json",
+      "sha256": "ae6ce3351335fd829a7f70b6f4094fed0b95607baa185ac1b4621a87e2c7017c"
+    },
+    "schemas/conform/kernel/intent-eval-core-0.11.0/authoring/v1/skill-frontmatter.schema.json": {
+      "upstreamPath": "schemas/conform/kernel/intent-eval-core-0.11.0/authoring/v1/skill-frontmatter.schema.json",
+      "sha256": "3a02f3eba5aef870349d94e49ccbd8d49352452ebc70aff80e4d7c3ae3b8b166"
+    },
+    "schemas/conform/kernel/intent-eval-core-0.11.0/authoring/v1/upstream-base/skill-frontmatter.v1.json": {
+      "upstreamPath": "schemas/conform/kernel/intent-eval-core-0.11.0/authoring/v1/upstream-base/skill-frontmatter.v1.json",
+      "sha256": "32ccd48d6aff5484b763372701ceccb63a5bef1c8acd24d50a5fc045215d9b79"
+    },
+    "schemas/conform/kernel/intent-eval-core-0.11.0/pin.json": {
+      "upstreamPath": "schemas/conform/kernel/intent-eval-core-0.11.0/pin.json",
+      "sha256": "0bd4b976b04e3220db101e79ae6e49bb4ae296729edee5774487d6a44c43dc17"
+    },
+    "schemas/conform/v1/agent-frontmatter.schema.json": {
+      "upstreamPath": "schemas/conform/v1/agent-frontmatter.schema.json",
+      "sha256": "c97e09bfe62dbc31aa35a8071ab8616f7942081f1df1456a1702514f7f721f60"
+    },
+    "schemas/conform/v1/mcp-config.schema.json": {
+      "upstreamPath": "schemas/conform/v1/mcp-config.schema.json",
+      "sha256": "1c323e96932d14ffce0f5027a5ffe434936e282f615b001109e3d2a19479dc00"
+    },
+    "schemas/conform/v1/plugin-manifest.schema.json": {
+      "upstreamPath": "schemas/conform/v1/plugin-manifest.schema.json",
+      "sha256": "ff63babb16e535d25ef183c1efef811560be5838910de6701fe9d3ab4991450d"
+    },
+    "schemas/conform/v1/skillmd-frontmatter.schema.json": {
+      "upstreamPath": "schemas/conform/v1/skillmd-frontmatter.schema.json",
+      "sha256": "027621eb7f291885310420f3aaea61314f29bdf82c0524c907da5a50345ef752"
+    },
+    "schemas/currency/pins.v1.json": {
+      "upstreamPath": "schemas/currency/pins.v1.json",
+      "sha256": "c9e990b7651a9fd601aa01e1ad4962e02e86133a6e5ff2f138b4ff2163dfdd8e"
+    },
+    "schemas/kernel-snapshot/gate-result-v1.schema.json": {
+      "upstreamPath": "schemas/kernel-snapshot/gate-result-v1.schema.json",
+      "sha256": "e4059e0387f3e6fb9a1175f5f60fe887b7a68a6b5c2c8ac63545b35bb7f95584"
+    },
+    "scripts/arch-check.sh": {
+      "upstreamPath": "scripts/arch-check.sh",
+      "sha256": "97206b26fbb9473e062187df01f4f838a7c9a967ac873cb569415f1543b63cfb"
+    },
+    "scripts/audit.py": {
+      "upstreamPath": "scripts/audit.py",
+      "sha256": "0721d395a19decae1265869c987a0539a364aac51f26acbede3b7841305bf762"
+    },
+    "scripts/bias-count.sh": {
+      "upstreamPath": "scripts/bias-count.sh",
+      "sha256": "546e06af05283bcca1b58a283db18075ba56a3c2c3e87aada3717a9f0ce15d8f"
+    },
+    "scripts/bundle-append.py": {
+      "upstreamPath": "scripts/bundle-append.py",
+      "sha256": "d38d71a56ab50c2aba186987b18bb809fdc72c5b895f94dcc57bcb35bf9fb2f9"
+    },
+    "scripts/caa-check.sh": {
+      "upstreamPath": "scripts/caa-check.sh",
+      "sha256": "04669acd4b561f6b81d21e9dd925c1f748c9c3a6b9e543bbf01737fe5394fdca"
+    },
+    "scripts/check-wrapper-sync.sh": {
+      "upstreamPath": "scripts/check-wrapper-sync.sh",
+      "sha256": "92b61f57425b725e649cf5785f2e200d83f77a481a344f7d9b7a19ee2be7f3f8"
+    },
+    "scripts/classify.py": {
+      "upstreamPath": "scripts/classify.py",
+      "sha256": "c1de816d94cb2c8593018534b49649017c74cc8ce9956fe3841f2715d2350fa4"
+    },
+    "scripts/conform.py": {
+      "upstreamPath": "scripts/conform.py",
+      "sha256": "e2e7d69fb6d021e9fc84b586a4b76f77710db527540c86e0c95eb8d9798724a6"
+    },
+    "scripts/crap-score.py": {
+      "upstreamPath": "scripts/crap-score.py",
+      "sha256": "df564819a3b7be2ba6e04d22b1e3ec3df8501332d7498b009a9b3cfe641ba576"
+    },
+    "scripts/cred-gate.sh": {
+      "upstreamPath": "scripts/cred-gate.sh",
+      "sha256": "e76b8ecca1e498f6c1369ebe5459146b2155dec1022858a3c02eae760a64b9b9"
+    },
+    "scripts/currency.py": {
+      "upstreamPath": "scripts/currency.py",
+      "sha256": "f73a0246f5ca7c7d09d3ec93ed74842a72cc6d84ab7b74ab1f96721b9bbcbb2e"
+    },
+    "scripts/dnssec-check.sh": {
+      "upstreamPath": "scripts/dnssec-check.sh",
+      "sha256": "6fc6e06c2ba9874ac7b2b687e505ad1cbaa9f63383a2b764b9740b2eac150c70"
+    },
+    "scripts/emit-evidence.sh": {
+      "upstreamPath": "scripts/emit-evidence.sh",
+      "sha256": "6c3fa27b7721bfaa286845100a6b85d4083471417afeaf1fd7affa81f3bcf9ab"
+    },
+    "scripts/escape-scan.sh": {
+      "upstreamPath": "scripts/escape-scan.sh",
+      "sha256": "27466353624492d6c729e8eac8d469d48c99c7071ea381f9db8c8ad771cc9d8e"
+    },
+    "scripts/fp-rate.py": {
+      "upstreamPath": "scripts/fp-rate.py",
+      "sha256": "93ac0548f3f451d2254b22e568020d9f34864b246ce3f4aa2643f538a62d765e"
+    },
+    "scripts/gen-layer-applicability.py": {
+      "upstreamPath": "scripts/gen-layer-applicability.py",
+      "sha256": "48bde087284fc9125491ce960381f1bf15421021fccf4e808f27de0a6a8ec1d1"
+    },
+    "scripts/gherkin-lint.sh": {
+      "upstreamPath": "scripts/gherkin-lint.sh",
+      "sha256": "547a5e1602a53095da92eb9e57aa842f730a77815ca1df05c0f4557f7ce9c335"
+    },
+    "scripts/harness-hash.sh": {
+      "upstreamPath": "scripts/harness-hash.sh",
+      "sha256": "fce4ee023be0bb81f6d5e78210c86a225d478b89c24d45eca01003a44f8e8264"
+    },
+    "scripts/install-osv-scanner.sh": {
+      "upstreamPath": "scripts/install-osv-scanner.sh",
+      "sha256": "e8c9bcf5c34a2846ca29b6726133a001428e3519f39700525f5b96269acbc355"
+    },
+    "scripts/kernel-shadow-check.sh": {
+      "upstreamPath": "scripts/kernel-shadow-check.sh",
+      "sha256": "f22d8acbd5e4ae3cc81607a2bab1c98c0cf85da25d910ba053d757f8120cedd1"
+    },
+    "scripts/migration-notes.py": {
+      "upstreamPath": "scripts/migration-notes.py",
+      "sha256": "52c462de38d7597ed91459a291e9fa1e352356d8cec56c1c0f02d528057e3981"
+    },
+    "scripts/report-lineage.py": {
+      "upstreamPath": "scripts/report-lineage.py",
+      "sha256": "a5c39aee99b89e7f40dd7430603547b7d2d055fb156386f08965d5179ab1d26e"
+    },
+    "scripts/scan.py": {
+      "upstreamPath": "scripts/scan.py",
+      "sha256": "699e85e2b72c75c117fccb684cea3124f74ccfe2b19c3e0fdfeaa747c965b424"
+    },
+    "scripts/worktree-run.sh": {
+      "upstreamPath": "scripts/worktree-run.sh",
+      "sha256": "aa521d93ff5e98d2bb991ecf1eceb2b8b25822a9577a9dafa5c84510aa1d2ea3"
+    }
+  },
+  "generatedOutputs": {
+    "scripts/audit-harness": "43c7fd50c3970870b1556529ad4834ca144b2d0c678e2f04ac4af6c74da40aec",
+    ".audit-harness/VERSION": "c8d27debf356c5ef491bb6f3d8ee52346ccf94177a95866e8b5adf4f196bc0a2",
+    ".audit-harness/PROVENANCE": "5e18e139a231e9e4bd9c498d291447bcdca11f1714c9abfcb4e21d2a3382102c"
+  },
+  "verificationScope": "50 copied payloads, VERSION and shell wrapper match a fresh offline installation; generated PROVENANCE matches except its installed-at timestamp. Supplemental BBB files are excluded from the upstream payload inventory. Co-located hashes do not provide independent rewrite detection."
+}
