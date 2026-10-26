@@ -19,7 +19,7 @@ git clone https://github.com/jeremylongshore/bobs-big-brain-compiler.git
 cd bobs-big-brain-compiler
 
 # Install dependencies
-pnpm install
+pnpm install --frozen-lockfile
 
 # Run tests
 pnpm test
@@ -84,27 +84,28 @@ pnpm --filter @ico/kernel test -- recall-results.test.ts
 pnpm --filter intentional-cognition-os test -- --reporter=verbose
 ```
 
-The four workspace packages each have their own vitest suite:
+The repository contains five workspace packages:
 
-| Workspace       | Published name                                                  |
-| --------------- | --------------------------------------------------------------- |
-| `@ico/types`    | private (workspace-only)                                        |
-| `@ico/kernel`   | private (workspace-only)                                        |
-| `@ico/compiler` | private (workspace-only)                                        |
-| `packages/cli`  | **`intentional-cognition-os`** — the only npm-published package |
+| Workspace         | Published name                                                  |
+| ----------------- | --------------------------------------------------------------- |
+| `@ico/types`      | private (workspace-only)                                        |
+| `@ico/kernel`     | private (workspace-only)                                        |
+| `@ico/compiler`   | private (workspace-only)                                        |
+| `@ico/benchmarks` | private benchmark harness (`packages/benchmarks`)               |
+| `packages/cli`    | **`intentional-cognition-os`** — the only npm-published package |
 
-The full suite currently runs 1100+ tests in ~90 s.
+Use the exact run/commit evidence in `TEST_AUDIT.md` or the PR for suite totals and timing; historical counts are not current guarantees.
 
 **Testing patterns** (see `000-docs/015-AT-TEST-testing-strategy.md` for the canonical reference):
 
-| Pattern                                                                    | Why                                                                                                                                                    |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Result<T, E>` everywhere — never `throw` from kernel/compiler public APIs | Lets callers reason about every failure mode with type-safe `if (!r.ok) return err(...)`. Tests assert `r.ok === false` and inspect `r.error.message`. |
-| Atomic writes (`.tmp + renameSync`) for every file mutation                | Disk failure mid-write leaves no partial file. Verified by `packages/compiler/src/recall/disk-full.test.ts`.                                           |
-| `vi.fn()` mocks for `ClaudeClient` in agent / compiler-pass tests          | Keeps tests offline, deterministic, free. Production code accepts an injected client, so tests never hit Anthropic.                                    |
-| Real workspace + real SQLite in integration tests                          | Faster than spawning subprocesses and catches the kernel/compiler interaction the unit tests miss. See `recall-pipeline.integration.test.ts`.          |
-| Trace assertions via `readTraces(db, { eventType })`                       | Asserting trace emission is the contract layer between the operator and the system; per 011-AT-TRSC every mutation emits at least one event.           |
-| `correlation_id` on multi-event flows                                      | Group related events for audit reconstruction. Tests assert the same `correlation_id` appears on `lint.run` + `lint.result`, etc.                      |
+| Pattern                                                                    | Why                                                                                                                                                                                      |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Result<T, E>` everywhere — never `throw` from kernel/compiler public APIs | Lets callers reason about every failure mode with type-safe `if (!r.ok) return err(...)`. Tests assert `r.ok === false` and inspect `r.error.message`.                                   |
+| Atomic writes (`.tmp + renameSync`) for every file mutation                | Disk failure mid-write leaves no partial file. Verified by `packages/compiler/src/recall/disk-full.test.ts`.                                                                             |
+| `vi.fn()` mocks for `ClaudeClient` in agent / compiler-pass tests          | Keeps tests offline, deterministic, free. Production code accepts an injected client; deterministic tests do not call a model provider.                                                  |
+| Real workspace + real SQLite in integration tests                          | Faster than spawning subprocesses and catches the kernel/compiler interaction the unit tests miss. See `recall-pipeline.integration.test.ts`.                                            |
+| Trace assertions via `readTraces(db, { eventType })`                       | Asserting trace emission is the contract layer between the operator and the system; check the actual emitter and its documented scope rather than assuming every operation is receipted. |
+| `correlation_id` on multi-event flows                                      | Group related events for audit reconstruction. Tests assert the same `correlation_id` appears on `lint.run` + `lint.result`, etc.                                                        |
 
 ### Code Review
 
@@ -156,12 +157,13 @@ These constraints come from `000-docs/007-PP-PLAN-master-blueprint.md` and are e
 
 ### Project Layout
 
-| Package              | Role                                                                                                                 |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `packages/types/`    | Shared `Result<T,E>`, Zod schemas, frontmatter schemas                                                               |
-| `packages/kernel/`   | SQLite state, mounts, sources, provenance, traces, tasks, recall, retention, evals — the deterministic control plane |
-| `packages/compiler/` | Claude API client, ingest adapters, six compiler passes, ask pipeline, render, agents, recall generator/quiz/export  |
-| `packages/cli/`      | Commander entry point, per-command handlers, friendly-error mapper, top-level process handlers                       |
+| Package                | Role                                                                                                                 |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `packages/types/`      | Shared `Result<T,E>`, Zod schemas, frontmatter schemas                                                               |
+| `packages/kernel/`     | SQLite state, mounts, sources, provenance, traces, tasks, recall, retention, evals — the deterministic control plane |
+| `packages/compiler/`   | Claude API client, ingest adapters, six compiler passes, ask pipeline, render, agents, recall generator/quiz/export  |
+| `packages/benchmarks/` | Benchmark harness; separate from product CLI registration                                                            |
+| `packages/cli/`        | Commander entry point, per-command handlers, friendly-error mapper, top-level process handlers                       |
 
 Adding a new event type? Update `000-docs/011-AT-TRSC-trace-schema.md` first, then emit it. Adding a new compiled-page type? Update `000-docs/009-AT-FMSC-frontmatter-schemas.md` and the validator.
 

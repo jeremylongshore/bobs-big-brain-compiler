@@ -17,9 +17,9 @@ Intent Solutions is a Claude Partner Network Select Services Partner.
 
 > Formerly `intentional-cognition-os` — the npm package keeps that name.
 
-Bob's Big Brain Compiler reads your documents, notes, and web clips and turns them into an organized, searchable knowledge base — every answer backed by a citation to the source.
+Bob's Big Brain Compiler reads your documents, notes, and web clips and turns them into an organized, searchable knowledge base — answers include source citations that are checked against the compiled wiki. A citation does not establish that its claim is correct.
 
-A local-first knowledge OS. Point `ico` at a folder of PDFs, markdown notes, and web clips. It compiles them into a queryable wiki you can read, runs grounded Q&A with inline citations, spins up multi-agent research tasks for hard questions, generates spaced-repetition flashcards from what landed, and writes every step to a protocol-level append-only audit trail. Single CLI. Your data never leaves disk except for the Claude API calls you opt into.
+A local-first knowledge OS. Point `ico` at a folder of PDFs, markdown notes, and web clips. It compiles them into a queryable wiki you can read, runs grounded Q&A with inline citations, spins up multi-agent research tasks for hard questions, generates spaced-repetition flashcards from what landed, and records supported operations in a protocol-level append-only, hash-chained trace. Single CLI. Model operations send selected source content to the configured provider; choose and provision a local endpoint when content must stay on the machine.
 
 [![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
 [![npm](https://img.shields.io/npm/v/intentional-cognition-os.svg)](https://www.npmjs.com/package/intentional-cognition-os)
@@ -36,11 +36,11 @@ A local-first knowledge OS. Point `ico` at a folder of PDFs, markdown notes, and
 
 You drop documents into a folder. `ico` reads them, compiles the content into a structured wiki on disk (one markdown file per source, per concept, per topic, per contradiction it found), and then lets you:
 
-- **Ask** a question — get an answer with `[source: filename]` citations next to every claim.
-- **Research** a question that's too big for a single retrieval — `ico` spawns a scoped task workspace with four agents (collector, summarizer, skeptic, integrator) that argue across stages and produce a cited final write-up.
+- **Ask** a question — get an answer with `[source: <page-title>]` citations checked against compiled page titles. Citation verification checks the reference, not factual correctness.
+- **Research** a question that's too big for a single retrieval — `ico` spawns a scoped task workspace through five stages (collector, summarizer, skeptic, integrator, orchestrator). Collection is deterministic; summarizer, skeptic and integrator call the configured model, and the final orchestrator hand-off can call the report renderer and provider too.
 - **Render** a report or slide deck from any topic, and **promote** that artifact back into the wiki so the next answer can cite it.
 - **Recall** what you ingested — generate flashcards with spaced repetition; export to Anki if you prefer.
-- **Audit** anything. Every API call, file write, and task transition is recorded in JSONL with a SHA-256 hash chain; the log is protocol-level append-only. If a citation looks wrong, you can trace it back to the exact source and prompt.
+- **Audit** recorded operations. Inspect the Compiler JSONL hash chain, SQLite trace index and provenance with `ico audit verify`. Compile traces can carry model-call lineage; the `ask` trace stores counts and retrieved paths, while `ask --json` returns citation details. These are separate from Registrar governance receipts and do not prove what a model used.
 
 It is a cognition runtime, not a chat wrapper. The model proposes; a deterministic kernel owns durable state, traces, and control. **Your data lives in plain markdown + SQLite on your machine.** The model API is called only for the compilation/synthesis/reasoning steps — and only when you trigger them. The backend is a pluggable provider registry: Claude by default, or any OpenAI- or Anthropic-wire provider (OpenAI, Groq, NVIDIA, DeepSeek, MiniMax) or a local server (Ollama, vLLM, LM Studio) via `ICO_PROVIDER` — so you can keep every call on-device if you want to.
 
@@ -51,20 +51,23 @@ It is a cognition runtime, not a chat wrapper. The model proposes; a determinist
 ```bash
 # the npm name predates the repo rename — intentional
 npm install -g intentional-cognition-os
-ico --version          # → 1.22.0
+ico --version          # compare with the installed artifact; source manifests are 1.23.1
 export ICO_PROVIDER=anthropic
 export ANTHROPIC_API_KEY=sk-ant-...
 # Or use MiniMax-M3: ICO_PROVIDER=minimax, ICO_MODEL=MiniMax-M3,
 # with MINIMAX_API_KEY set in the environment.
 ```
 
-Requires **Node 22+** and an API key for the selected provider. pnpm not required for usage — only for building from source.
+Requires **Node 22+**. Model operations need credentials for the selected hosted provider; a configured local provider can be keyless. pnpm is needed when building from source. Provider settings come from environment variables or the workspace `.env`; see [.env.example](.env.example). For LM Studio, use the OpenAI wire with an explicit `ICO_BASE_URL`, such as `http://localhost:1234/v1`, and the model served there.
 
 From source:
 
 ```bash
 git clone https://github.com/jeremylongshore/bobs-big-brain-compiler.git
-cd bobs-big-brain-compiler && pnpm install && pnpm build
+cd bobs-big-brain-compiler
+corepack enable
+pnpm install --frozen-lockfile
+pnpm build
 node packages/cli/dist/index.js --version
 ```
 
@@ -114,21 +117,20 @@ You now have:
 
 ---
 
-## vs. the obvious alternatives
+## Implementation boundaries
 
-|                                              | **ico**                                    | NotebookLM (Google) | Obsidian + AI plugins                             | Claude Projects / ChatGPT | LangChain / LlamaIndex    | Anki                          |
-| -------------------------------------------- | ------------------------------------------ | ------------------- | ------------------------------------------------- | ------------------------- | ------------------------- | ----------------------------- |
-| **Local-first**                              | ✅ markdown + SQLite on disk               | ❌ cloud            | ✅                                                | ❌ cloud                  | ✅ (library)              | ✅                            |
-| **Source-cited answers**                     | ✅ inline `[source:...]` per claim         | ✅                  | depends on plugin                                 | ✅ but no per-claim audit | you build it              | n/a                           |
-| **Inspectable compiled wiki**                | ✅ readable .md files                      | ❌ chat only        | ✅ (but you write the notes)                      | ❌                        | n/a — you build the store | n/a                           |
-| **Multi-agent research mode**                | ✅ collector→summarizer→skeptic→integrator | ❌                  | ❌                                                | ❌                        | you build it              | ❌                            |
-| **Spaced-repetition recall**                 | ✅ built-in, Anki export                   | ❌                  | plugin only                                       | ❌                        | ❌                        | ✅ (that's the whole product) |
-| **Protocol-level append-only audit trail**   | ✅ SHA-256 hash-chained JSONL              | ❌                  | ❌                                                | ❌                        | ❌                        | ❌                            |
-| **Open source / hackable**                   | ✅ Apache-2.0                              | ❌                  | partial (core closed)                             | ❌                        | ✅                        | ✅                            |
-| **Single CLI, no plugin zoo**                | ✅ 16 commands                             | n/a                 | ❌ (Obsidian Sync / Smart Connections / Copilot…) | n/a                       | ❌ you assemble           | n/a                           |
-| **You write the data; the AI just reads it** | ✅ kernel owns state                       | ✅                  | ✅                                                | ✅                        | depends                   | ✅                            |
+| Capability            | Mechanism                                                                  | Limit                                                                   |
+| --------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Local-first workspace | Markdown plus SQLite                                                       | Configured model endpoints can be remote.                               |
+| Compiled knowledge    | Six passes, including deterministic backlink construction                  | Model-derived content still needs evaluation.                           |
+| Cited answers         | Page-title references and citation verification                            | A valid reference does not prove a true answer.                         |
+| Research              | Five stages, including reasoning agents and a model-backed report hand-off | No separate agent SDK is required by the current implementation.        |
+| Recall                | Cards, quizzes, retention scores and Anki export                           | These are distinct from team governance.                                |
+| Trace integrity       | JSONL hash links, SQL index and optional external anchors                  | A writer able to replace all retained witnesses can evade local checks. |
+| CLI                   | Seventeen top-level command groups                                         | Count from source registration, not a new acceptance test.              |
 
-**The honest summary**: NotebookLM is the closest competitor in _function_, but it's a cloud product with no audit trail and no recall layer. Obsidian + plugins gets you a local wiki but you write every note yourself — `ico` writes the wiki for you by compiling sources. LangChain gives you the parts; `ico` is the assembled tool.
+Historical positioning lives in the design documents. This table describes this
+implementation; it is not a current feature audit of other products.
 
 ---
 
@@ -158,20 +160,24 @@ The hard constraint, drilled through every component: **the model never directly
 
 ## Commands you'll actually use
 
-|                                   |                                                          |
-| --------------------------------- | -------------------------------------------------------- |
-| `ico init <name>`                 | Create a workspace                                       |
-| `ico mount add <name> <path>`     | Register a source directory                              |
-| `ico ingest <path>`               | Parse PDFs/MD/web-clips into the raw layer               |
-| `ico compile all`                 | Run the six compiler passes (provider calls happen here) |
-| `ico ask "<question>"`            | Grounded Q&A with citations                              |
-| `ico research "<brief>"`          | Multi-agent research task (5 stages, ~5 min)             |
-| `ico render report --topic <t>`   | Generate a markdown report                               |
-| `ico recall generate --topic <t>` | Build flashcards from compiled wiki                      |
-| `ico recall quiz --topic <t>`     | Interactive quiz; tracks retention                       |
-| `ico recall export --format anki` | Anki-importable TSV                                      |
-| `ico lint`                        | Audit the wiki (schema, staleness, orphans)              |
-| `ico status` / `ico inspect`      | Workspace summary / per-subsystem detail                 |
+|                                          |                                                          |
+| ---------------------------------------- | -------------------------------------------------------- |
+| `ico init <name>`                        | Create a workspace                                       |
+| `ico mount add <name> <path>`            | Register a source directory                              |
+| `ico ingest <path>`                      | Parse PDFs/MD/web-clips into the raw layer               |
+| `ico compile all`                        | Run six passes; backlink construction is deterministic   |
+| `ico ask "<question>"`                   | Grounded Q&A with citations                              |
+| `ico research "<brief>"`                 | Five-stage research; duration depends on corpus/provider |
+| `ico render report --topic <t>`          | Generate a markdown report                               |
+| `ico recall generate --topic <t>`        | Build flashcards from compiled wiki                      |
+| `ico recall quiz --topic <t>`            | Interactive quiz; tracks retention                       |
+| `ico recall export --format anki`        | Anki-importable TSV                                      |
+| `ico compile all --changed`              | Compile eligible changed inputs; see command help        |
+| `ico spool emit --tenant <id> --dry-run` | Preview the governance hand-off without emitting files   |
+| `ico audit verify`                       | Verify Compiler trace/index/provenance evidence          |
+| `ico maintain --help`                    | Inspect mounted-source maintenance and lifecycle options |
+| `ico lint`                               | Audit the wiki (schema, staleness, orphans)              |
+| `ico status` / `ico inspect`             | Workspace summary / per-subsystem detail                 |
 
 Global flags on every command: `--workspace <path>`, `--json`, `--verbose`, `--quiet`. Full reference: `ico --help` or any command with `--help`.
 
@@ -179,11 +185,21 @@ Global flags on every command: `--workspace <path>`, `--json`, `--verbose`, `--q
 
 ## Status
 
-**v1.22.0 — stable.** 1,737 deterministic tests passing (1,712 package tests plus 25 integration tests), with live model-output quality measured separately by the manual MiniMax-M3 golden-corpus workflow. Public release on npm.
+Source checked 2026-10-26 at `9dc7488`: release manifests and the CLI version
+are **1.23.1**, with **17 top-level command groups** and **five workspace packages**.
+An installed artifact must be checked independently; a matching version label
+alone does not identify its payload. Current test and coverage evidence belongs
+to the run and commit recorded in [TEST_AUDIT.md](TEST_AUDIT.md) or the relevant PR;
+older test totals are not current acceptance evidence.
 
-- **Stable**: all 16 commands, the compilation passes, ask + research + recall + render + promote, the audit chain.
-- **In progress**: manual golden-corpus quality receipts and post-v1 coverage uplift on compiler + CLI packages.
-- **Roadmap**: remote/sync (Phase 3), multi-user (Phase 4), plugin system (Phase 5). All deliberately deferred to keep v1 local-first and inspectable.
+The exported `packages/compiler/src/version.ts` constant remains `0.1.0`, is pinned
+by its unit test and is outside release-please's version updates. It is distinct
+from the CLI/release version; this documentation correction changes no code.
+
+The Compiler is the local workspace layer; the separate Registrar/plugin provide
+team governance. A repository Claude plugin already exists under `plugin/` for
+dog-food workflows. This does not establish the general extension API, remote
+workspace service or multi-user Compiler described in the historical phase plan.
 
 ---
 

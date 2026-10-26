@@ -7,6 +7,16 @@
 **Product:** Intentional Cognition OS
 **CLI:** `ico`
 
+> Implementation note, 2026-10-26 (`9dc7488`): preserve these historical phase
+> numbers as a plan, not a shipping inventory. Current source has the optional
+> dog-food Claude plugin, spool/demo/audit/maintenance commands and provider
+> registry. The research implementation uses an injected `ClaudeClient`, not a
+> separate Agent SDK; its final report hand-off can call the provider. A general
+> extension API, remote Compiler workspace service and multi-user Compiler are
+> distinct planned capabilities. See README for the current local layer and the
+> separate Registrar/plugin for team governance. This note records observed
+> implementation, not approval of a new architectural direction.
+
 ---
 
 ## 1. Thesis
