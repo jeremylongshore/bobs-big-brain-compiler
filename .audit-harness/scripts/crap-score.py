@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import os
 import shutil
@@ -34,6 +35,35 @@ class MethodScore:
     coverage: float
     crap: float
     kind: str  # "src" or "test"
+
+
+# Directories to skip during candidate discovery AND the --json input-hash
+# walk. Single source of truth — both call sites MUST use this set so a repo
+# with `reports/` (or `.next/`, `.nuxt/`, `.cache/`) gets identical treatment
+# in both the candidate scan and the input-hash computation. Adding a dir
+# here removes it from BOTH passes; that's the invariant this constant exists
+# to preserve.
+EXCLUDED_DIRS = {
+    ".git", ".venv", "venv", "node_modules", "__pycache__",
+    "dist", "build", "target", ".tox", ".mypy_cache", ".pytest_cache",
+    ".next", ".nuxt", ".cache", "reports",
+}
+
+
+def is_excluded_dir(name: str) -> bool:
+    """Single exclusion predicate shared by the candidate-discovery walk and
+    the --json input-hash walk.
+
+    Both walks MUST agree on which directories they descend into; otherwise the
+    set of files that feed the CRAP score can diverge from the set that feeds
+    the input_hash, and the score/hash desync (a hash that claims to cover
+    files the score never saw, or vice versa). The rule is: skip any dot-dir
+    (e.g. `.idea`, `.svn`, `.git`) OR any explicitly-named build/vendor dir in
+    EXCLUDED_DIRS. Previously discovery dropped all dot-dirs while the hash walk
+    dropped only the named subset, so a dot-dir not in EXCLUDED_DIRS was hashed
+    but never scored.
+    """
+    return name.startswith(".") or name in EXCLUDED_DIRS
 
 
 def crap(complexity: int, coverage_pct: float) -> float:
@@ -81,12 +111,10 @@ def score_python(root: Path, kind: str) -> list[MethodScore]:
         scanned = [t for t in candidates if (root / t).is_dir()]
         if not scanned:
             test_dirs = {"tests", "test", "spec", "specs", "features", "__tests__"}
-            ignore = {".git", ".venv", "venv", "node_modules", "dist", "build", "target", ".tox", ".mypy_cache", ".pytest_cache", "reports", "__pycache__"}
             scanned = [
                 p.name for p in root.iterdir()
                 if p.is_dir()
-                and not p.name.startswith(".")
-                and p.name not in ignore
+                and not is_excluded_dir(p.name)
                 and p.name not in test_dirs
                 and any(p.rglob("*.py"))
             ]
@@ -152,7 +180,15 @@ def score_go(root: Path, kind: str) -> list[MethodScore]:
         print("[crap-score] gocyclo not installed", file=sys.stderr)
         return []
 
-    rc, out, _ = run(["gocyclo", "-ignore", "_test.go" if kind == "src" else ".*\\.go$", "."], root)
+    # For kind="src", ignore *_test.go at the gocyclo level. For kind="test",
+    # do NOT pass -ignore: a pattern like `.*\.go$` matches every analyzable
+    # file (gocyclo only reads .go files), which silenced all test-kind output.
+    # The include-filter below keeps only *_test.go rows for kind="test".
+    gocyclo_cmd = ["gocyclo"]
+    if kind == "src":
+        gocyclo_cmd += ["-ignore", "_test.go"]
+    gocyclo_cmd.append(".")
+    rc, out, _ = run(gocyclo_cmd, root)
     complexity: list[tuple[str, str, int]] = []
     for line in out.splitlines():
         parts = line.strip().split()
@@ -171,14 +207,31 @@ def score_go(root: Path, kind: str) -> list[MethodScore]:
 
     coverage: dict[str, float] = {}
     cov_out = root / "coverage.out"
-    if not cov_out.is_file():
+    if not cov_out.is_file() and which_or_none("go"):
         run(["go", "test", "-coverprofile=coverage.out", "-covermode=atomic", "./..."], root)
     if cov_out.is_file() and which_or_none("go"):
+        # `go tool cover -func` reports module-qualified paths
+        # (github.com/user/repo/pkg/file.go) while gocyclo reports repo-relative
+        # paths (pkg/file.go). Strip the module prefix read from go.mod so the
+        # coverage keys join the complexity keys.
+        module_prefix = ""
+        go_mod = root / "go.mod"
+        if go_mod.is_file():
+            try:
+                for mod_line in go_mod.read_text().splitlines():
+                    mod_line = mod_line.strip()
+                    if mod_line.startswith("module ") or mod_line.startswith("module\t"):
+                        module_prefix = mod_line.split(None, 1)[1].strip() + "/"
+                        break
+            except OSError:
+                pass
         rc, out, _ = run(["go", "tool", "cover", "-func=coverage.out"], root)
         for line in out.splitlines():
             parts = line.split()
             if len(parts) >= 3 and parts[-1].endswith("%"):
                 fpath = parts[0].split(":", 1)[0]
+                if module_prefix and fpath.startswith(module_prefix):
+                    fpath = fpath[len(module_prefix):]
                 try:
                     pct = float(parts[-1].rstrip("%"))
                 except ValueError:
@@ -215,6 +268,17 @@ def score_js(root: Path, kind: str) -> list[MethodScore]:
     except json.JSONDecodeError:
         return []
 
+    # c8/istanbul's json-summary reporter keys files by ABSOLUTE path while
+    # complexity-report (run with a repo-relative target) reports repo-relative
+    # paths. Normalize both sides to repo-relative so the coverage join works.
+    def _rel_to_root(p: str) -> str:
+        if os.path.isabs(p):
+            try:
+                return os.path.relpath(p, str(root))
+            except ValueError:
+                return p  # e.g. different drive on Windows — keep as-is
+        return p
+
     cov_path = root / "coverage" / "coverage-summary.json"
     coverage: dict[str, float] = {}
     if cov_path.is_file():
@@ -224,14 +288,14 @@ def score_js(root: Path, kind: str) -> list[MethodScore]:
                 if fpath == "total":
                     continue
                 lines_pct = summary.get("lines", {}).get("pct", 0.0)
-                coverage[fpath] = float(lines_pct)
+                coverage[_rel_to_root(fpath)] = float(lines_pct)
         except (OSError, json.JSONDecodeError):
             pass
 
     scores: list[MethodScore] = []
     for report in data.get("reports", []):
         fpath = report.get("path", "")
-        cov = coverage.get(fpath, 0.0)
+        cov = coverage.get(_rel_to_root(fpath), 0.0)
         for func in report.get("functions", []):
             c = int(func.get("cyclomatic", 1))
             scores.append(
@@ -263,7 +327,6 @@ def score_rust(root: Path, kind: str) -> list[MethodScore]:
         except json.JSONDecodeError:
             continue
         fpath = rec.get("name", "")
-        metrics = rec.get("metrics", {}).get("cyclomatic", {})
         for func in rec.get("spaces", []):
             c = int(func.get("metrics", {}).get("cyclomatic", {}).get("sum", 1))
             complexity.append((fpath, func.get("name", "<anon>"), c))
@@ -302,6 +365,10 @@ def main() -> int:
                     help="Test CRAP max (default 15)")
     ap.add_argument("--threshold-avg", type=float, default=10.0,
                     help="Project average max (default 10)")
+    ap.add_argument("--json", action="store_true",
+                    help="Emit gate-result envelope JSON on stdout (suitable for piping "
+                         "to `audit-harness emit-evidence`). Preserves existing CSV/JSON "
+                         "files written under --out.")
     args = ap.parse_args()
 
     root = Path(args.root).resolve()
@@ -377,7 +444,51 @@ def main() -> int:
     if args.format in ("json", "both"):
         (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
 
-    print(json.dumps({"pass": pass_, "summary_path": str(out_dir / "summary.json")}))
+    if args.json:
+        side = os.environ.get("AUDIT_HARNESS_SIDE", "ci")
+        # input_hash: SHA256 over all production+test source-file contents under root, sorted.
+        # Use os.walk with directory pruning instead of rglob — large vendored trees
+        # (node_modules, .venv, .git, build outputs) would otherwise dominate the walk
+        # cost on big repos and waste IO on files we already filter out by extension.
+        digest = hashlib.sha256()
+        exts = (".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".kt", ".cs", ".php", ".rb")
+        collected: list[Path] = []
+        for dirpath, dirs, files in os.walk(root):
+            dirs[:] = [d for d in dirs if not is_excluded_dir(d)]
+            for fn in files:
+                if fn.endswith(exts):
+                    collected.append(Path(dirpath) / fn)
+        for fp in sorted(collected):
+            digest.update(fp.read_bytes())
+        input_hash = f"sha256:{digest.hexdigest()}"
+        # policy_hash: SHA256 over the threshold tuple (stable, deterministic)
+        policy_repr = f"prod={args.threshold_prod}|test={args.threshold_test}|avg={args.threshold_avg}".encode()
+        policy_hash = f"sha256:{hashlib.sha256(policy_repr).hexdigest()}"
+        result = "PASS" if pass_ else "FAIL"
+        envelope = {
+            "gate_id": f"audit-harness:{side}:crap-score",
+            "result": result,
+            "input_hash": input_hash,
+            "policy_hash": policy_hash,
+            "metadata": {
+                "language": lang,
+                "thresholds": summary["thresholds"],
+                "production_max_crap": summary["production"]["max_crap"],
+                "production_avg_crap": summary["production"]["avg_crap"],
+                "production_methods_scored": summary["production"]["methods_scored"],
+                "production_blockers_count": len(prod_blockers),
+                "test_max_crap": summary["test"]["max_crap"],
+                "test_methods_scored": summary["test"]["methods_scored"],
+                "test_blockers_count": len(test_blockers),
+                "avg_fail": avg_fail,
+                "summary_path": str(out_dir / "summary.json"),
+            },
+        }
+        if not pass_:
+            envelope["failure_mode"] = "crap-threshold-exceeded"
+        print(json.dumps(envelope))
+    else:
+        print(json.dumps({"pass": pass_, "summary_path": str(out_dir / "summary.json")}))
     return 0 if pass_ else 1
 
 

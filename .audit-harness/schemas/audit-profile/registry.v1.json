@@ -1,0 +1,87 @@
+{
+  "registry_version": "audit-profile-registry/v1",
+  "description": "THE canonical dimension-to-gate registry: the single datum that answers 'which gates apply to repo-type X, in which dimension, at what applicability'. layer-applicability.md and each repo's TESTING.md are PROJECTIONS of this datum. `classify` resolves the UNION of a repo's detected classifications against this registry and records its sha256 as the audit-profile's registry_hash. Every gate defaults to enforcement=advisory; blocking is earned (engineer-pinned in TESTING.md, FP-rate-gated). applicability mirrors the matrix glyphs: required(✅) recommended(⭕) conditional(⚠) waived(❌).",
+  "base": [
+    { "gate_id": "audit-harness:local:hygiene-readme", "dimension": "hygiene", "applicability": "recommended", "enforcement": "advisory", "result_class_default": "PASS" },
+    { "gate_id": "audit-harness:local:hygiene-links", "dimension": "hygiene", "applicability": "recommended", "enforcement": "advisory", "tool": "lychee", "result_class_default": "INDETERMINATE" },
+    { "gate_id": "audit-harness:local:hygiene-markdown", "dimension": "hygiene", "applicability": "recommended", "enforcement": "advisory", "tool": "markdownlint" },
+    { "gate_id": "audit-harness:ci:secrets-gitleaks", "dimension": "security", "applicability": "recommended", "enforcement": "advisory", "tool": "gitleaks", "result_class_default": "INDETERMINATE" },
+    { "gate_id": "audit-harness:ci:cve-osv", "dimension": "security", "applicability": "recommended", "enforcement": "advisory", "tool": "osv-scanner", "result_class_default": "INDETERMINATE" }
+  ],
+  "classifications": {
+    "service": [
+      { "gate_id": "audit-harness:ci:unit", "dimension": "testing-depth", "applicability": "required", "enforcement": "advisory" },
+      { "gate_id": "audit-harness:ci:crap-score", "dimension": "testing-depth", "applicability": "required", "enforcement": "advisory" },
+      { "gate_id": "audit-harness:ci:integration", "dimension": "testing-depth", "applicability": "required", "enforcement": "advisory" },
+      { "gate_id": "audit-harness:ci:contract", "dimension": "testing-depth", "applicability": "required", "enforcement": "advisory" },
+      { "gate_id": "audit-harness:ci:migration", "dimension": "testing-depth", "applicability": "required", "enforcement": "advisory" },
+      { "gate_id": "audit-harness:ci:sast", "dimension": "security", "applicability": "required", "enforcement": "advisory", "tool": "semgrep" },
+      { "gate_id": "audit-harness:ci:sbom-syft", "dimension": "security", "applicability": "recommended", "enforcement": "advisory", "tool": "syft" },
+      { "gate_id": "audit-harness:ci:perf", "dimension": "testing-depth", "applicability": "recommended", "enforcement": "advisory" }
+    ],
+    "api": [
+      { "gate_id": "audit-harness:ci:unit", "dimension": "testing-depth", "applicability": "required", "enforcement": "advisory" },
+      { "gate_id": "audit-harness:ci:crap-score", "dimension": "testing-depth", "applicability": "required", "enforcement": "advisory" },
+      { "gate_id": "audit-harness:ci:integration", "dimension": "testing-depth", "applicability": "required", "enforcement": "advisory" },
+      { "gate_id": "audit-harness:ci:contract", "dimension": "testing-depth", "applicability": "required", "enforcement": "advisory" },
+      { "gate_id": "audit-harness:local:conform-openapi", "dimension": "conformance", "applicability": "required", "enforcement": "advisory", "tool": "spectral" },
+      { "gate_id": "audit-harness:ci:sast", "dimension": "security", "applicability": "required", "enforcement": "advisory", "tool": "semgrep" }
+    ],
+    "frontend": [
+      { "gate_id": "audit-harness:ci:unit", "dimension": "testing-depth", "applicability": "required", "enforcement": "advisory" },
+      { "gate_id": "audit-harness:ci:crap-score", "dimension": "testing-depth", "applicability": "required", "enforcement": "advisory" },
+      { "gate_id": "audit-harness:ci:e2e", "dimension": "testing-depth", "applicability": "required", "enforcement": "advisory" },
+      { "gate_id": "audit-harness:ci:a11y", "dimension": "testing-depth", "applicability": "required", "enforcement": "advisory", "tool": "axe" },
+      { "gate_id": "audit-harness:ci:contract", "dimension": "testing-depth", "applicability": "conditional", "enforcement": "advisory" }
+    ],
+    "cli": [
+      { "gate_id": "audit-harness:ci:unit", "dimension": "testing-depth", "applicability": "required", "enforcement": "advisory" },
+      { "gate_id": "audit-harness:ci:crap-score", "dimension": "testing-depth", "applicability": "required", "enforcement": "advisory" },
+      { "gate_id": "audit-harness:ci:smoke", "dimension": "testing-depth", "applicability": "required", "enforcement": "advisory" }
+    ],
+    "library": [
+      { "gate_id": "audit-harness:ci:unit", "dimension": "testing-depth", "applicability": "required", "enforcement": "advisory" },
+      { "gate_id": "audit-harness:ci:crap-score", "dimension": "testing-depth", "applicability": "required", "enforcement": "advisory" },
+      { "gate_id": "audit-harness:ci:property-based", "dimension": "testing-depth", "applicability": "recommended", "enforcement": "advisory" },
+      { "gate_id": "audit-harness:ci:cve-osv", "dimension": "security", "applicability": "required", "enforcement": "advisory", "tool": "osv-scanner", "result_class_default": "INDETERMINATE" }
+    ],
+    "embedded": [
+      { "gate_id": "audit-harness:ci:unit", "dimension": "testing-depth", "applicability": "required", "enforcement": "advisory" },
+      { "gate_id": "audit-harness:ci:fuzz", "dimension": "testing-depth", "applicability": "required", "enforcement": "advisory" },
+      { "gate_id": "audit-harness:ci:sanitizers", "dimension": "testing-depth", "applicability": "required", "enforcement": "advisory" }
+    ],
+    "monorepo": [
+      { "gate_id": "audit-harness:local:per-package-classify", "dimension": "testing-depth", "applicability": "required", "enforcement": "advisory" }
+    ],
+    "skill": [
+      { "gate_id": "audit-harness:local:conform-skillmd", "dimension": "conformance", "applicability": "required", "enforcement": "advisory", "tool": "validate-skillmd" },
+      { "gate_id": "audit-harness:server:skill-behavioral", "dimension": "skill-quality", "applicability": "recommended", "enforcement": "advisory", "tool": "j-rig" }
+    ],
+    "agent": [
+      { "gate_id": "audit-harness:local:conform-agent", "dimension": "conformance", "applicability": "required", "enforcement": "advisory", "tool": "validate-agent" }
+    ],
+    "hook": [
+      { "gate_id": "audit-harness:local:conform-hook", "dimension": "conformance", "applicability": "required", "enforcement": "advisory", "tool": "validate-hook" }
+    ],
+    "mcp": [
+      { "gate_id": "audit-harness:local:conform-mcp", "dimension": "conformance", "applicability": "required", "enforcement": "advisory", "tool": "validate-mcp" }
+    ],
+    "plugin": [
+      { "gate_id": "audit-harness:local:conform-plugin", "dimension": "conformance", "applicability": "required", "enforcement": "advisory", "tool": "validate-plugin" },
+      { "gate_id": "audit-harness:server:skill-behavioral", "dimension": "skill-quality", "applicability": "recommended", "enforcement": "advisory", "tool": "j-rig" }
+    ],
+    "marketplace": [
+      { "gate_id": "audit-harness:local:conform-marketplace", "dimension": "conformance", "applicability": "required", "enforcement": "advisory", "tool": "validate-marketplace" }
+    ],
+    "action": [
+      { "gate_id": "audit-harness:local:conform-action", "dimension": "conformance", "applicability": "required", "enforcement": "advisory", "tool": "yamllint" },
+      { "gate_id": "audit-harness:ci:smoke", "dimension": "testing-depth", "applicability": "recommended", "enforcement": "advisory" }
+    ]
+  },
+  "overlays": {
+    "regulated": {
+      "description": "Compliance overlay (HIPAA/SOX/PCI-DSS/SOC2/GDPR/FedRAMP markers). Promotes recommended security + conformance gates to required and escalates uncovered SHOULD requirements.",
+      "promote_to_required": ["security", "conformance"]
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jeremylongshore/intent-eval-core/schemas/authoring/v1/upstream-base/skill-frontmatter.v1.json",
+  "title": "skill-frontmatter — UPSTREAM BASE (authored by the open standard, not by IS)",
+  "description": "The upstream projection of the skill-frontmatter contract: the field shape owned by agentskills.io v1.0 + the Anthropic/Claude skill docs. THIS FILE IS A VENDORED PROJECTION — it encodes ONLY what the upstream standard says, never an IS-specific rule. It is regenerated from the vendored snapshot, never hand-edited with IS policy. IS-specific required fields and constraints live in is-overlay/skill-frontmatter.v1.json. Convergence (upstream adopts one of our overlay extras) is a mechanical MOVE of a field from is-overlay → here, not an in-place re-edit. Two upstream tiers (bead azj4): standardFloor = the 2 always-required fields; openStandardCompliant = the full agentskills.io v1.0 surface (2 required + 4 optional = 6).",
+  "$comment": "PROVENANCE. Authorities: agentskills.io/specification (the open standard Claude Code follows); platform.claude.com/docs/en/agents-and-tools/agent-skills/overview + .../best-practices; code.claude.com/docs/en/skills. Deep prose capture: claude-code-plugins/000-docs/6767-b-SPEC-DR-STND-claude-skills-standard.md §4. Vendored snapshot of record + drift-watch freshness mechanism: intent-eval-lab _vendor/upstream/skill-frontmatter/ (Track C — single vendored source; do not fork a second copy here). standardFloor = [name, description]. openStandardCompliant adds optional [license, compatibility, metadata, allowed-tools]. NOTE on description length: agentskills.io documents a 1024-char soft cap, but the IS marketplace tier operates at the 1536-char disclosureMarkers budget (universal fold). The base intentionally does NOT encode the 1024 cap — encoding it would conflict with the IS 1536 tier and violate the monotonic-additive invariant (the base must be the loosest layer; the overlay may only ADD/NARROW). NOTE on allowed-tools: agentskills.io marks it EXPERIMENTAL and documents a space-separated string; the IS overlay narrows it to a YAML array (a permitted narrowing). The base therefore does not type allowed-tools.",
+  "type": "object",
+  "required": ["name", "description"],
+  "properties": {
+    "name": {
+      "$comment": "agentskills.io: 1-64 chars; lowercase letters/digits/hyphens; no leading/trailing hyphen; no consecutive '--'; must match parent directory name. The pattern here enforces the kebab-case + length surface tested by the corpus; the no-consecutive-hyphen and parent-dir-match rules are upstream prose not encoded structurally.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+    },
+    "description": {
+      "$comment": "agentskills.io: 1-1024 chars, non-empty, third-person voice. Length cap deliberately NOT encoded here (see top-level $comment) — the universal disclosureMarkers fold (1536) is the operative IS cap.",
+      "type": "string",
+      "minLength": 1
+    },
+    "license": {
+      "$comment": "agentskills.io OPTIONAL: a license name or a reference to a bundled license file.",
+      "type": "string"
+    },
+    "compatibility": {
+      "$comment": "agentskills.io OPTIONAL: 1-500 chars; free-text environment/product/system-package requirements.",
+      "type": "string",
+      "maxLength": 500
+    },
+    "metadata": {
+      "$comment": "agentskills.io OPTIONAL: a map from string keys to string values; vendor-namespacing recommended. Left as a generic object (not string→string) so an IS vendor namespace (metadata.intent-solutions) does not violate the upstream shape.",
+      "type": "object"
+    }
+  }
+}

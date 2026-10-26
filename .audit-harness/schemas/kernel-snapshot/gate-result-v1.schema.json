@@ -1,0 +1,300 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "gate-result/v1 \u2014 NORMATIVE in-toto predicate body",
+  "description": "Predicate body of an in-toto Statement v1 whose predicateType is https://evals.intentsolutions.io/gate-result/v1. Source of truth: Blueprint B \u00a7 7.4 (lines 794-834). The ONLY predicate body fully spec-bound at v1; every other predicate URI runs in sigstore_staging until its SPEC.md normative section lands per DR-010 Q3. This schema validates ONLY the predicate body \u2014 the enclosing in-toto Statement envelope (_type, subject, predicateType) is validated separately. Each row independently verifiable; NO top-level bundle signature per \u00a7 7 line 754. Adding/loosening any field requires Class-1 ISEDC convening.\n\nMigration note: this schema SUPERSEDES the lab's v0.1.0-draft schema (which used `result`/`timestamp` and was missing gate_name/gate_version/gate_reasons/coverage/policy_ref). Blueprint B \u00a7 7.4 is the canonical source \u2014 the lab schema was authored before Blueprint B landed on main.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "gate_id",
+    "gate_name",
+    "gate_version",
+    "gate_decision",
+    "gate_reasons",
+    "coverage",
+    "policy_ref",
+    "policy_hash",
+    "input_hash",
+    "evaluated_at",
+    "runner",
+    "commit_sha"
+  ],
+  "properties": {
+    "gate_id": {
+      "$ref": "#/$defs/subjectName"
+    },
+    "gate_name": {
+      "$ref": "#/$defs/kebabSlug"
+    },
+    "gate_version": {
+      "$ref": "#/$defs/semver"
+    },
+    "gate_decision": {
+      "type": "string",
+      "description": "Decision verdict (Blueprint B \u00a7 7.4 line 800, closed 4-element enum). Distinct from JudgeVerdict (UPPERCASE) and RolloutGateDecision (ship/no_ship).",
+      "enum": [
+        "pass",
+        "fail",
+        "advisory",
+        "error"
+      ]
+    },
+    "gate_reasons": {
+      "type": "array",
+      "description": "Structured reason strings. Empty array permitted ONLY for unconditional pass. For fail/advisory/error, at least one entry MUST appear; for error, gate_reasons[0] MUST capture the error class per \u00a7 7.4 line 829.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "coverage": {
+      "$ref": "#/$defs/coverage"
+    },
+    "policy_ref": {
+      "type": "string",
+      "description": "Format: `sha256:<hex>:<repo-relative-path>`. Defends against mid-flight policy mutation per \u00a7 7.4 line 810.",
+      "pattern": "^sha256:[a-f0-9]{64}:.+$"
+    },
+    "policy_hash": {
+      "$ref": "#/$defs/sha256Prefixed"
+    },
+    "input_hash": {
+      "$ref": "#/$defs/sha256Prefixed"
+    },
+    "evaluated_at": {
+      "$ref": "#/$defs/rfc3339"
+    },
+    "runner": {
+      "$ref": "#/$defs/runnerIdentifier"
+    },
+    "commit_sha": {
+      "$ref": "#/$defs/commitSha"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Tool-specific free-form metadata. Consumers MUST NOT use this for ship/no-ship decisions per \u00a7 7.4 line 818.",
+      "additionalProperties": true
+    },
+    "failure_mode": {
+      "type": "string",
+      "description": "Failure-mode classifier. MUST be populated when gate_decision='fail' AND the originating tool defines failure modes (e.g., MM-class for audit-harness gates)."
+    },
+    "advisory_severity": {
+      "type": "string",
+      "description": "Severity hint when gate_decision='advisory'. Consumer policy decides whether to elevate to blocking.",
+      "enum": [
+        "info",
+        "warn",
+        "error"
+      ]
+    },
+    "cost_record_ref": {
+      "$ref": "#/$defs/uuidv7"
+    },
+    "replay_fidelity_level": {
+      "type": "string",
+      "description": "Replay fidelity level per iel-E11.",
+      "enum": [
+        "RF-0",
+        "RF-1",
+        "RF-2",
+        "RF-3",
+        "RF-4"
+      ]
+    },
+    "coverage_detail": {
+      "type": "array",
+      "description": "Richer per-dimension coverage metadata (deferral-D lockup, bd_000-projects-9xyk). OPTIONAL + additive \u2014 the required `coverage` string arrays are unchanged, so the predicate URI is unaffected per \u00a7 7.2. Each entry's id MUST be a member of the matching `coverage` array (enforced at the validator layer). Descriptive only; MUST NOT drive ship/no-ship.",
+      "items": {
+        "$ref": "#/$defs/coverageDimensionDetail"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "description": "When gate_decision='advisory', advisory_severity SHOULD be populated.",
+      "if": {
+        "properties": {
+          "gate_decision": {
+            "const": "advisory"
+          }
+        },
+        "required": [
+          "gate_decision"
+        ]
+      },
+      "then": {
+        "required": [
+          "advisory_severity"
+        ]
+      }
+    },
+    {
+      "description": "Blueprint B \u00a7 7.4 line 829 (NORMATIVE): empty gate_reasons is permitted ONLY for unconditional pass \u2014 when gate_decision is fail/advisory/error at least one reason MUST appear.",
+      "if": {
+        "properties": {
+          "gate_decision": {
+            "enum": [
+              "fail",
+              "advisory",
+              "error"
+            ]
+          }
+        },
+        "required": [
+          "gate_decision"
+        ]
+      },
+      "then": {
+        "properties": {
+          "gate_reasons": {
+            "type": "array",
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "uuidv7": {
+      "type": "string",
+      "description": "UUIDv7 \u2014 time-ordered 128-bit identifier (RFC 9562). Time-ordered prefix means natural sort order matches insertion order. Per Blueprint B \u00a7 6.2 universal conventions.",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "sha256": {
+      "type": "string",
+      "description": "Bare 64-hex-char SHA-256 digest. Used for entity content_hash fields per Blueprint B \u00a7 2.x prose.",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "sha256Prefixed": {
+      "type": "string",
+      "description": "Prefixed SHA-256 digest in the form `sha256:<64-lowercase-hex>`. REQUIRED format for every *_hash field in the gate-result/v1 predicate body per Blueprint B \u00a7 7.4. Unknown algorithm prefixes cause row verification failure.",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "rfc3339": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 / ISO 8601 timestamp with timezone. Blueprint B requires UTC ('Z') with millisecond precision for fields in worker-lease ordering (clock-skew tolerance \u00b110 ms)."
+    },
+    "semver": {
+      "type": "string",
+      "description": "SemVer 2.0.0 version string.",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[A-Za-z0-9.-]+)?(\\+[A-Za-z0-9.-]+)?$"
+    },
+    "kebabSlug": {
+      "type": "string",
+      "description": "Lowercase kebab-case slug.",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "actorIdentity": {
+      "type": "string",
+      "description": "Opaque actor identity string \u2014 engineer email, service-account name, or worker id. Format intentionally unspecified at this layer.",
+      "minLength": 1
+    },
+    "storageKey": {
+      "type": "string",
+      "description": "Object-storage key (content-addressed). Format opaque at this layer; storage backends own resolution.",
+      "minLength": 1
+    },
+    "otelSpanId": {
+      "type": "string",
+      "description": "OpenTelemetry span identifier \u2014 16 lowercase hex characters per OTel spec.",
+      "pattern": "^[a-f0-9]{16}$"
+    },
+    "microUsd": {
+      "type": "integer",
+      "description": "Cost in micro-USD for sub-cent precision. Per Blueprint B \u00a7 2.12. Convert to USD at display layer (value / 1_000_000).",
+      "minimum": 0
+    },
+    "mmClass": {
+      "type": "string",
+      "description": "Matcher Map class \u2014 closed v1 canonical set per Blueprint B \u00a7 2.3. Extension via FailureTaxonomy proposed\u2192canonical lifecycle (Class-1 ISEDC).",
+      "enum": [
+        "MM-1",
+        "MM-2",
+        "MM-3",
+        "MM-4",
+        "MM-5",
+        "MM-6"
+      ]
+    },
+    "mmClassId": {
+      "type": "string",
+      "description": "FailureTaxonomy natural key \u2014 accepts any MM-N value (broader than MmClass enum since taxonomy is upstream of kernel enum).",
+      "pattern": "^MM-[0-9]+$"
+    },
+    "runnerIdentifier": {
+      "type": "string",
+      "description": "Tool + SemVer identifier in the form `<kebab-slug>@<semver>`.",
+      "pattern": "^[a-z0-9][a-z0-9-]*@[0-9]+\\.[0-9]+\\.[0-9]+(-[A-Za-z0-9.-]+)?(\\+[A-Za-z0-9.-]+)?$"
+    },
+    "commitSha": {
+      "type": "string",
+      "description": "Git commit SHA \u2014 full 40-hex or short 7-hex accepted per Blueprint B \u00a7 7.4 line 815.",
+      "pattern": "^[a-f0-9]{7,40}$"
+    },
+    "subjectName": {
+      "type": "string",
+      "description": "in-toto subject name per Blueprint B \u00a7 7.3 line 779. Three segments: `<tool>:<side>:<gate-id>` where side \u2208 {client, server, ci, sandbox, local}.",
+      "pattern": "^[a-z0-9][a-z0-9-]*:(client|server|ci|sandbox|local):[a-zA-Z0-9][a-zA-Z0-9.-]*$"
+    },
+    "coverage": {
+      "type": "object",
+      "description": "Coverage declaration per Blueprint B \u00a7 7.4 line 807. Both arrays REQUIRED. Element type LOCKED as string per deferral-D (bd_000-projects-9xyk). NOT_APPLICABLE encoding (\u00a7 7.4 line 832): gate_decision='pass' + populated dimensions_skipped + documented skip in gate_reasons.",
+      "required": [
+        "dimensions_evaluated",
+        "dimensions_skipped"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "dimensions_evaluated": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dimensions_skipped": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "coverageDimensionDetail": {
+      "type": "object",
+      "description": "Richer per-dimension coverage element (deferral-D lockup, bd_000-projects-9xyk). The OPTIONAL companion to `coverage`'s string arrays \u2014 adopted additively per \u00a7 7.2 so the `coverage` element type stays `string`. Descriptive only; MUST NOT drive ship/no-ship (mirrors metadata rule).",
+      "required": [
+        "id",
+        "status"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Dimension id \u2014 MUST appear in the matching coverage array (cross-field enforced at the validator layer)."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "evaluated",
+            "skipped"
+          ]
+        },
+        "skip_reason": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "observed": {
+          "type": "number"
+        }
+      }
+    },
+    "errorClass": {
+      "type": "string",
+      "description": "Tool-error class (deferral-E lockup, bd_000-projects-84li). A kernel-registered cross-cutting class OR a tool-defined `<domain>.<condition>` string. The registration CONVENTION is locked (dot-separated, lowercase); the enum stays OPEN.",
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+    }
+  },
+  "x-derived-from": "@intentsolutions/core schemas/v1/gate-result.schema.json (kernel) \u2014 self-contained copy with _common $defs inlined; regenerate when the kernel schema changes"
+}

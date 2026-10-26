@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://evals.intentsolutions.io/conform/v1/skillmd-frontmatter.schema.json",
+  "title": "SKILL.md frontmatter — deterministic structural floor (conform/v1)",
+  "description": "The DETERMINISTIC STRUCTURAL FLOOR for a SKILL.md frontmatter block: it parses, carries the Anthropic-spec required pair (name + description), and the known optional fields are the right type. This is NOT the IS 100-point marketplace rubric or the 8-field enterprise required set — that grading is judgment-bearing and stays in /validate-skillmd (Tier 1) + the SAK authoring kernel. conform validates the floor; Claude adds judgment on top. additionalProperties is true because SKILL.md frontmatter is intentionally extensible (model, effort, context, hooks, metadata, user-invocable, etc.).",
+  "type": "object",
+  "required": ["name", "description"],
+  "additionalProperties": true,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]*$"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "allowed-tools": {
+      "anyOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" } }
+      ]
+    },
+    "disallowed-tools": {
+      "anyOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" } }
+      ]
+    },
+    "version": { "type": "string" },
+    "author": { "type": "string" },
+    "license": { "type": "string" },
+    "compatibility": { "type": "string", "maxLength": 500 },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "user-invocable": { "type": "boolean" },
+    "disable-model-invocation": { "type": "boolean" },
+    "argument-hint": { "type": "string" }
+  }
+}

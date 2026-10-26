@@ -1,0 +1,2 @@
+# Preserve the Node CommonJS lint boundary for the official vendored CLI.
+eslint.config.js

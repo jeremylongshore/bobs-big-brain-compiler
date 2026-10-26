@@ -1,0 +1,20 @@
+source-repo:   jeremylongshore/intent-audit-harness
+source-version: v1.5.1
+source-tarball: file:///tmp/bbb-audit-harness-1.5.1-source.tar.gz
+installed-at:  2026-10-26T16:50:17Z
+schemas-sha256:
+  a5da1d53a81dd4718ae0293c7bf672613506aa671086111dde60fb0903a685bd  schemas/audit-profile/layer-applicability.md
+  ffbc75700fb5eb501cb47f1e4038f47ab95ae1fba534b38095e1fe7820c80ed1  schemas/audit-profile/registry.v1.json
+  465acce129613428d8473b8987a31d36817ef1fa4435b4625b45f54e787babc1  schemas/audit-profile/v1.schema.json
+  cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30  schemas/conform/kernel/intent-eval-core-0.11.0/LICENSE
+  cfd2da92e71246d6d26abfbff49beef0bb6dcd3b30af64107ae636d0cbc53fc3  schemas/conform/kernel/intent-eval-core-0.11.0/authoring/v1/is-overlay/skill-frontmatter.v1.json
+  ae6ce3351335fd829a7f70b6f4094fed0b95607baa185ac1b4621a87e2c7017c  schemas/conform/kernel/intent-eval-core-0.11.0/authoring/v1/marketplace-tier.schema.json
+  3a02f3eba5aef870349d94e49ccbd8d49352452ebc70aff80e4d7c3ae3b8b166  schemas/conform/kernel/intent-eval-core-0.11.0/authoring/v1/skill-frontmatter.schema.json
+  32ccd48d6aff5484b763372701ceccb63a5bef1c8acd24d50a5fc045215d9b79  schemas/conform/kernel/intent-eval-core-0.11.0/authoring/v1/upstream-base/skill-frontmatter.v1.json
+  0bd4b976b04e3220db101e79ae6e49bb4ae296729edee5774487d6a44c43dc17  schemas/conform/kernel/intent-eval-core-0.11.0/pin.json
+  c97e09bfe62dbc31aa35a8071ab8616f7942081f1df1456a1702514f7f721f60  schemas/conform/v1/agent-frontmatter.schema.json
+  1c323e96932d14ffce0f5027a5ffe434936e282f615b001109e3d2a19479dc00  schemas/conform/v1/mcp-config.schema.json
+  ff63babb16e535d25ef183c1efef811560be5838910de6701fe9d3ab4991450d  schemas/conform/v1/plugin-manifest.schema.json
+  027621eb7f291885310420f3aaea61314f29bdf82c0524c907da5a50345ef752  schemas/conform/v1/skillmd-frontmatter.schema.json
+  c9e990b7651a9fd601aa01e1ad4962e02e86133a6e5ff2f138b4ff2163dfdd8e  schemas/currency/pins.v1.json
+  e4059e0387f3e6fb9a1175f5f60fe887b7a68a6b5c2c8ac63545b35bb7f95584  schemas/kernel-snapshot/gate-result-v1.schema.json

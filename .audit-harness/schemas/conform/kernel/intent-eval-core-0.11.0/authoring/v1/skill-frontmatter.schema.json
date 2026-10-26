@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jeremylongshore/intent-eval-core/schemas/authoring/v1/skill-frontmatter.schema.json",
+  "title": "skill-frontmatter — IS marketplace-tier contract (composition)",
+  "description": "The published, canonical skill-frontmatter authoring contract. PURE COMPOSITION — zero authored fields of its own. It is the allOf of three layers: (1) the upstream base (agentskills.io + Claude docs, authored by THEM); (2) the three universal folds (deprecationRegistry, securityChecks, disclosureMarkers) by $ref to the shared foundation; (3) the IS overlay (authored by US). This is authoring contract #1 — the walking skeleton that proves the base+overlay composition pattern the other five contracts (plugin-manifest, agent-definition, mcp-config, hook-config, marketplace-catalog) will follow. Per DR-044 D8 it is GRANDFATHERED as hand-authored (single-source codegen is a hard precondition of contract #2, not #1).",
+  "$comment": "EFFECTIVE-REQUIRED MANIFEST (the answer to 'what does skill-frontmatter require?' from one file — DR-044 D7(e)). This block is the generated effective-required surface; the source of truth is the `required` arrays of the two composed layers below.\n  name           INHERITED   (upstream-base · agentskills.io standardFloor)\n  description    INHERITED   (upstream-base · agentskills.io standardFloor)\n  allowed-tools  REQUIRED HERE (is-overlay · promoted from upstream-optional)\n  version        REQUIRED HERE (is-overlay · net-new IS tracking field)\n  author         REQUIRED HERE (is-overlay · net-new IS tracking field)\n  license        REQUIRED HERE (is-overlay · promoted from upstream-optional)\n  compatibility  REQUIRED HERE (is-overlay · promoted from upstream-optional)\n  tags           REQUIRED HERE (is-overlay · pure IS invention, zero upstream provenance)\nEffective required = base ∪ overlay = the IS 8-field marketplace set (the SCHEMA_CHANGELOG NON-NEGOTIABLE). securityChecks is inherited UNIVERSAL-IMMUTABLE. Resolving the $refs requires the base, overlay, and marketplace-tier schemas to be registered (e.g. ajv addSchema by $id); a dereferenced bundle is a codegen follow-on (contract #2). Citations: 6767-b §4; agentskills.io/specification; platform.claude.com agent-skills; code.claude.com/docs/en/skills.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "https://github.com/jeremylongshore/intent-eval-core/schemas/authoring/v1/upstream-base/skill-frontmatter.v1.json"
+    },
+    {
+      "$ref": "https://github.com/jeremylongshore/intent-eval-core/schemas/authoring/v1/marketplace-tier.schema.json#/$defs/universalFolds"
+    },
+    {
+      "$ref": "https://github.com/jeremylongshore/intent-eval-core/schemas/authoring/v1/is-overlay/skill-frontmatter.v1.json"
+    }
+  ]
+}

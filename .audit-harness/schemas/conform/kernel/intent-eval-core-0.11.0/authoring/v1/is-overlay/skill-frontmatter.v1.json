@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jeremylongshore/intent-eval-core/schemas/authoring/v1/is-overlay/skill-frontmatter.v1.json",
+  "title": "skill-frontmatter — IS OVERLAY (authored by Intent Solutions)",
+  "description": "The Intent-Solutions-only delta on top of upstream-base/skill-frontmatter.v1.json. THIS FILE IS THE ONLY PLACE IS POLICY LIVES for this contract. It promotes four upstream-optional fields (allowed-tools, license, compatibility) to IS-required, adds three net-new IS-required tracking fields (version, author, tags), narrows a few types, and declares the optional IS extension fields. By the monotonic-additive invariant (DR-044 D7 + CSO position): the overlay may only ADD required fields and NARROW constraints relative to the base — never subtract a base requirement or loosen a base constraint. Each field below carries its upstream-convergence trigger: the condition under which the field MOVES from this overlay into upstream-base (a mechanical move, not a re-edit).",
+  "$comment": "OVERLAY REQUIRED DELTA (beyond the base floor [name, description]): [allowed-tools, version, author, license, compatibility, tags]. Union with the base floor = the IS 8-field marketplace required set {name, description, allowed-tools, version, author, license, compatibility, tags} — the SCHEMA_CHANGELOG NON-NEGOTIABLE. Evolves under ISEDC Class-1 ratification only (must not be silently reduced — the 2026-04-28 debacle guard). Citations: 6767-b §4 (the 3-layer split + the NON-NEGOTIABLE 8-field set); skill-creator references/frontmatter-spec.md.",
+  "type": "object",
+  "required": ["allowed-tools", "version", "author", "license", "compatibility", "tags"],
+  "x-mutually-exclusive-fields": [
+    {
+      "$comment": "kyh9 cross-field invariant (CTO re-scope of the original infeasible cross-field bead). requires_env and fallback_for_env are mutually exclusive PER VARIABLE: a single identifier must not appear in BOTH arrays (a variable cannot be declared required-present AND simultaneously carry a fallback). This is an array-element-disjointness predicate, which vanilla JSON Schema 2020-12 cannot express (no cross-array intersection keyword; ajv can only do it with the non-standard `$data` extension, which would break the language-agnostic wire contract and silently no-op for any standard validator). DOCUMENTED CARVE-OUT per the CTO ruling: the predicate is enforced in the Zod runtime layer (generated from this annotation by codegen-authoring.ts) and is intentionally NOT mirrored in the published JSON Schema. The fold-agreement (ajv ↔ Zod) backstop carves out exactly these overlap cases — see src/__tests__/skill-frontmatter-schema.test.ts.",
+      "fields": ["requires_env", "fallback_for_env"]
+    }
+  ],
+  "properties": {
+    "allowed-tools": {
+      "$comment": "IS: promoted from upstream-OPTIONAL to IS-REQUIRED. Type accepts EITHER a CSV/space-delimited STRING (the upstream prose form — 6767-h §3.1 / agentskills.io EXPERIMENTAL space-separated string — and the form the entire published-plugin corpus authors) OR a YAML array of tool identifiers. Non-breaking SUPERSET relaxation (v0.4.1): array-authored skills stay valid AND string-authored skills now validate too, faithful to the upstream string form. Resolves the 23% CCP kernel-shadow deviation (836/838 disagreements were this single field rejecting the corpus string form). An empty array is valid (a skill that pre-approves zero tools); an empty string is likewise valid. CONVERGENCE TRIGGER: if agentskills.io promotes allowed-tools out of EXPERIMENTAL and into its required set, move the required-membership to upstream-base. The base STILL does not type allowed-tools — the union now MATCHES the upstream string form rather than narrowing it, so the overlay's only remaining delta is REQUIRED-membership plus the additional array form.",
+      "anyOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }]
+    },
+    "version": {
+      "$comment": "IS: net-new IS-required tracking field (NOT a top-level agentskills.io field; the standard only allows metadata.version). Strict SemVer 2.0.0 — stricter than the legacy IS validator's prefix match (which accepted 1.2.3.4 / 1.2.3-anything-unanchored). CONVERGENCE TRIGGER: if agentskills.io adds a top-level required `version`, move it to upstream-base.",
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
+    },
+    "author": {
+      "$comment": "IS: net-new IS-required tracking field (the standard only allows metadata.author). CONVERGENCE TRIGGER: if agentskills.io adds a top-level required `author`, move it to upstream-base.",
+      "type": "string",
+      "minLength": 1
+    },
+    "tags": {
+      "$comment": "IS: net-new IS-required tracking field with ZERO upstream provenance — not in agentskills.io (not even under metadata) nor any Anthropic surface. Pure IS invention; convergence is unlikely. CONVERGENCE TRIGGER: only if the open standard introduces a top-level `tags` array.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "license": {
+      "$comment": "IS: promoted from upstream-OPTIONAL to IS-REQUIRED (type unchanged from base). CONVERGENCE TRIGGER: if agentskills.io makes license required, move the required-membership to upstream-base.",
+      "type": "string",
+      "minLength": 1
+    },
+    "compatibility": {
+      "$comment": "IS: promoted from upstream-OPTIONAL to IS-REQUIRED (type unchanged from base). CONVERGENCE TRIGGER: if agentskills.io makes compatibility required, move the required-membership to upstream-base.",
+      "type": "string",
+      "minLength": 1
+    },
+    "requires_env": {
+      "$comment": "IS OPTIONAL extension (validator schema 3.5.0). Environment variables this skill needs. Cross-field invariant (an identifier must not appear in both requires_env and fallback_for_env) is enforced PER VARIABLE in the Zod runtime layer via the x-mutually-exclusive-fields annotation above (kyh9 — generated by codegen-authoring.ts as a documented carve-out; not structurally expressible in vanilla JSON Schema).",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "requires_tools": {
+      "$comment": "IS OPTIONAL extension (3.5.0). Tools this skill needs.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "fallback_for_env": {
+      "$comment": "IS OPTIONAL extension (3.5.0).",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "fallback_for_tools": {
+      "$comment": "IS OPTIONAL extension (3.5.0).",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "required_environment_variables": {
+      "$comment": "IS OPTIONAL extension (validator schema 3.6.0). Each entry prompts the user on first run. name is UPPER_SNAKE_CASE; name + prompt are required per entry.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "prompt"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+          "prompt": { "type": "string" },
+          "help": { "type": "string" },
+          "required_for": { "type": "string" }
+        }
+      }
+    }
+  }
+}

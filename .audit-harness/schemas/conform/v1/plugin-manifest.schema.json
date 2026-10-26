@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://evals.intentsolutions.io/conform/v1/plugin-manifest.schema.json",
+  "title": ".claude-plugin/plugin.json manifest — deterministic structural floor (conform/v1)",
+  "description": "The DETERMINISTIC STRUCTURAL FLOOR for a Claude plugin manifest: it parses and carries a name. Version/description/author are type-checked when present. The richer catalog-invariant + cross-artifact checks (INV-PLUGIN-SKILL etc.) live in /validate-plugin + the SAK kernel — conform asserts only the manifest floor. additionalProperties:true for forward-compat with the evolving plugin manifest surface.",
+  "type": "object",
+  "required": ["name"],
+  "additionalProperties": true,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]*$"
+    },
+    "version": { "type": "string" },
+    "description": { "type": "string" },
+    "author": {
+      "anyOf": [
+        { "type": "string" },
+        { "type": "object" }
+      ]
+    },
+    "license": { "type": "string" },
+    "homepage": { "type": "string" }
+  }
+}
