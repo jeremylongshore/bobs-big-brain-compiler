@@ -7,13 +7,20 @@ authors:
 status: thesis paper — peer reviewed via /academic-pipeline integrity-gated workflow
 target_word_count: 8000
 audience: engineering managers, platform-team leads, team-knowledge stewards
-cross_repo: byte-identical copy at qmd-team-intent-kb/000-docs/034-AT-NTRP-ecosystem-thesis.md
+cross_repo: separately maintained historical copy in bobs-big-brain-registrar/000-docs/034-AT-NTRP-ecosystem-thesis.md
 parent_bead_ico: intentional-cognition-os-ziz
 parent_bead_intkb: qmd-team-intent-kb-oaa
 license: Apache-2.0
 ---
 
 # Compile, Then Govern
+
+> Source reconciliation, 2026-10-26: this is a dated thesis, not a current
+> competitor benchmark or shipping specification. The two engine copies differ.
+> The historical partial-wire note is superseded as an implementation inventory
+> by the shipped spool emitter, demo and audit commands; released/installed and
+> live acceptance remain separate evidence. The general remote/multi-user
+> Compiler plan is distinct from the Registrar/plugin's team mode.
 
 ## A Two-Layer Local-First Architecture for Team Institutional Memory
 
