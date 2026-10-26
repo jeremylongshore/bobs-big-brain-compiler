@@ -8,7 +8,7 @@
 > `ask.start`/`ask.complete` pair shown below. Use README and trace spec 011 for
 > current guidance; retain the original dated metrics as historical evidence.
 > Fresh gate results must name their own run and commit.
-
+>
 > Compile knowledge for the machine. Distill understanding for the human.
 
 **Last Updated:** 2026-08-02
