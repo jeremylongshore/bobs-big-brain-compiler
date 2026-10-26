@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- Count only distinct prior digest nights with valid outcomes and matching read-proof
+  receipts before automatic compile graduation. Failed, duplicated, unverified or
+  changed outcomes no longer satisfy the soak; explicit mode overrides and dry-run
+  persistence behavior are retained.
+
 - Disambiguate new wiki outputs using typed source/page identity suffixes and
   preserve `+`/`#` in derived-title comparison. Refuse conflicting file, path or
   cross-kind database ownership before staging; retain summary cache IDs on reruns.

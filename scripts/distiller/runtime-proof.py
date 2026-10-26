@@ -60,15 +60,49 @@ def decision_hash(path, date, mode):
     return hashlib.sha256(json.dumps(matching[-1], sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def verified(path, date, mode, receipts):
+def verification_matches(digest, date, mode, receipts):
     try:
         receipt = json.loads((Path(receipts) / f"verified-{date}.json").read_text())
-        digest = decision_hash(path, date, mode)
         return bool(digest and receipt.get("decision_sha256") == digest and
                     receipt.get("date") == date and receipt.get("mode") == mode and
                     receipt.get("event") == "compile_verified" and receipt.get("audit", {}).get("ok") is True)
     except (OSError, ValueError, TypeError, AttributeError):
         return False
+
+
+def verified(path, date, mode, receipts):
+    try:
+        return verification_matches(decision_hash(path, date, mode), date, mode, receipts)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return False
+
+
+def clean_digest_nights(path, before, receipts):
+    """Count distinct prior nights with a valid digest bound to its read proof."""
+    cutoff = dt.date.fromisoformat(before)
+    latest = {}
+    for row in records(path):
+        date = row.get("date")
+        if not isinstance(date, str):
+            continue
+        try:
+            parsed = dt.date.fromisoformat(date)
+        except ValueError:
+            continue
+        if parsed.isoformat() != date or parsed >= cutoff:
+            continue
+        if valid_record(row, date, "digest"):
+            # Match decision_hash's last-valid-record rule without re-reading
+            # the entire methodology history once per date.
+            latest[date] = row
+    count = 0
+    for date, row in latest.items():
+        if row.get("error") is not None:
+            continue
+        digest = hashlib.sha256(json.dumps(row, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        if verification_matches(digest, date, "digest", receipts):
+            count += 1
+    return count
 
 
 def mcp_read(config, name):
@@ -124,7 +158,7 @@ def mcp_read(config, name):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["completed", "verified", "verify", "pending", "audit"])
+    parser.add_argument("action", choices=["completed", "verified", "verify", "pending", "audit", "clean-digest-count"])
     parser.add_argument("--decisions")
     parser.add_argument("--date")
     parser.add_argument("--mode", default="auto", choices=["auto", "digest"])
@@ -132,6 +166,9 @@ def main():
     parser.add_argument("--output")
     parser.add_argument("--receipts-dir")
     args = parser.parse_args()
+    if args.action == "clean-digest-count":
+        print(clean_digest_nights(args.decisions, args.date, args.receipts_dir))
+        return 0
     if args.action == "completed":
         return 0 if completed(args.decisions, args.date, args.mode) else 1
     if args.action == "verified":

@@ -2,9 +2,9 @@
 # Nightly autonomous /teamkb-compile — compiles yesterday's work into the governed brain.
 #
 # REPO-CANONICAL COPY (bead intentional-cognition-os-l13.9). This is the versioned
-# distiller wrapper: ~/bin/teamkb-compile-daily.sh is a thin shim that execs this
-# file when the repo checkout carries it (enforcement travels with the code). Edit
-# HERE, not in ~/bin.
+# distiller payload: the umbrella installs reviewed Git objects into a
+# commit-addressed bundle; its ~/bin entry verifies that bundle before delegation.
+# Edit this source, not an installed runtime copy.
 #
 # Runs LOCALLY (cloud Routines can't reach the tailnet-bound brain / local ~/.teamkb).
 # Scheduled ~03:30 via crontab, BEFORE the 04:30 teamkb-backup.timer, so the night's
@@ -27,7 +27,8 @@
 # with the cited doc. No LLM, no key. Result is folded into the digest email; a
 # failing eval never flips the compile status (diagnostic, loud, non-gating).
 #
-# Mode: digest-first by default; self-graduates to auto (see MODE section).
+# Mode: digest-first; graduates after distinct prior digest outcomes match their
+# verification receipts (see MODE section). Failed or unverified rows do not count.
 #
 # Concurrency (bead compile-then-govern-e06.12 / risk 010-AT-RISK R13 / umbrella #27):
 #   All ~/.teamkb writers serialize on flocks; this wrapper takes .compile.lock and
@@ -338,7 +339,8 @@ fi
 # persist it (one-way). Skipped when the mode came from an explicit env override.
 GRADUATED=0; CLEAN_DIGESTS="n/a"
 if [ "$MODE" = "digest" ] && [ "$MODE_SRC" != "env-override" ]; then
-  CLEAN_DIGESTS=$(grep -cE '"mode"[[:space:]]*:[[:space:]]*"digest"' "$DECISIONS" 2>/dev/null) || CLEAN_DIGESTS=0
+  CLEAN_DIGESTS=$(python3 "$SCRIPT_DIR/runtime-proof.py" clean-digest-count \
+    --decisions "$DECISIONS" --date "$TARGET" --receipts-dir "$LOG_DIR")
   if [ "$CLEAN_DIGESTS" -ge "$SOAK_NIGHTS" ]; then
     MODE="auto"; GRADUATED=1
     # Persist the one-way graduation — but never as a side effect of a dry run.
