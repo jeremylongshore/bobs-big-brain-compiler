@@ -12,5 +12,6 @@
   "repository": "https://github.com/jeremylongshore/bobs-big-brain-compiler",
   "license": "Apache-2.0",
   "keywords": ["knowledge", "rag", "compilation", "audit", "dogfood", "evaluation"],
+  "commands": [],
   "skills": ["./skills/ico-your-internals"]
 }
