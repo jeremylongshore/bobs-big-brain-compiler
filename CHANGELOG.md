@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.24.0](https://github.com/jeremylongshore/bobs-big-brain-compiler/compare/v1.23.1...v1.24.0) (2026-10-27)
+
+
+### Features
+
+* **compile:** record per-call model and prompt lineage in traces ([#255](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/255)) ([a4c4737](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/a4c4737e56c6f23d290b81e3ead7f0f96a139401))
+* **maintain:** add a receipted `ico maintain retire` for deliberately removed sources ([#239](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/239)) ([1c0328f](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/1c0328f1816733b7512140169e1ebe43bb048848))
+* **maintain:** relocate mounts onto dedicated main clones without orphaning sources ([#242](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/242)) ([72665d6](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/72665d6aaf4c0dc81997a29cbfc9d3844e00bff4))
+
+
+### Bug Fixes
+
+* **api:** sanitize provider errors before retry decisions ([#250](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/250)) ([163a847](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/163a847b2bfdd498d067fd08f67e8eddfc161ffb))
+* **compile:** disambiguate wiki outputs by logical identity ([#256](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/256)) ([9dc7488](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/9dc74889fefa506b7cce2995b24cff1c8150a246))
+* **compiler:** preserve explicitly configured batch token ceilings ([#254](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/254)) ([b7ad84b](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/b7ad84b8cdb1772434c52f7858ebc02e4da9116f))
+* **config:** keep workspace provider selection consistent through transport ([#253](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/253)) ([8c619a5](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/8c619a53f05feac258eca9a118d8f7e5c76c1920))
+* **distiller:** require verified distinct nights for soak graduation ([#259](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/259)) ([c32bdab](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/c32bdab54a69e19288352b69c7394ffb35b1df09))
+* **ingest:** defer PDF startup and preserve Result failures ([#246](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/246)) ([e69d86e](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/e69d86e0c071c7f05b9c43489d7f22d353096689))
+* **kernel:** run write-lock critical sections only after flock holds the lock ([#244](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/244)) ([5d45bac](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/5d45bac1fe93a9a9f3bad375f189da6067e1be12))
+* **security:** migrate shared schemas to patched Zod and Vite ([#247](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/247)) ([fa19692](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/fa19692f880d7493d43821c1ec669317317e0301))
+* **security:** patch scoped esbuild toolchain consumers ([#252](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/252)) ([56c6f33](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/56c6f3367007e4a60558fd0fa934d8a0d92668fd))
+* **security:** upgrade Anthropic SDK with consumer contracts ([#251](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/251)) ([d8fbebe](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/d8fbebe8d92bd8e2d30a1a3aa080f69ba8dca859))
+* **test:** enforce package coverage floors on source files ([#258](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/258)) ([0052f9c](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/0052f9c442a0ee8e6074f715d0c31a56e123b81f))
+* **tooling:** patch audited development dependency paths ([#249](https://github.com/jeremylongshore/bobs-big-brain-compiler/issues/249)) ([9fd6e36](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/9fd6e36ba5b472e728edac846c82e4fb40ba2df2))
+
 ## [Unreleased]
 
 ### Fixed
