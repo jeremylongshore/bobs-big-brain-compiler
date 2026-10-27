@@ -1,102 +1,155 @@
-# TEST_AUDIT.md — intentional-cognition-os
+# Compiler test audit
 
-**Audit date**: 2026-08-02
-**Auditor**: l13.18 manual refresh against the current repository gates
-**Branch**: `feat/ico-l13-18-golden-corpus-quality`
-**Supersedes**: the 2026-05-19 audit, which described a pre-hook, pre-CodeQL, pre-integration-test state
+Diagnostic refresh dated 2026-10-27 for `compile-then-govern-6ps.19`.
+Audited source: `9fe7f6d04ad51e9b55447b98ef240ccb41641642`.
+No new grade is assigned. This replaces the August snapshot as the current report;
+[the previous report](https://github.com/jeremylongshore/bobs-big-brain-compiler/blob/9fe7f6d04ad51e9b55447b98ef240ccb41641642/TEST_AUDIT.md)
+remains historical. Deterministic tests, live model-output quality and human
+acceptance are separate evidence classes.
 
-## Executive summary
+## Measured evidence
 
-The May audit is no longer a reliable description of this repository. The
-enforcement gaps it listed were subsequently addressed: hooks, commitlint,
-formatting, secret scanning, CodeQL, mutation testing, architecture checks,
-integration coverage, and post-build CLI smoke are now present in the tracked
-workflow and hook configuration.
+The [hosted Coverage job at refresh head `63414f5`](https://github.com/jeremylongshore/bobs-big-brain-compiler/actions/runs/40454049349/job/122023116790)
+records 1,917 tests in 148 files passing, with 81.15% statements, 67.17%
+branches, 88.22% functions and 82.75% lines. The job exited successfully with
+configured package thresholds. [The source comparison](https://github.com/jeremylongshore/bobs-big-brain-compiler/compare/9fe7f6d04ad51e9b55447b98ef240ccb41641642...63414f52210ca209cc55bb07ae64fcd619f45501)
+changes only this report, the observational testing document and its hash entry;
+runtime, test code and coverage configuration are unchanged from `9fe7f6d`.
+The aggregate branch number must not be compared with the kernel-only floor:
+[the pinned coverage configuration](https://github.com/jeremylongshore/bobs-big-brain-compiler/blob/9fe7f6d04ad51e9b55447b98ef240ccb41641642/vitest.config.ts)
+defines distinct package globs and thresholds.
 
-The deterministic test suite is healthy, but it is not a model-output quality
-signal. Compiler unit tests use mocked `ClaudeClient` responses by design. A
-separate workflow-dispatch lane now runs the real six-pass compiler against
-`tests/fixtures/populated/raw` with MiniMax-M3 and scores the resulting source,
-concept, and topic pages. Its machine-readable receipt is the only evidence
-reported here for live compilation quality; no score is invented when that
-workflow has not been run.
+The author also reports an uncommitted local `pnpm build` followed by
+`pnpm test:coverage` at `9fe7f6d`, both exiting zero. That local run is not
+independently attested; the linked hosted job supplies the public measurement
+above. Package-root test counts, plugin script tests, benchmarks, mutation runs
+and real-provider rubric scores are separate evidence classes.
 
-## Current evidence
+The [vendored version record](https://github.com/jeremylongshore/bobs-big-brain-compiler/blob/9fe7f6d04ad51e9b55447b98ef240ccb41641642/.audit-harness/VERSION)
+is 1.5.1, and [merged PR #260](https://github.com/jeremylongshore/bobs-big-brain-compiler/pull/260)
+aligned both entry points. At audit time the author observed the installed npm
+package also at 1.5.1 and reported both local verifier commands exiting zero.
+[This refresh's hosted hash-verification job](https://github.com/jeremylongshore/bobs-big-brain-compiler/actions/runs/40454049349/job/122023116845)
+separately records `harness-hash: OK`. Local environment observations below are
+author-recorded diagnostics, not signed records or independent attestations.
 
-| Metric                        | Current evidence                                                                                                       |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Unit/integration tests        | 1,737 passing in the current full gate: 50 types, 466 kernel, 609 compiler, 39 benchmarks, 548 CLI, and 25 integration |
-| Tracked package source files  | 249 discovered under `packages/` by `rg --files`                                                                       |
-| Tracked test/spec files       | 130 discovered under package and integration test paths                                                                |
-| Coverage floors               | types 80%; kernel line 80% / branch 70%; compiler 60%; CLI 43%                                                         |
-| Mutation floor                | kernel kill-rate floor 55%, enforced by Stryker workflow                                                               |
-| Architecture floor            | zero dependency-cruiser violations                                                                                     |
-| Security gates                | OSV high/critical gate, gitleaks, CodeQL security-and-quality queries, and audit-harness checks                        |
-| Artifact smoke                | built CLI version/help smoke in CI                                                                                     |
-| Live compile-quality evidence | `workflow_dispatch` only; see `000-docs/043-AT-EVAL-golden-corpus-quality-run-2026-08-02.md`                           |
+## Layers: presence, configuration and measurement
 
-The test counts above are package-level receipt numbers from the current
-repository test gate. They must not be added to a golden-corpus rubric score:
-the former measures deterministic behavior, while the latter measures one
-real provider's generated artifacts on one committed fixture.
+| Layer                | Current source/wiring                                                                                            | Evidence limit                                                                                                                |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| L1 hooks and CI      | Husky, lint-staged, commitlint, pre-push hash verification and CI jobs                                           | Presence/wiring is distinct from local enforcement and branch-protection configuration                                        |
+| L2 static            | ESLint, TypeScript, Prettier, gitleaks, OSV and CodeQL workflow configuration                                    | Author reports a local build pass; local OSV unavailable; no refreshed CodeQL backlog or aggregate security assurance claimed |
+| L3 unit and function | Vitest package coverage floors, fast-check kernel properties, kernel-only Stryker and architecture configuration | Fresh ordinary coverage passed; mutation effectiveness and true CRAP were not measured                                        |
+| L4 integration       | Real SQLite/filesystem fixtures and cross-package integration fixtures                                           | Included in the unified suite; the old 25-integration-test snapshot is not reused as a fresh count                            |
+| L5 system quality    | Eval YAML, benchmark runner and manual golden-corpus workflow                                                    | No live provider, fresh performance result or model-output score executed here                                                |
+| L6 artifact smoke    | Built CLI smoke and plugin script CI jobs                                                                        | Separate from ordinary Vitest counts; no live deployment inferred                                                             |
+| L7 acceptance        | RTM/persona/journey declarations                                                                                 | Historical inferred mappings do not establish current acceptance percentages or human sign-off                                |
 
-## Gate inventory
+[Integration fixtures](https://github.com/jeremylongshore/bobs-big-brain-compiler/tree/9fe7f6d04ad51e9b55447b98ef240ccb41641642/tests/integration),
+[kernel promotion properties](https://github.com/jeremylongshore/bobs-big-brain-compiler/blob/9fe7f6d04ad51e9b55447b98ef240ccb41641642/packages/kernel/src/promotion.property.test.ts)
+and [retention properties](https://github.com/jeremylongshore/bobs-big-brain-compiler/blob/9fe7f6d04ad51e9b55447b98ef240ccb41641642/packages/kernel/src/retention.property.test.ts)
+are included by the pinned ordinary-suite configuration linked above.
 
-| Layer                            | Status | Evidence                                                                                            |
-| -------------------------------- | ------ | --------------------------------------------------------------------------------------------------- |
-| L1 — hooks and CI enforcement    | active | `.husky/commit-msg`, `.husky/pre-commit`, `.husky/pre-push`, and `.github/workflows/ci.yml`         |
-| L2 — static analysis and secrets | active | ESLint, TypeScript, Prettier, OSV Scanner, gitleaks, and audit-harness verification                 |
-| L3 — tests and regression        | active | Vitest, package coverage thresholds, kernel Stryker floor, and dependency-cruiser architecture gate |
-| L4 — integration                 | active | `tests/integration/` cross-package suite; 25 tests in the current full gate                         |
-| L5 — system quality              | active | YAML eval framework, benchmarks, CodeQL, and the separate real-provider golden-corpus lane          |
-| L6 — artifact smoke              | active | CI invokes the built `packages/cli/dist/index.js` artifact                                          |
-| L7 — acceptance and traceability | active | RTM/persona/journey documents, test policy, and audit-harness hash policy                           |
+Current gate observations are in [tests/TESTING.md](tests/TESTING.md). Its policy
+thresholds and waivers are preserved. The old claims that fast-check is absent
+and Stryker config is unpinned are obsolete: kernel promotion/retention property
+suites exist, and [.harness-hash](https://github.com/jeremylongshore/bobs-big-brain-compiler/blob/9fe7f6d04ad51e9b55447b98ef240ccb41641642/.harness-hash)
+pins `stryker.config.js`. The current coverage configuration binds package source
+globs. [REQ-063](https://github.com/jeremylongshore/bobs-big-brain-compiler/blob/9fe7f6d04ad51e9b55447b98ef240ccb41641642/tests/RTM.md)
+remains unchanged; its historical missing-gate note requires owning-record
+reconciliation. This report does not supersede a requirement or mark it complete.
 
-## Live model-output quality lane
+## Classification and traceability
 
-The golden-corpus workflow is deliberately separate from ordinary CI because
-it needs a provider secret, incurs provider cost, and is probabilistic. It is
-manual (`workflow_dispatch`) rather than a required pull-request check.
+The author-recorded 1.5.1 root classifier run detected CLI, library, monorepo and skill signals.
+Per-package classification recognized the CLI package but left benchmarks,
+compiler, kernel and types unresolved. Source inspection suggests internal
+performance/evaluation tooling, a compiler library with provider integration,
+a kernel library with persistence integration and a schema/type library.
+These are proposed refinements pending owning policy adoption; they do not
+override emitted classifier data or establish accepted classifications.
 
-The runner:
+Historical RTM/persona/journey ratios remain historical. This audit neither
+recomputed current declarative test links nor changed requirements, MoSCoW tiers,
+personas or journeys. Test success does not establish a new traceability ratio.
 
-1. requires `MINIMAX_API_KEY` and fails closed when it is absent;
-2. initializes an isolated workspace and ingests every supported file under
-   `tests/fixtures/populated/raw`;
-3. runs summarize, extract, synthesize, link, contradict, and gap in order;
-4. scores one actual output from each of the first three generative passes with
-   the checked-in compilation-quality rubrics; and
-5. uploads `golden-corpus-receipt.json` without including the API key.
+## Measurement gaps and handoff
 
-The runner retargets the checked-in rubrics to the pages actually emitted by
-the run. This is intentional: concept and topic filenames are derived from
-model-selected titles, so a fixed filename would turn a valid title choice
-into a false infrastructure failure.
+- Generic deep audit reported CRAP PASS with zero scored production and test
+  methods. That result is excluded and cannot establish the policy's CRAP floors.
+  The runner permits writes despite its read-only description; the author reports
+  observing the listed files and retaining copies outside the checkout. Proposed remediation is to reject zero-measurement verdicts and isolate output.
+  Local handoff reference `compile-then-govern-8pg.1` is not a public tracker-state
+  or scope attestation.
+- The generic scanner could run gitleaks and observed README presence, but OSV,
+  standalone markdownlint and j-rig measurements were unavailable. Link scanning
+  also found unresolved experimental dogfood corpus links. Scanner exit zero
+  does not mean all gates ran or all links/security controls passed.
+- A new mutation score, complete traceability and live provider quality remain
+  unmeasured. The dated kernel mutation baseline in policy is not refreshed by
+  this ordinary suite. Compiler mutation needs its own meaningful boundary;
+  mocked provider responses are not live model-output quality evidence.
+- The manual golden-corpus workflow remains the separate provider-backed lane;
+  see [its runbook](000-docs/043-AT-EVAL-golden-corpus-quality-run-2026-08-02.md).
+  No new provider spend, deployment or account operation is included.
 
-Runbook: `000-docs/043-AT-EVAL-golden-corpus-quality-run-2026-08-02.md`.
+This is a diagnostic handoff, not automatic permission to install new test
+infrastructure or change policy floors. No full-audit clean verdict is issued.
 
-## Known limits and follow-up work
+## Author-recorded diagnostic extracts
 
-- The live lane is a fixed three-document fixture and does not represent all
-  corpus shapes or prompt distributions.
-- Rubric scores are judge-model assessments, not deterministic correctness
-  proofs. They complement, rather than replace, provenance, schema, and audit
-  checks.
-- The workflow is not scheduled. A future bead can add a bounded weekly run
-  and trend storage after the first manual receipts establish cost and score
-  variance.
-- Compiler mutation testing remains deferred because a mutation score over
-  mocked provider behavior would not measure the provider boundary honestly.
-- Branch protection still requires an operator to select the intended checks in
-  GitHub; workflow presence alone does not change repository settings.
+The following normalized extracts were recorded on 2026-10-27 UTC at `9fe7f6d`.
+They are authored execution summaries, not raw signed output. Absolute host paths
+are omitted; local diagnostic observations are not independent attestations.
 
-## Files and evidence locations
+```json
+{
+  "command": "pnpm exec audit-harness audit --deep",
+  "runner": "audit-harness@1.5.1",
+  "gate_id": "audit-harness:ci:crap-score",
+  "result": "PASS",
+  "input_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "child_summary": {
+    "language": "js",
+    "production_methods_scored": 0,
+    "test_methods_scored": 0,
+    "pass": true
+  },
+  "generated_paths": [
+    "reports/crap/crap-src.csv",
+    "reports/crap/crap-test.csv",
+    "reports/crap/summary.json"
+  ]
+}
+```
 
-- `tests/TESTING.md` — deterministic test policy and thresholds
-- `tests/RTM.md` — requirements traceability matrix
-- `tests/PERSONAS.md` — persona coverage
-- `tests/JOURNEYS.md` — journey coverage
-- `000-docs/043-AT-EVAL-golden-corpus-quality-run-2026-08-02.md` — live-run instructions
-- `.github/workflows/golden-corpus.yml` — manual real-provider workflow
-- `scripts/eval/run-golden-corpus.sh` — isolated runner and receipt writer
-- `evals/compilation-quality/` — checked-in live-quality rubrics
+The pinned [audit runner](https://github.com/jeremylongshore/bobs-big-brain-compiler/blob/9fe7f6d04ad51e9b55447b98ef240ccb41641642/.audit-harness/scripts/audit.py)
+describes read-only assessment but invokes the child without an output override.
+The [child scorer](https://github.com/jeremylongshore/bobs-big-brain-compiler/blob/9fe7f6d04ad51e9b55447b98ef240ccb41641642/.audit-harness/scripts/crap-score.py)
+defaults to `reports/crap`. The author observed those untracked files and retained
+their bytes outside the checkout; no independent custody verification is claimed.
+
+Classification commands were `pnpm exec audit-harness classify` at root and
+`pnpm exec audit-harness classify packages/<name>` for each package. The normalized
+root kinds were `cli, library, monorepo, skill`, with `unresolved: []`. CLI returned
+`cli, library`; benchmarks, compiler, kernel and types returned `unknown`, each
+with residue kind `repo-type` because no deterministic signal matched.
+“Unresolved” is classifier residue, not a failed test or accepted policy decision.
+
+The author's local `pnpm exec audit-harness scan` result included gitleaks PASS,
+README-presence PASS, and unavailable OSV/markdownlint/j-rig measurements. Its
+link diagnostic mentioned experimental corpus inputs `00-README.md` and
+`01-api.md`, including relative references to `api.md`, `CONTRIBUTING.md`,
+`helpers.md`, `tools.md` and a provider SDK source path. The stored diagnostic
+was truncated; this is an untriaged sample-corpus observation, not a complete
+link inventory or compiler failure.
+
+The generic scanner looks for a standalone `markdownlint` executable. The
+separate local command was `npx --no-install markdownlint-cli2 TEST_AUDIT.md tests/TESTING.md`,
+which the author observed exiting zero. These are different entry points, so
+its availability does not contradict the generic scanner's missing-PATH result.
+Other author-reported local exits of zero were `scripts/audit-harness verify`,
+`pnpm exec audit-harness verify`, `pnpm exec audit-harness escape-scan --staged`
+and `pnpm exec prettier --check TEST_AUDIT.md tests/TESTING.md`.
+The patch's one-line manifest change is directly inspectable; local verification
+claims are distinct from the linked hosted verification job.

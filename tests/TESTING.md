@@ -81,72 +81,75 @@ separate evidence classes.
 
 ## Installed gates (observational — updated by `/audit-tests` + `/implement-tests`)
 
-State as of 2026-08-02 after the l13.18 audit refresh.
+Observed 2026-10-27 at `9fe7f6d`. Presence, CI wiring and a fresh measurement
+are distinct columns; none implies live model-output or user acceptance.
 
-| Layer | Tool                                              | Status    | Wired                                                                           |
-| ----- | ------------------------------------------------- | --------- | ------------------------------------------------------------------------------- |
-| L0    | `@intentsolutions/audit-harness@0.1.0`            | installed | devDep + `scripts/audit-harness` wrapper                                        |
-| L1    | husky                                             | installed | `.husky/`                                                                       |
-| L1    | commitlint + `@commitlint/config-conventional`    | installed | `.husky/commit-msg`                                                             |
-| L1    | lint-staged                                       | installed | `package.json#lint-staged` + pre-commit                                         |
-| L1    | `audit-harness escape-scan --staged` (pre-commit) | installed | `.husky/pre-commit`                                                             |
-| L1    | `audit-harness verify` (pre-push)                 | installed | `.husky/pre-push`                                                               |
-| L2    | ESLint + typescript-eslint                        | installed | CI (Lint job)                                                                   |
-| L2    | `tsc --noEmit`                                    | installed | CI (Typecheck job)                                                              |
-| L2    | OSV scanner (SCA)                                 | installed | CI (Security Audit job)                                                         |
-| L2    | prettier                                          | installed | CI (Format Check job) + pre-commit                                              |
-| L2    | gitleaks                                          | installed | CI (Secret Scan job)                                                            |
-| L2    | `audit-harness verify` (CI)                       | installed | CI (Audit Harness Verify job)                                                   |
-| L3    | vitest                                            | installed | CI (Test job)                                                                   |
-| L3    | coverage (`@vitest/coverage-v8`)                  | installed | thresholds: types/kernel/compiler/cli                                           |
-| L3    | Stryker (mutation, kernel)                        | installed | `.github/workflows/mutation.yml` (PR + nightly, `mutation-test` job, floor 55%) |
-| L3    | dependency-cruiser (architecture)                 | installed | CI (Architecture Rules job)                                                     |
-| L3    | fast-check (property-based)                       | absent    | n/a — P2 follow-up                                                              |
-| L4    | `tests/integration/**`                            | installed | cross-package integration suite (25 tests in the current full gate)             |
-| L5    | OSV scanner (SCA)                                 | installed | CI (Security Audit job)                                                         |
-| L5    | CodeQL (SAST)                                     | installed | `.github/workflows/codeql.yml` (PR+weekly)                                      |
-| L5    | `evals/` framework (functional quality)           | installed | manual + CI-eligible                                                            |
-| L5    | `packages/benchmarks/` (perf + degradation gate)  | installed | manual                                                                          |
-| L6    | post-build CLI smoke                              | installed | CI (CLI Smoke job, against built dist/)                                         |
-| L6    | `.feature` files                                  | absent    | n/a — eval YAML serves equivalent role here                                     |
-| L7    | `RTM.md`                                          | installed | n/a — engineer-owned                                                            |
-| L7    | `PERSONAS.md`                                     | installed | n/a — engineer-owned                                                            |
-| L7    | `JOURNEYS.md`                                     | installed | n/a — engineer-owned                                                            |
-| L7    | hash manifest                                     | installed | `.harness-hash` pins `.dependency-cruiser.cjs`                                  |
+| Layer  | Gate                                         | Current source/measurement                                                                                                    |
+| ------ | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| L1     | Husky, commitlint and lint-staged            | Checked-in pre-commit, commit-msg and pre-push hooks                                                                          |
+| L1/L2  | Stock and vendored audit-harness 1.5.1       | Vendored version and hosted hash-manifest verification are linked in TEST_AUDIT.md; stock-package results are author-reported |
+| L2     | ESLint, TypeScript and Prettier              | CI lint/type/format jobs; this audit did not change their configuration                                                       |
+| L2/L5  | OSV, gitleaks and CodeQL                     | CI wiring exists; local OSV unavailable, local harness gitleaks reported PASS; no current alert-backlog claim                 |
+| L3     | Vitest/coverage-v8 4.1.12                    | Configured package coverage gates; the canonical measured snapshot is in TEST_AUDIT.md                                        |
+| L3     | Stryker, kernel only                         | PR/nightly workflow and break floor 55; no fresh mutation score measured in this audit                                        |
+| L3     | dependency-cruiser                           | Checked-in architecture rules and CI job; a new architecture measurement is not inferred from test success                    |
+| L3     | fast-check                                   | Kernel promotion and retention property suites exist and are included in the ordinary suite                                   |
+| L4     | Cross-package integration                    | Cross-package fixtures included by the unified coverage configuration; do not reuse the old 25-test snapshot                  |
+| L5     | Evals, benchmarks and golden-corpus workflow | Source/configuration present; no live provider run or fresh performance result executed here                                  |
+| L6     | CLI artifact smoke and plugin script checks  | CI jobs exist; distinguish them from Vitest counts                                                                            |
+| L7     | RTM/persona/journey documents                | Declarations and historical inferred mappings, not refreshed acceptance percentages                                           |
+| Policy | `.harness-hash`                              | Includes `stryker.config.js`, coverage config, workflow and test-policy files; exact inventory is in the manifest             |
 
 ### Known limits in the current install
 
-- **Stryker config not hash-pinned**: the harness `PATTERNS` list matches `stryker.conf.json` and `stryker.config.js` but not `stryker.config.json` (our extension). Manually rename to `stryker.config.js` (CommonJS) or wait for an upstream harness patch. Until then, the break threshold can be lowered silently. Tracked as a sub-bead under epic `0wy`.
-- **Stryker `timeoutMS: 30000`** is appropriate for kernel (only 1 timeout in 2989 mutants). If compiler scope is added later, watch for timeout-heavy results.
-- **CodeQL** runs the `security-and-quality` query pack on PR + weekly. As of 2026-05-26 (bead 0wy.3) the open-alert backlog is zero — 31 alerts triaged + dismissed with categorical reasons documented in `000-docs/037-OD-SEC-codeql-triage-2026-05-26.md`. CodeQL workflow is ready to be promoted to required-check status in branch protection (operator action; GitHub UI).
-- **Mutation job is now `pull_request` + nightly** (2026-05-25, bead 0wy.1). Job name `mutation-test` must be added to branch-protection required checks via GitHub UI (operator action; cannot be done by CI). The break threshold of 55% guards the kernel kill rate; PR drop below that fails the build.
-- **Compiler mutation scope deferred**: `packages/compiler/` talks to Claude through `ClaudeClient`, mocked in tests with `vi.fn()`. A naive Stryker run on compiler would score against mock behavior, not real model interaction — meaningless gate. Real signal needs either a contract-test approach against mock paths, or an integration-test arm against a fixture-recorded model. Tracked as the natural successor bead.
+- The prior warning that Stryker configuration was unpinned is obsolete:
+  `.harness-hash` explicitly includes `stryker.config.js`. Current kernel mutation
+  measurement remains separate from the dated baseline in the policy rationale.
+- The author-recorded generic deep-audit CRAP runner reported PASS with zero scored production
+  and test methods. That is unmeasured complexity, not evidence of meeting the
+  CRAP floors. Its child also wrote local reports despite the read-only command
+  description. Generated files were preserved outside this checkout; local handoff reference is `compile-then-govern-8pg.1` (no public tracker attestation).
+- OSV, standalone markdownlint and j-rig were unavailable to the local generic
+  scanner. Owning CI wiring and tool-specific results must be assessed separately;
+  a scanner exit of zero is not complete security or quality assurance.
+- The author observed unresolved sample-corpus references in the generic link
+  diagnostic. Its stored output was truncated; this is not a complete link audit
+  or a failure of the compiler suite.
+- Compiler mutation scope and real model-output quality remain separate
+  obligations. No provider call, model evaluation, deployment or account change
+  was executed by this audit.
+
+Diagnostic extracts, exact local commands, source citations and the distinction
+between standalone markdownlint and the explicit markdownlint-cli2 check are
+in [TEST_AUDIT.md](../TEST_AUDIT.md).
 
 ## Frameworks (observational)
 
-- vitest (root + per-package configs)
-- tsup (ESM-only bundling, `--workspace-concurrency=1`)
-- pnpm workspace (10.x)
-- @anthropic-ai/sdk (model API)
-- better-sqlite3 (deterministic state)
-- Zod (runtime schema)
-- Commander.js (CLI)
+- Vitest/coverage-v8 4.1.12, with root unified coverage and package configurations.
+- pnpm workspace; TypeScript/tsup builds, including the built CLI artifact.
+- fast-check kernel promotion and retention properties.
+- Stryker kernel mutation configuration, distinct from the ordinary test suite.
+- better-sqlite3 and filesystem fixtures for deterministic state integration.
+- ClaudeClient mocks for ordinary compiler tests; no live-output score follows
+  from deterministic test or coverage results.
 
 ## Traceability (observational)
 
-| Artifact             | Count                                                              |
-| -------------------- | ------------------------------------------------------------------ |
-| REQ-MUST             | 48 / 48 covered                                                    |
-| REQ-SHOULD           | 13 / 14 covered (REQ-053 uncovered)                                |
-| REQ-COULD            | 0 / 6 covered (advisory)                                           |
-| REQ-WON'T            | 7 (excluded from math)                                             |
-| Personas             | 4 / 4 at 100% flow coverage                                        |
-| Journey steps tested | 37 / 38                                                            |
-| Orphan tests         | 90 (all — convention: no `// REQ:` headers yet; mappings inferred) |
+The RTM, persona and journey declarations are preserved. Their historical
+48/48 MUST, 13/14 SHOULD, persona percentages and journey ratios have not been
+recomputed from explicit current test links. They must not be advertised as a
+fresh measured acceptance result. This audit changes no requirements or tiers.
+
+Current `vitest.config.ts` binds recursive source globs for package coverage.
+REQ-063's historical note remains unchanged and needs owning-record
+reconciliation; this observation does not supersede its authority or update
+requirement completion. Direct configuration and RTM links are in the canonical
+[report](../TEST_AUDIT.md#layers-presence-configuration-and-measurement).
 
 ## Last audit
 
-- **Date**: 2026-08-02
-- **Method**: l13.18 manual refresh against repository gates
-- **Report**: `TEST_AUDIT.md`
-- **Live model-output receipt**: produced only by the manual golden-corpus workflow; no score is assumed before a run
+The canonical dated source/test/coverage snapshot and evidence links are in
+[TEST_AUDIT.md](../TEST_AUDIT.md#measured-evidence). This observational section
+links to that report rather than maintaining a second copy of the measurements.
+No grade is assigned. Historical mutation/traceability records retain their dates;
+live provider quality and human acceptance remain separate obligations.
