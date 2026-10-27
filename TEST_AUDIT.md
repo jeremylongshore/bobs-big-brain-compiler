@@ -35,15 +35,15 @@ author-recorded diagnostics, not signed records or independent attestations.
 
 ## Layers: presence, configuration and measurement
 
-| Layer                | Current source/wiring                                                                                            | Evidence limit                                                                                                       |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| L1 hooks and CI      | Husky, lint-staged, commitlint, pre-push hash verification and CI jobs                                           | Presence/wiring is distinct from local enforcement and branch-protection configuration                               |
-| L2 static            | ESLint, TypeScript, Prettier, gitleaks, OSV and CodeQL workflow configuration                                    | Build passed here; local OSV unavailable, and no refreshed CodeQL backlog or aggregate security assurance is claimed |
-| L3 unit and function | Vitest package coverage floors, fast-check kernel properties, kernel-only Stryker and architecture configuration | Fresh ordinary coverage passed; mutation effectiveness and true CRAP were not measured                               |
-| L4 integration       | Real SQLite/filesystem fixtures and cross-package integration fixtures                                           | Included in the unified suite; the old 25-integration-test snapshot is not reused as a fresh count                   |
-| L5 system quality    | Eval YAML, benchmark runner and manual golden-corpus workflow                                                    | No live provider, fresh performance result or model-output score executed here                                       |
-| L6 artifact smoke    | Built CLI smoke and plugin script CI jobs                                                                        | Separate from ordinary Vitest counts; no live deployment inferred                                                    |
-| L7 acceptance        | RTM/persona/journey declarations                                                                                 | Historical inferred mappings do not establish current acceptance percentages or human sign-off                       |
+| Layer                | Current source/wiring                                                                                            | Evidence limit                                                                                                                |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| L1 hooks and CI      | Husky, lint-staged, commitlint, pre-push hash verification and CI jobs                                           | Presence/wiring is distinct from local enforcement and branch-protection configuration                                        |
+| L2 static            | ESLint, TypeScript, Prettier, gitleaks, OSV and CodeQL workflow configuration                                    | Author reports a local build pass; local OSV unavailable; no refreshed CodeQL backlog or aggregate security assurance claimed |
+| L3 unit and function | Vitest package coverage floors, fast-check kernel properties, kernel-only Stryker and architecture configuration | Fresh ordinary coverage passed; mutation effectiveness and true CRAP were not measured                                        |
+| L4 integration       | Real SQLite/filesystem fixtures and cross-package integration fixtures                                           | Included in the unified suite; the old 25-integration-test snapshot is not reused as a fresh count                            |
+| L5 system quality    | Eval YAML, benchmark runner and manual golden-corpus workflow                                                    | No live provider, fresh performance result or model-output score executed here                                                |
+| L6 artifact smoke    | Built CLI smoke and plugin script CI jobs                                                                        | Separate from ordinary Vitest counts; no live deployment inferred                                                             |
+| L7 acceptance        | RTM/persona/journey declarations                                                                                 | Historical inferred mappings do not establish current acceptance percentages or human sign-off                                |
 
 [Integration fixtures](https://github.com/jeremylongshore/bobs-big-brain-compiler/tree/9fe7f6d04ad51e9b55447b98ef240ccb41641642/tests/integration),
 [kernel promotion properties](https://github.com/jeremylongshore/bobs-big-brain-compiler/blob/9fe7f6d04ad51e9b55447b98ef240ccb41641642/packages/kernel/src/promotion.property.test.ts)
@@ -77,8 +77,8 @@ personas or journeys. Test success does not establish a new traceability ratio.
 
 - Generic deep audit reported CRAP PASS with zero scored production and test
   methods. That result is excluded and cannot establish the policy's CRAP floors.
-  The generic child also wrote local reports despite its read-only description.
-  Known generated files were preserved outside the checkout. Proposed remediation is to reject zero-measurement verdicts and isolate output.
+  The runner permits writes despite its read-only description; the author reports
+  observing the listed files and retaining copies outside the checkout. Proposed remediation is to reject zero-measurement verdicts and isolate output.
   Local handoff reference `compile-then-govern-8pg.1` is not a public tracker-state
   or scope attestation.
 - The generic scanner could run gitleaks and observed README presence, but OSV,

@@ -84,21 +84,21 @@ separate evidence classes.
 Observed 2026-10-27 at `9fe7f6d`. Presence, CI wiring and a fresh measurement
 are distinct columns; none implies live model-output or user acceptance.
 
-| Layer  | Gate                                         | Current source/measurement                                                                                        |
-| ------ | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| L1     | Husky, commitlint and lint-staged            | Checked-in pre-commit, commit-msg and pre-push hooks                                                              |
-| L1/L2  | Stock and vendored audit-harness 1.5.1       | Author-reported local verification passed; hosted proof and PR #260 are linked in TEST_AUDIT.md                   |
-| L2     | ESLint, TypeScript and Prettier              | CI lint/type/format jobs; this audit did not change their configuration                                           |
-| L2/L5  | OSV, gitleaks and CodeQL                     | CI wiring exists; local OSV unavailable, local harness gitleaks reported PASS; no current alert-backlog claim     |
-| L3     | Vitest/coverage-v8 4.1.12                    | Configured package coverage gates; the canonical measured snapshot is in TEST_AUDIT.md                            |
-| L3     | Stryker, kernel only                         | PR/nightly workflow and break floor 55; no fresh mutation score measured in this audit                            |
-| L3     | dependency-cruiser                           | Checked-in architecture rules and CI job; a new architecture measurement is not inferred from test success        |
-| L3     | fast-check                                   | Kernel promotion and retention property suites exist and are included in the ordinary suite                       |
-| L4     | Cross-package integration                    | Cross-package fixtures included by the unified coverage configuration; do not reuse the old 25-test snapshot      |
-| L5     | Evals, benchmarks and golden-corpus workflow | Source/configuration present; no live provider run or fresh performance result executed here                      |
-| L6     | CLI artifact smoke and plugin script checks  | CI jobs exist; distinguish them from Vitest counts                                                                |
-| L7     | RTM/persona/journey documents                | Declarations and historical inferred mappings, not refreshed acceptance percentages                               |
-| Policy | `.harness-hash`                              | Includes `stryker.config.js`, coverage config, workflow and test-policy files; exact inventory is in the manifest |
+| Layer  | Gate                                         | Current source/measurement                                                                                                    |
+| ------ | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| L1     | Husky, commitlint and lint-staged            | Checked-in pre-commit, commit-msg and pre-push hooks                                                                          |
+| L1/L2  | Stock and vendored audit-harness 1.5.1       | Vendored version and hosted hash-manifest verification are linked in TEST_AUDIT.md; stock-package results are author-reported |
+| L2     | ESLint, TypeScript and Prettier              | CI lint/type/format jobs; this audit did not change their configuration                                                       |
+| L2/L5  | OSV, gitleaks and CodeQL                     | CI wiring exists; local OSV unavailable, local harness gitleaks reported PASS; no current alert-backlog claim                 |
+| L3     | Vitest/coverage-v8 4.1.12                    | Configured package coverage gates; the canonical measured snapshot is in TEST_AUDIT.md                                        |
+| L3     | Stryker, kernel only                         | PR/nightly workflow and break floor 55; no fresh mutation score measured in this audit                                        |
+| L3     | dependency-cruiser                           | Checked-in architecture rules and CI job; a new architecture measurement is not inferred from test success                    |
+| L3     | fast-check                                   | Kernel promotion and retention property suites exist and are included in the ordinary suite                                   |
+| L4     | Cross-package integration                    | Cross-package fixtures included by the unified coverage configuration; do not reuse the old 25-test snapshot                  |
+| L5     | Evals, benchmarks and golden-corpus workflow | Source/configuration present; no live provider run or fresh performance result executed here                                  |
+| L6     | CLI artifact smoke and plugin script checks  | CI jobs exist; distinguish them from Vitest counts                                                                            |
+| L7     | RTM/persona/journey documents                | Declarations and historical inferred mappings, not refreshed acceptance percentages                                           |
+| Policy | `.harness-hash`                              | Includes `stryker.config.js`, coverage config, workflow and test-policy files; exact inventory is in the manifest             |
 
 ### Known limits in the current install
 
