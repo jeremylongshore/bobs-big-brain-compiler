@@ -87,14 +87,14 @@ are distinct columns; none implies live model-output or user acceptance.
 | Layer  | Gate                                         | Current source/measurement                                                                                        |
 | ------ | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | L1     | Husky, commitlint and lint-staged            | Checked-in pre-commit, commit-msg and pre-push hooks                                                              |
-| L1/L2  | Stock and vendored audit-harness 1.5.1       | Both hash-verification entry points pass; PR #260 aligned their protected inventories                             |
+| L1/L2  | Stock and vendored audit-harness 1.5.1       | Author-reported local verification passed; hosted proof and PR #260 are linked in TEST_AUDIT.md                   |
 | L2     | ESLint, TypeScript and Prettier              | CI lint/type/format jobs; this audit did not change their configuration                                           |
 | L2/L5  | OSV, gitleaks and CodeQL                     | CI wiring exists; local OSV unavailable, local harness gitleaks reported PASS; no current alert-backlog claim     |
-| L3     | Vitest/coverage-v8 4.1.12                    | Fresh unified ordinary suite: 1,917 tests across 148 files passed; package coverage thresholds passed             |
+| L3     | Vitest/coverage-v8 4.1.12                    | Configured package coverage gates; the canonical measured snapshot is in TEST_AUDIT.md                            |
 | L3     | Stryker, kernel only                         | PR/nightly workflow and break floor 55; no fresh mutation score measured in this audit                            |
 | L3     | dependency-cruiser                           | Checked-in architecture rules and CI job; a new architecture measurement is not inferred from test success        |
 | L3     | fast-check                                   | Kernel promotion and retention property suites exist and are included in the ordinary suite                       |
-| L4     | Cross-package integration                    | Eight tracked integration test paths included in the unified coverage run; do not reuse the old 25-test snapshot  |
+| L4     | Cross-package integration                    | Cross-package fixtures included by the unified coverage configuration; do not reuse the old 25-test snapshot      |
 | L5     | Evals, benchmarks and golden-corpus workflow | Source/configuration present; no live provider run or fresh performance result executed here                      |
 | L6     | CLI artifact smoke and plugin script checks  | CI jobs exist; distinguish them from Vitest counts                                                                |
 | L7     | RTM/persona/journey documents                | Declarations and historical inferred mappings, not refreshed acceptance percentages                               |
@@ -105,19 +105,23 @@ are distinct columns; none implies live model-output or user acceptance.
 - The prior warning that Stryker configuration was unpinned is obsolete:
   `.harness-hash` explicitly includes `stryker.config.js`. Current kernel mutation
   measurement remains separate from the dated baseline in the policy rationale.
-- The generic deep-audit CRAP runner reported PASS with zero scored production
+- The author-recorded generic deep-audit CRAP runner reported PASS with zero scored production
   and test methods. That is unmeasured complexity, not evidence of meeting the
   CRAP floors. Its child also wrote local reports despite the read-only command
-  description. Generated files were preserved outside this checkout; the defect
-  is tracked under `compile-then-govern-8pg.1`.
+  description. Generated files were preserved outside this checkout; local handoff reference is `compile-then-govern-8pg.1` (no public tracker attestation).
 - OSV, standalone markdownlint and j-rig were unavailable to the local generic
   scanner. Owning CI wiring and tool-specific results must be assessed separately;
   a scanner exit of zero is not complete security or quality assurance.
-- Some links in experimental dogfood corpus documentation did not resolve in
-  the generic link scan. These findings are not a failure of the compiler suite.
+- The author observed unresolved sample-corpus references in the generic link
+  diagnostic. Its stored output was truncated; this is not a complete link audit
+  or a failure of the compiler suite.
 - Compiler mutation scope and real model-output quality remain separate
   obligations. No provider call, model evaluation, deployment or account change
   was executed by this audit.
+
+Diagnostic extracts, exact local commands, source citations and the distinction
+between standalone markdownlint and the explicit markdownlint-cli2 check are
+in [TEST_AUDIT.md](../TEST_AUDIT.md).
 
 ## Frameworks (observational)
 
@@ -136,26 +140,16 @@ The RTM, persona and journey declarations are preserved. Their historical
 recomputed from explicit current test links. They must not be advertised as a
 fresh measured acceptance result. This audit changes no requirements or tiers.
 
-REQ-063's historical statement that per-package coverage gates are absent is
-obsolete: `vitest.config.ts` now binds recursive source globs for types, kernel,
-compiler and CLI. That correction does not establish complete requirement,
-persona or journey coverage. Test-to-requirement linkage and acceptance need
-separate verification before publishing updated percentages.
+Current `vitest.config.ts` binds recursive source globs for package coverage.
+REQ-063's historical note remains unchanged and needs owning-record
+reconciliation; this observation does not supersede its authority or update
+requirement completion. Direct configuration and RTM links are in the canonical
+[report](../TEST_AUDIT.md#layers-presence-configuration-and-measurement).
 
 ## Last audit
 
-- **Date:** 2026-10-27; diagnostic refresh for `compile-then-govern-6ps.19`.
-- **Source:** `9fe7f6d04ad51e9b55447b98ef240ccb41641642`.
-- **Executed:** `pnpm build`, then `pnpm test:coverage`; both exited zero.
-- **Ordinary suite:** 1,917 tests in 148 files passed; coverage run took 57.58 seconds.
-- **Aggregate coverage:** 81.15% statements, 67.17% branches, 88.22% functions,
-  82.75% lines. Package-specific configured floors passed; aggregate branches
-  must not be compared with the kernel-only 70% branch floor.
-- **Evidence:** author-recorded local results at the source revision above;
-  output logs are not committed and no independent human attestation is claimed.
-  [Source check history](https://github.com/jeremylongshore/bobs-big-brain-compiler/commit/9fe7f6d04ad51e9b55447b98ef240ccb41641642/checks)
-  is separate hosted evidence, not a claim that every check ran in this session.
-- **Grade:** not assigned. Older test/mutation snapshots retain their original dates.
-- **Report:** [TEST_AUDIT.md](../TEST_AUDIT.md).
-- **Unmeasured:** fresh mutation/true CRAP, complete traceability, live provider
-  quality and human acceptance. The golden-corpus lane remains separate.
+The canonical dated source/test/coverage snapshot and evidence links are in
+[TEST_AUDIT.md](../TEST_AUDIT.md#measured-evidence). This observational section
+links to that report rather than maintaining a second copy of the measurements.
+No grade is assigned. Historical mutation/traceability records retain their dates;
+live provider quality and human acceptance remain separate obligations.
