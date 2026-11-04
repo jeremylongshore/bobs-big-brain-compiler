@@ -168,8 +168,19 @@ resolve_agent() {
 # deliberate activation gate (per the self-managing-rollout doctrine, nobody flips
 # a switch; provisioning the token is the one deliberate step).
 REVIEW_SUMMARY=""
+record_review_metrics() {
+  # Observation only: missing/unwritable telemetry must not alter compile/review status.
+  if ! python3 "$SCRIPT_DIR/review-metrics.py" \
+      --directory "$LOG_DIR" --target-date "$TARGET" --started-ns "$review_started_ns" \
+      --configured "$TEAMKB_AGENT" --provider "${AGENT_NAME:-unknown}" \
+      --model "$MINIMAX_MODEL" --mode "$MODE" "$@" >/dev/null 2>&1; then
+    log "inbox review metrics unavailable (diagnostic only)"
+  fi
+  return 0
+}
 run_inbox_review() {
-  local tok=""
+  local tok="" review_started_ns
+  review_started_ns="$(python3 "$SCRIPT_DIR/review-metrics.py" clock 2>/dev/null)"
   if [ -n "${TEAMKB_REVIEW_AGENT_TOKEN:-}" ]; then
     tok="$TEAMKB_REVIEW_AGENT_TOKEN"
   elif [ -r "$REVIEW_TOKEN_FILE" ]; then
@@ -178,16 +189,21 @@ run_inbox_review() {
   if [ -z "$tok" ]; then
     log "inbox review SKIPPED — no teamkb-review-agent token ($REVIEW_TOKEN_FILE). Provision it to activate (see teamkb-review SKILL.md)."
     REVIEW_SUMMARY="Inbox review: skipped (no teamkb-review-agent token provisioned — the deliberate activation gate)."
+    record_review_metrics --outcome skipped --reason no_token
     return 0
   fi
   if [ ! -f "$REVIEW_MCP_CONFIG" ]; then
     log "inbox review SKIPPED — review MCP config missing at $REVIEW_MCP_CONFIG"
     REVIEW_SUMMARY="Inbox review: skipped (review MCP config missing — run deploy-teamkb-compile.sh)."
+    record_review_metrics --outcome skipped --reason missing_config
     return 0
   fi
   # Live iff the compile is in auto (the single self-graduation gates both); digest → dry-run.
   local review_flag="--dry-run"; [ "$MODE" = "auto" ] && review_flag=""
   local rlog="$SCRATCH/review-${TARGET}.log"
+  # script -a appends: never attribute an earlier attempt's transcript to this one.
+  local review_offset=0
+  if [ -f "$rlog" ]; then review_offset="$(stat -c %s "$rlog" 2>/dev/null || echo 0)"; fi
   local review_cmd review_rc
   # Tokens/keys are exported ONLY into the invocation's environment — NEVER
   # interpolated into the `script -c` string (shell-injection risk if the token
@@ -243,6 +259,11 @@ run_inbox_review() {
       fi
       ;;
   esac
+  local review_outcome=failed
+  if [ "$review_rc" -eq 0 ]; then review_outcome=success
+  elif [ "$review_rc" -eq 124 ]; then review_outcome=timeout; fi
+  record_review_metrics --outcome "$review_outcome" --exit-code "$review_rc" \
+    --transcript "$rlog" --offset "$review_offset"
   if [ "$review_rc" -eq 0 ]; then
     # Pull the agent's one-line tallies out of the transcript for the digest.
     local tally

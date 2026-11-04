@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- Add sanitized review-phase runtime observations with monotonic elapsed time,
+  provider selection, agent-reported counts and available terminal client usage.
+  Missing usage stays unavailable; fake-agent tests cover skips, failures and
+  timeouts. Installer integration remains separate; no live cron was activated
+  (`compile-then-govern-6ps.14`).
+
 ### Fixed
 
 - Count only distinct prior digest nights with valid outcomes and matching read-proof
