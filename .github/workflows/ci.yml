@@ -9,6 +9,12 @@ on:
 permissions:
   contents: read
 
+# Supersede validation only for the same PR. Keep main, scheduled, and manual
+# runs independent; this policy must never be copied onto deployment workflows.
+concurrency:
+  group: validation-${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   lint:
     name: Lint
