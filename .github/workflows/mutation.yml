@@ -4,8 +4,8 @@ name: Mutation Testing
 # (highest-value module) per stryker.config.json.
 #
 # Triggers (post-baseline lock 2026-05-25, bead 0wy.1):
-#   - pull_request: gates merges. Job name `mutation-test` is the
-#     required check. stryker.config.json `thresholds.break` defines
+#   - pull_request: `mutation-test` gates the operational merge path
+#     when present. stryker.config.json `thresholds.break` defines
 #     the floor; PRs that drop the kill rate below the floor fail
 #     this job. Floor is `(baseline - 5)` per the tolerance band
 #     defined in tests/TESTING.md.
@@ -38,7 +38,8 @@ concurrency:
 
 jobs:
   mutation-test:
-    # Job name must match the required-check name in branch protection.
+    # Keep this name stable for the operational merge guard, which requires
+    # observed non-advisory checks. GitHub protection has a separate check list.
     name: mutation-test
     runs-on: ubuntu-latest
     timeout-minutes: 60
