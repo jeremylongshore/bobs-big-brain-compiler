@@ -84,6 +84,12 @@ describe('library ingestion disclosure boundary', () => {
       true,
     ],
     ['metadata.md', '---\ntitle: salary\n---\nNeutral body\n', 'salary', false],
+    [
+      'metadata-lines.html',
+      '<meta name="author" content="50&#47;50&#10;split"><p>Neutral body</p>',
+      '50/50\nsplit',
+      true,
+    ],
     ['extracted.pdf', hexTextPdf('salary'), 'salary', true],
   ] as const)(
     'refuses %s without persistent changes or matched text in the error',
@@ -96,7 +102,9 @@ describe('library ingestion disclosure boundary', () => {
         expect(parsed.ok).toBe(true);
         if (!parsed.ok) throw parsed.error;
         expect(
-          scanForDisclosure(`${parsed.value.content}\n${JSON.stringify(parsed.value.metadata)}`),
+          scanForDisclosure(
+            `${parsed.value.content}\n${Object.values(parsed.value.metadata).join('\n')}`,
+          ),
         ).not.toBeNull();
       }
       const before = snapshot(options.workspacePath);
