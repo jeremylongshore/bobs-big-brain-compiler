@@ -80,7 +80,7 @@ export interface IngestPipelineOptions {
   force?: boolean;
   /** Maximum allowed file size in bytes. Defaults to 50 MiB. */
   maxFileSize?: number;
-  /** Trusted host configuration, never a value from source content or an untrusted request. */
+  /** Host callers must supply trusted configuration; this API cannot enforce path provenance. */
   captureCatalogPath?: string;
 }
 

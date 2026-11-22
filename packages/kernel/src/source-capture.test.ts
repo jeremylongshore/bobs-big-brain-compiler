@@ -172,6 +172,28 @@ describe('trusted-host source capture', () => {
     expect(readSourceCaptureBindings(db, source.id, source.hash, catalogPath).ok).toBe(false);
   });
 
+  it('refuses a 257th origin atomically instead of dropping an earlier binding', () => {
+    let source = persist(file(0, 'Neutral shared source', 'origin-0.txt'));
+    for (let i = 1; i < 256; i++) {
+      source = persist(file(0, 'Neutral shared source', `origin-${i}.txt`));
+    }
+    const full = readSourceCaptureBindings(db, source.id, source.hash, catalogPath);
+    if (!full.ok) throw full.error;
+    expect(full.value).toHaveLength(256);
+    const before = db.serialize();
+    const extra = capture(file(0, 'Neutral shared source', 'origin-256.txt'));
+    expect(
+      registerSource(db, {
+        path: source.path,
+        type: 'text',
+        hash: source.hash,
+        capture: extra.evidence,
+      }).ok,
+    ).toBe(false);
+    expect(db.serialize().equals(before)).toBe(true);
+    expect(readSourceCaptureBindings(db, source.id, source.hash, catalogPath)).toEqual(full);
+  });
+
   it('refuses forged tickets and changed captured bytes with transaction rollback', () => {
     const captured = capture(file());
     const before = db.serialize();

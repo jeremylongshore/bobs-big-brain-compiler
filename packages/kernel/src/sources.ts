@@ -40,7 +40,7 @@ export interface RegisterSourceParams {
   metadata?: Record<string, unknown>;
   /** Pre-computed SHA-256 hex digest of the file content. */
   hash: string;
-  /** Opaque evidence from trusted-host capture; absence permanently records unknown origin. */
+  /** Opaque evidence from trusted-host capture; absence records unknown origin that normal registration cannot clear. */
   capture?: CaptureEvidence;
 }
 
