@@ -13,16 +13,17 @@
  *
  * Never throws — all error paths return err(Error).
  */
-
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
 
+import { sourceInputCustody } from '@ico/kernel';
 import { appendAuditLog, type Database, recordProvenance, writeTrace } from '@ico/kernel';
 import { err, ok, type Result } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
 import { validateCompiledContent } from '../validation.js';
+import { settleOutputCustody } from './input-custody.js';
 import { wikiOutputFilename } from './output-filename.js';
 import {
   checkModelOutput,
@@ -207,6 +208,8 @@ export async function summarizeSource(
     }
     return err(new CompileSkipError('EMPTY_SOURCE', `Skipped ${sourcePath}: raw source is empty`));
   }
+
+  const sourceCustody = sourceInputCustody(db, sourceId, sourceContent);
 
   // 2. Build prompts.
   const userPrompt = buildUserPrompt({
@@ -403,6 +406,10 @@ export async function summarizeSource(
 
   // 8b. Receipts are durable — make the page visible.
   try {
+    const custody = settleOutputCustody(db, outputPath, content, [
+      sourceCustody.ok ? sourceCustody.value : null,
+    ]);
+    if (!custody.ok) return err(custody.error);
     renameSync(tmpPath, absoluteOutputPath);
   } catch (e) {
     return err(e instanceof Error ? e : new Error(String(e)));

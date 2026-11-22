@@ -31,7 +31,6 @@
  *
  * Never throws — all error paths return err(Error).
  */
-
 import {
   existsSync,
   mkdirSync,
@@ -58,6 +57,12 @@ import {
   shouldRunReduce,
   wasTruncated,
 } from './batch-helper.js';
+import {
+  captureInput,
+  type InputClosure,
+  settleOutputCustody,
+  unionInputs,
+} from './input-custody.js';
 import { wikiOutputFilename } from './output-filename.js';
 import { checkModelOutput, type PassOutcome, stampPassProvenance } from './output-filter.js';
 import { assertWikiOutputOwnership } from './output-ownership.js';
@@ -217,13 +222,19 @@ export interface ContradictResult {
  * Read all .md files from a wiki subdirectory.
  * Returns an empty array (not an error) if the directory does not exist.
  */
-function readWikiSubdir(workspacePath: string, subdir: string): string[] {
+function readWikiSubdir(
+  workspacePath: string,
+  subdir: string,
+  capture: (path: string, content: string) => void,
+): string[] {
   const dir = join(workspacePath, 'wiki', subdir);
   if (!existsSync(dir)) return [];
   try {
-    return readdirSync(dir)
+    const pages = readdirSync(dir)
       .filter((f) => f.endsWith('.md'))
-      .map((f) => readFileSync(join(dir, f), 'utf-8'));
+      .map((f) => ({ path: `wiki/${subdir}/${f}`, content: readFileSync(join(dir, f), 'utf-8') }));
+    for (const page of pages) capture(page.path, page.content);
+    return pages.map((page) => page.content);
   } catch {
     return [];
   }
@@ -269,7 +280,10 @@ export async function detectContradictions(
   const maxTokens = scaledMaxTokens(options?.maxTokens, DEFAULT_MAX_TOKENS, batchSize);
 
   // 1. Read all summary files.
-  const summaries = readWikiSubdir(workspacePath, 'sources');
+  const inputCustody: InputClosure[] = [];
+  const summaries = readWikiSubdir(workspacePath, 'sources', (path, content) =>
+    inputCustody.push(captureInput(db, path, content)),
+  );
 
   if (summaries.length === 0) {
     return ok({ pages: [], skipped: 0 });
@@ -278,7 +292,9 @@ export async function detectContradictions(
   // 2. Chunk the summaries and call the API per batch, collecting raw pages.
   //    A single batch (small corpus) reproduces the old single-call behavior.
   const batches = chunkArray(summaries, batchSize);
+  const batchInputs = chunkArray(inputCustody, batchSize).map(unionInputs);
   const rawPages: string[] = [];
+  const rawPageInputs: InputClosure[] = [];
   const rawPageCalls: ModelCallProvenance[] = [];
   let inputTokens = 0;
   let outputTokens = 0;
@@ -334,6 +350,7 @@ export async function detectContradictions(
       if (trimmed.length > 0) {
         rawPages.push(trimmed);
         rawPageCalls.push(callProvenance);
+        rawPageInputs.push(batchInputs[batchIndex] ?? null);
       }
     }
   }
@@ -403,6 +420,14 @@ export async function detectContradictions(
           if (trimmed.length > 0 && extractFrontmatterField(trimmed, 'type') === 'contradiction') {
             rawPages.push(trimmed);
             rawPageCalls.push(reduceProvenance);
+            rawPageInputs.push(
+              unionInputs(
+                inputCustody.filter((_, index) => {
+                  const id = extractFrontmatterField(summaries[index]!, 'id');
+                  return id !== undefined && id.length > 0;
+                }),
+              ),
+            );
           }
         }
       }
@@ -565,6 +590,13 @@ export async function detectContradictions(
 
     // 7b. Receipts are durable — make the page visible.
     try {
+      const custody = settleOutputCustody(
+        db,
+        outputPath,
+        pageContent,
+        page.custodyInputIndices.map((index) => rawPageInputs[index] ?? null),
+      );
+      if (!custody.ok) return err(custody.error);
       renameSync(tmpPath, absoluteOutputPath);
     } catch (e) {
       return err(e instanceof Error ? e : new Error(String(e)));
