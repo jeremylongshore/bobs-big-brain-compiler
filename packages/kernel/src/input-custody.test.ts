@@ -2,7 +2,13 @@ import { createHash } from 'node:crypto';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { readInputCustody, recordInputCustody, sourceInputCustody } from './input-custody.js';
+import {
+  type CustodyRoot,
+  invalidateInputCustody,
+  readInputCustody,
+  recordInputCustody,
+  sourceInputCustody,
+} from './input-custody.js';
 import { type Database, initDatabase } from './state.js';
 
 let db: Database;
@@ -24,6 +30,50 @@ beforeEach(() => {
 afterEach(() => db.close());
 
 describe('complete input custody storage', () => {
+  it('canonicalizes reordered and repeated inputs into the same versioned record', () => {
+    expect(recordInputCustody(db, 'wiki/a.md', 'output', roots).ok).toBe(true);
+    const first = db.prepare('SELECT * FROM compilation_input_custody').get();
+    expect(
+      recordInputCustody(db, 'wiki/a.md', 'output', [roots[1]!, roots[0]!, roots[1]!]).ok,
+    ).toBe(true);
+    expect(db.prepare('SELECT * FROM compilation_input_custody').get()).toEqual(first);
+    expect((first as { roots_json: string }).roots_json).toBe(JSON.stringify(roots));
+    const expected = createHash('sha256')
+      .update(JSON.stringify(['ico-input-custody-v1', 'wiki/a.md', hash('output'), roots]))
+      .digest('hex');
+    expect((first as { record_hash: string }).record_hash).toBe(expected);
+  });
+  it('invalidates only the selected output even when its bytes are unchanged', () => {
+    expect(recordInputCustody(db, 'wiki/a.md', 'same bytes', roots).ok).toBe(true);
+    expect(recordInputCustody(db, 'wiki/b.md', 'same bytes', roots).ok).toBe(true);
+    expect(invalidateInputCustody(db, 'wiki/a.md').ok).toBe(true);
+    expect(readInputCustody(db, 'wiki/a.md', 'same bytes').ok).toBe(false);
+    expect(readInputCustody(db, 'wiki/b.md', 'same bytes').ok).toBe(true);
+    expect(invalidateInputCustody(db, 'wiki/missing.md').ok).toBe(true);
+  });
+  it.each(['x' + 'a'.repeat(64), 'a'.repeat(64) + 'x', 'a'.repeat(63), 'g'.repeat(64)])(
+    'refuses malformed hash %s even if a corrupt catalog agrees',
+    (invalidHash) => {
+      db.prepare('UPDATE sources SET hash = ? WHERE id = ?').run(invalidHash, 'public');
+      expect(
+        recordInputCustody(db, 'wiki/a.md', 'output', [
+          { sourceId: 'public', contentHash: invalidHash },
+        ]).ok,
+      ).toBe(false);
+      expect(db.prepare('SELECT * FROM compilation_input_custody').all()).toEqual([]);
+    },
+  );
+  it.each([
+    null,
+    'untyped',
+    { sourceId: 'public', contentHash: hash('public material'), profile: 'caller-selected' },
+    { sourceId: '', contentHash: hash('public material') },
+  ])('refuses malformed root %j without persisting a receipt', (invalid) => {
+    expect(
+      recordInputCustody(db, 'wiki/a.md', 'output', [invalid as unknown as CustodyRoot]).ok,
+    ).toBe(false);
+    expect(db.prepare('SELECT * FROM compilation_input_custody').all()).toEqual([]);
+  });
   it('retains every supplied input independently of advisory attribution', () => {
     expect(recordInputCustody(db, 'wiki/a.md', 'output naming only public', roots).ok).toBe(true);
     expect(readInputCustody(db, 'wiki/a.md', 'output naming only public')).toEqual({
@@ -70,7 +120,7 @@ describe('complete input custody storage', () => {
       [...roots, { sourceId: 'public', contentHash: hash('conflict') }],
     ]) {
       expect(recordInputCustody(db, 'wiki/a.md', 'changed', invalid).ok).toBe(false);
-      expect(db.serialize()).toEqual(before);
+      expect(db.serialize().equals(before)).toBe(true);
     }
   });
 });

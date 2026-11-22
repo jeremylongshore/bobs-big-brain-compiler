@@ -86,7 +86,7 @@ describe('exported response-token configuration reaches each batched pass', () =
       );
       expect(createCompletion.mock.calls[0]?.[2]?.maxTokens).toBe(16000);
       expect(result).toEqual(err(stop));
-      expect(database.serialize()).toEqual(before);
+      expect(database.serialize().equals(before)).toBe(true);
       database.close();
       expect(readFileSync(join(workspace, summaryPath), 'utf8')).toBe(summary);
     },
