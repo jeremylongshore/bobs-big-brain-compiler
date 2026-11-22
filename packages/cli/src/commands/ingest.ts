@@ -8,7 +8,19 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+  closeSync,
+  existsSync,
+  fchmodSync,
+  fstatSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { basename, extname, join, relative, resolve, sep } from 'node:path';
 import { createInterface } from 'node:readline';
 
@@ -18,7 +30,6 @@ import { ingestSource, markSupersededCompilationsStale } from '@ico/compiler';
 import {
   appendAuditLog,
   closeDatabase,
-  computeFileHash,
   disclosureLabel,
   findContainingMount,
   initDatabase,
@@ -307,8 +318,15 @@ export async function runIngest(
   //    Reading once, rather than exists/stat THEN read, avoids a check-then-use
   //    (TOCTOU) race where the file changes between the check and the read.
   let rawBytes: Buffer;
+  let sourceMode: number;
   try {
-    rawBytes = readFileSync(filePath);
+    const sourceFd = openSync(filePath, 'r');
+    try {
+      rawBytes = readFileSync(sourceFd);
+      sourceMode = fstatSync(sourceFd).mode & 0o777;
+    } finally {
+      closeSync(sourceFd);
+    }
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
       return { ok: false, error: new Error(`File not found: ${filePath}`) };
@@ -334,12 +352,8 @@ export async function runIngest(
     }
   }
 
-  // 5. Compute content hash
-  const hashResult = computeFileHash(filePath);
-  if (!hashResult.ok) {
-    return { ok: false, error: hashResult.error };
-  }
-  const hash = hashResult.value;
+  // 5. Hash the captured bytes, never reopen a mutable source after scanning.
+  const hash = createHash('sha256').update(rawBytes).digest('hex');
 
   // 5b. Disclosure pre-check — reject comp/PII at the source, before any write.
   //     The governed brain is append-only and must never hold compensation,
@@ -374,6 +388,8 @@ export async function runIngest(
       dbPath,
       sourceType,
       hash,
+      rawBytes,
+      sourceMode,
     }),
   );
   if (!lockResult.ok) return lockResult;
@@ -389,13 +405,25 @@ interface IngestMutationInput {
   dbPath: string;
   sourceType: SourceType;
   hash: string;
+  rawBytes: Buffer;
+  sourceMode: number;
 }
 
 /** Execute the state/filesystem mutation portion of ingest under the writer lock. */
 function runIngestMutation(
   input: IngestMutationInput,
 ): { ok: true; value: IngestResult } | { ok: false; error: Error } {
-  const { filePath, ingestOpts, globalOpts, wsRoot, dbPath, sourceType, hash } = input;
+  const {
+    filePath,
+    ingestOpts,
+    globalOpts,
+    wsRoot,
+    dbPath,
+    sourceType,
+    hash,
+    rawBytes,
+    sourceMode,
+  } = input;
 
   // 6. Build destination path: workspace/raw/<subdir>/<slug>
   const subdir = TYPE_TO_SUBDIR[sourceType];
@@ -461,9 +489,16 @@ function runIngestMutation(
       return { ok: true, value: result };
     }
 
-    // 10. Copy file to destination (create subdir if needed)
+    // 10. Persist exactly the scanned snapshot, even if the source changed while waiting.
     mkdirSync(destAbsDir, { recursive: true });
-    copyFileSync(filePath, destAbsPath);
+    const destinationFd = openSync(destAbsPath, 'w', sourceMode);
+    try {
+      // Preserve source permissions on both new and existing destinations before writing bytes.
+      fchmodSync(destinationFd, sourceMode);
+      writeFileSync(destinationFd, rawBytes);
+    } finally {
+      closeSync(destinationFd);
+    }
 
     // 11. Register source in SQLite
     const sourceResult = registerSource(db, {

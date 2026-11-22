@@ -6,7 +6,17 @@
  * so we validate actual side-effects (file copies, database records, traces).
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -22,6 +32,7 @@ import {
   registerMount,
 } from '@ico/kernel';
 
+import * as writeLock from '../lib/write-lock.js';
 import {
   detectSourceType,
   type GlobalOptions,
@@ -85,6 +96,44 @@ describe('runIngest', () => {
   // -------------------------------------------------------------------------
   // Happy path — text file
   // -------------------------------------------------------------------------
+
+  it.each(['replace', 'remove'] as const)(
+    'persists the scanned snapshot when the source changes before mutation: %s',
+    async (change) => {
+      const path = join(tempBase, 'snapshot.txt');
+      const captured = Buffer.from('Synthetic captured text that passed disclosure checks.\n');
+      writeFileSync(path, captured);
+      chmodSync(path, 0o600);
+      if (change === 'replace') {
+        const destination = join(workspaceRoot, 'raw/notes/snapshot.txt');
+        writeFileSync(destination, 'Earlier synthetic destination');
+        chmodSync(destination, 0o644);
+      }
+      const originalLock = writeLock.withBrainWriteLock;
+      vi.spyOn(writeLock, 'withBrainWriteLock').mockImplementation(async (fn) => {
+        if (change === 'replace') {
+          writeFileSync(path, 'Different bytes that were never scanned.');
+          chmodSync(path, 0o644);
+        } else rmSync(path);
+        return originalLock(fn);
+      });
+      const result = await runIngest(path, ingestOpts(), globalOpts());
+      if (!result.ok) throw result.error;
+      const expectedHash = createHash('sha256').update(captured).digest('hex');
+      expect(readFileSync(join(workspaceRoot, result.value.path))).toEqual(captured);
+      expect(result.value.hash).toBe(expectedHash);
+      expect(statSync(join(workspaceRoot, result.value.path)).mode & 0o777).toBe(0o600);
+      const opened = initDatabase(join(workspaceRoot, '.ico/state.db'));
+      if (!opened.ok) throw opened.error;
+      try {
+        expect(
+          opened.value.prepare('SELECT hash FROM sources WHERE id = ?').get(result.value.id),
+        ).toEqual({ hash: expectedHash });
+      } finally {
+        closeDatabase(opened.value);
+      }
+    },
+  );
 
   it('ingests a text file and copies it to raw/notes/', async () => {
     const srcFile = join(tempBase, 'notes.txt');
