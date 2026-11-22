@@ -32,6 +32,7 @@ import {
   listSources,
   recordProvenance,
   registerSource,
+  scanForDisclosure,
   writeTrace,
 } from '@ico/kernel';
 import { err, ok, type Result } from '@ico/types';
@@ -147,7 +148,7 @@ function slugify(filename: string): string {
  *      parent directory (symlink-escape guard).
  *  3.  Check file size against `maxFileSize` (skipped when `force` is `true`).
  *  4.  Detect the source type (or use `typeOverride`).
- *  5.  Run the appropriate adapter over captured bytes to extract content and metadata.
+ *  5.  Screen captured bytes, run the adapter, and screen extracted content and metadata.
  *  6.  Compute the SHA-256 hash of those same captured bytes.
  *  7.  Open the SQLite database.
  *  8.  Determine the destination relative path: `raw/<subdir>/<slugified-name>`.
@@ -229,6 +230,12 @@ export async function runIngestPipeline(
     );
   }
 
+  // Refuse known disclosure patterns before parsing or opening persistent state.
+  // Use a generic error: neither matched text nor source metadata belongs in logs.
+  if (scanForDisclosure(capturedBytes.toString('utf8')) !== null) {
+    return err(new Error('Disclosure check failed: source content is not permitted.'));
+  }
+
   // 4. Detect source type.
   const type: SourceType = options.typeOverride ?? detectSourceType(resolvedPath);
 
@@ -238,7 +245,19 @@ export async function runIngestPipeline(
     return err(ingestResult.error);
   }
 
-  const { metadata } = ingestResult.value;
+  const { content, metadata } = ingestResult.value;
+
+  // Decoding HTML entities or PDF text can reveal content absent from the raw
+  // UTF-8 representation. Screen both extracted text and all metadata before any
+  // database, raw-file, trace or audit writes. This uses the existing bounded
+  // kernel pattern policy; it is not comprehensive PII detection.
+  try {
+    if (scanForDisclosure(`${content}\n${JSON.stringify(metadata)}`) !== null) {
+      return err(new Error('Disclosure check failed: extracted content is not permitted.'));
+    }
+  } catch {
+    return err(new Error('Disclosure check failed: extracted metadata could not be checked.'));
+  }
 
   // 6. Compute file hash.
   const hash = createHash('sha256').update(capturedBytes).digest('hex');
