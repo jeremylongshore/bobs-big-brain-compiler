@@ -491,6 +491,22 @@ case "$AGENT_NAME" in
 esac
 
 log "Invoking: ${AGENT_NAME} -p /teamkb-compile $TARGET $NEXT --$MODE (timeout ${TIMEOUT_SECS}s, max-turns ${TEAMKB_MAX_TURNS}, pty-wrapped)"
+# Explicit per-attempt context reaches Bash tools independently of PTY stdout.
+# These are progress diagnostics, not proof that any phase succeeded.
+export TEAMKB_PHASE_WRAPPED=1
+export TEAMKB_PHASE_HELPER="$SCRIPT_DIR/runtime-proof.py"
+export TEAMKB_PHASE_DATE="$TARGET" TEAMKB_PHASE_MODE="$MODE"
+TEAMKB_PHASE_LOG="$(realpath -m -- "$LOG")"
+export TEAMKB_PHASE_LOG
+TEAMKB_PHASE_DECISIONS="$(realpath -m -- "$DECISIONS")"
+TEAMKB_PHASE_DIGEST="$(realpath -m -- "$DIGEST")"
+TEAMKB_PHASE_RECEIPTS="$(realpath -m -- "$LOG_DIR/c8-${TARGET}.jsonl")"
+export TEAMKB_PHASE_DECISIONS TEAMKB_PHASE_DIGEST TEAMKB_PHASE_RECEIPTS
+TEAMKB_PHASE_ATTEMPT=$(python3 -c 'import uuid; print(uuid.uuid4().hex)')
+export TEAMKB_PHASE_ATTEMPT
+if ! python3 "$TEAMKB_PHASE_HELPER" phase-start >> "$LOG" 2>&1; then
+  log "FATAL: phase logging unavailable before agent invocation"; exit 2
+fi
 T0=$(date +%s)
 if [ "$AGENT_NAME" = "minimax" ]; then
   # MiniMax env is scoped to this invocation only. x-api-key auth (verified
@@ -523,6 +539,12 @@ else
   if [ "${EXIT:-1}" = "124" ]; then STATUS="FAILED (timeout ${TIMEOUT_SECS}s)"; log "${AGENT_NAME} -p TIMED OUT after ${WALL}s"
   else STATUS="FAILED (exit ${EXIT:-1})"; log "${AGENT_NAME} -p exited non-zero (${EXIT:-1}) after ${WALL}s"; fi
 fi
+
+if ! python3 "$TEAMKB_PHASE_HELPER" phase-end >> "$LOG" 2>&1; then
+  log "WARNING: phase summary unavailable; consult authoritative outcome receipts"
+fi
+unset TEAMKB_PHASE_WRAPPED TEAMKB_PHASE_HELPER TEAMKB_PHASE_LOG TEAMKB_PHASE_DATE TEAMKB_PHASE_MODE
+unset TEAMKB_PHASE_DECISIONS TEAMKB_PHASE_DIGEST TEAMKB_PHASE_RECEIPTS TEAMKB_PHASE_ATTEMPT
 
 # ── Classify result ──────────────────────────────────────────────────────────
 HAS_RECORD=0

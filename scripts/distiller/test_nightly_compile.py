@@ -92,6 +92,77 @@ if os.environ.get("FIXTURE_OUTCOME")=="success":
         return subprocess.run(["bash", str(HERE / "teamkb-compile-daily.sh")], env=self.env,
                               capture_output=True, text=True, timeout=15)
 
+    def phase_agent(self, phases, fail=False):
+        original = self.agent.read_text()
+        code = "import subprocess,sys\nassert os.environ.get('TEAMKB_PHASE_WRAPPED') == '1'\n"
+        code += "for phase in " + repr(phases) + ":\n"
+        code += ' subprocess.run(["python3", os.environ["TEAMKB_PHASE_HELPER"], "phase", "--phase", phase], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n'
+        if fail:
+            code += "sys.exit(17)\n"
+        self.agent.write_text(original.replace("p=pathlib.Path", code + "p=pathlib.Path"))
+
+    def phase_rows(self):
+        log = self.root / ".local/state/teamkb-compile-daily/run-2026-09-08.log"
+        return [json.loads(line[len("BBB_PHASE "):]) for line in log.read_text().splitlines()
+                if line.startswith("BBB_PHASE ")]
+
+    def test_phase_log_survives_suppressed_tool_stdout_for_both_agents(self):
+        self.phase_agent(list(proof.PHASES))
+        for agent in ("claude", "minimax"):
+            with self.subTest(agent=agent):
+                self.env["TEAMKB_AGENT"] = agent
+                result = self.run_wrapper()
+                self.assertNotEqual(result.returncode, 0)  # markers cannot prove outcome
+                rows = self.phase_rows()[-8:]
+                self.assertEqual([r.get("phase") for r in rows[1:-1]], list(proof.PHASES))
+                self.assertEqual({r["attempt"] for r in rows}, {rows[0]["attempt"]})
+                self.assertTrue(rows[-1]["sequence_ok"])
+                self.assertEqual(rows[-1]["missing"], [])
+                self.assertEqual(rows[0]["artifacts"]["decisions"], str(self.decisions))
+                self.assertTrue(all(r["source"] == "agent_reported" for r in rows[1:-1]))
+                self.assertTrue(all(r["attribution"] == "unverified" for r in rows))
+        starts = [r for r in self.phase_rows() if r["event"] == "start"]
+        self.assertEqual(len({r["attempt"] for r in starts}), 2)
+        self.assertNotIn("fixture-key-never-log", json.dumps(self.phase_rows()))
+
+    def test_phase_log_bisects_failure_and_distinguishes_retry(self):
+        self.phase_agent(["setup", "gather", "distill"], fail=True)
+        for _ in range(2):
+            result = self.run_wrapper()
+            self.assertNotEqual(result.returncode, 0)
+        ends = [r for r in self.phase_rows() if r["event"] == "end"]
+        self.assertEqual(len(ends), 2)
+        self.assertNotEqual(ends[0]["attempt"], ends[1]["attempt"])
+        for row in ends:
+            self.assertEqual(row["last_entered"], "distill")
+            self.assertEqual(row["missing"], ["govern", "audit", "digest"])
+            self.assertFalse(row["sequence_ok"])
+
+    def test_phase_log_reports_wrong_order_and_missing_markers(self):
+        self.phase_agent(["gather", "setup", "setup"])
+        self.run_wrapper()
+        rows = self.phase_rows()
+        self.assertTrue(all(not r["sequence_ok"] for r in rows if r["event"] == "phase"))
+        self.assertFalse(rows[-1]["sequence_ok"])
+        self.assertIn("distill", rows[-1]["missing"])
+
+    def test_phase_helper_refuses_missing_context_and_unavailable_log(self):
+        env = {"PATH": "/usr/bin:/bin"}
+        helper = ["python3", str(HERE / "runtime-proof.py"), "phase", "--phase", "setup"]
+        missing = subprocess.run(helper, env=env, capture_output=True, text=True)
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertIn("phase logging unavailable", missing.stderr)
+        env.update({"TEAMKB_PHASE_" + k: v for k, v in {
+            "LOG": str(self.root / "absent.log"), "ATTEMPT": "a" * 32,
+            "DATE": "2026-09-08", "MODE": "auto", "DECISIONS": str(self.decisions),
+            "DIGEST": str(self.root / "digest.md"), "RECEIPTS": str(self.root / "receipts.jsonl")}.items()})
+        unavailable = subprocess.run(helper, env=env, capture_output=True, text=True)
+        self.assertNotEqual(unavailable.returncode, 0)
+        self.assertFalse((self.root / "absent.log").exists())
+        invalid = subprocess.run(helper[:-1] + ["secret-payload"], env=env, capture_output=True, text=True)
+        self.assertNotEqual(invalid.returncode, 0)
+        self.assertFalse((self.root / "absent.log").exists())
+
     def mode_probe(self, history, state=None, override=None, soak="3", verified_history=False,
                    dry_run=False, raw_tail="", already_verified=False):
         """Stop at a deliberately denied fixture preflight, before model/MCP work."""
