@@ -47,6 +47,6 @@ describe('PDF registry failure boundary', () => {
     const failure = err(new Error('PDF format rejected'));
     adapter.mockResolvedValueOnce(failure);
     expect(await ingestSource('fixture.txt', 'pdf')).toBe(failure);
-    expect(adapter).toHaveBeenLastCalledWith('fixture.txt');
+    expect(adapter).toHaveBeenLastCalledWith('fixture.txt', undefined);
   });
 });

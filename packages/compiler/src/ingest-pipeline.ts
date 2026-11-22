@@ -9,13 +9,24 @@
  * Never throws — all failures are returned as `err(Error)`.
  */
 
-import { copyFileSync, existsSync, mkdirSync, realpathSync, renameSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+  closeSync,
+  existsSync,
+  fchmodSync,
+  fstatSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  writeFileSync,
+} from 'node:fs';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 
 import {
   appendAuditLog,
   closeDatabase,
-  computeFileHash,
   initDatabase,
   isSourceChanged,
   listSources,
@@ -136,13 +147,13 @@ function slugify(filename: string): string {
  *      parent directory (symlink-escape guard).
  *  3.  Check file size against `maxFileSize` (skipped when `force` is `true`).
  *  4.  Detect the source type (or use `typeOverride`).
- *  5.  Run the appropriate adapter to extract content and metadata.
- *  6.  Compute the SHA-256 hash of the resolved file.
+ *  5.  Run the appropriate adapter over captured bytes to extract content and metadata.
+ *  6.  Compute the SHA-256 hash of those same captured bytes.
  *  7.  Open the SQLite database.
  *  8.  Determine the destination relative path: `raw/<subdir>/<slugified-name>`.
  *      If `isSourceChanged` returns `false`, the file is already registered at
  *      that path with the same hash — return early with `alreadyIngested: true`.
- *  9.  Copy the file atomically to the destination (write to a `.tmp` file,
+ *  9.  Write the captured bytes atomically to the destination (write to a `.tmp` file,
  *      then `renameSync` into place).
  * 10.  Register the source in the database.
  * 11.  Record a provenance entry.
@@ -186,8 +197,25 @@ export async function runIngestPipeline(
 
   // 3. Check file size.
   let fileSize: number;
+  let capturedBytes: Buffer;
+  let sourceMode: number;
   try {
-    fileSize = statSync(resolvedPath).size;
+    const fd = openSync(resolvedPath, 'r');
+    try {
+      const sourceStat = fstatSync(fd);
+      sourceMode = sourceStat.mode & 0o777;
+      if (options.force !== true && sourceStat.size > maxFileSize) {
+        return err(
+          new Error(
+            `File too large: ${sourceStat.size} bytes exceeds limit of ${maxFileSize} bytes. Pass force: true to bypass.`,
+          ),
+        );
+      }
+      capturedBytes = readFileSync(fd);
+      fileSize = capturedBytes.length;
+    } finally {
+      closeSync(fd);
+    }
   } catch (e) {
     return err(e instanceof Error ? e : new Error(String(e)));
   }
@@ -205,7 +233,7 @@ export async function runIngestPipeline(
   const type: SourceType = options.typeOverride ?? detectSourceType(resolvedPath);
 
   // 5. Run the adapter.
-  const ingestResult = await ingestSource(resolvedPath, type);
+  const ingestResult = await ingestSource(resolvedPath, type, capturedBytes);
   if (!ingestResult.ok) {
     return err(ingestResult.error);
   }
@@ -213,11 +241,7 @@ export async function runIngestPipeline(
   const { metadata } = ingestResult.value;
 
   // 6. Compute file hash.
-  const hashResult = computeFileHash(resolvedPath);
-  if (!hashResult.ok) {
-    return err(hashResult.error);
-  }
-  const hash = hashResult.value;
+  const hash = createHash('sha256').update(capturedBytes).digest('hex');
 
   // 7. Open the database.
   const dbResult = initDatabase(options.dbPath);
@@ -285,7 +309,13 @@ export async function runIngestPipeline(
     const tmpPath = `${absoluteDest}.tmp`;
 
     try {
-      copyFileSync(resolvedPath, tmpPath);
+      const fd = openSync(tmpPath, 'w', sourceMode);
+      try {
+        fchmodSync(fd, sourceMode);
+        writeFileSync(fd, capturedBytes);
+      } finally {
+        closeSync(fd);
+      }
       renameSync(tmpPath, absoluteDest);
     } catch (e) {
       return err(e instanceof Error ? e : new Error(String(e)));

@@ -70,6 +70,15 @@ describe('ingestPdf', () => {
   // Happy-path: valid PDF
   // -------------------------------------------------------------------------
 
+  it('parses captured PDF bytes through the lazy registry without reopening a path', async () => {
+    const captured = Buffer.from(MINIMAL_PDF);
+    const result = await ingestSource(join(tmpDir, 'missing.pdf'), undefined, captured);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw result.error;
+    expect(result.value.content).toContain('Hello World');
+    expect(captured.equals(MINIMAL_PDF)).toBe(true);
+  });
+
   it('returns ok for a valid PDF', async () => {
     const filePath = await writeTmp('valid.pdf', MINIMAL_PDF);
     const result = await ingestPdf(filePath);

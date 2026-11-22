@@ -30,13 +30,17 @@ import type { IngestResult } from './types.js';
  * - Image-only PDF (zero text extracted) → `ok` with empty content and
  *   `warning` field set in metadata
  *
+ * @param capturedBytes - Optional captured file bytes; when supplied, the path is not reopened.
  * @param filePath - Absolute or workspace-relative path to the PDF file.
  */
-export async function ingestPdf(filePath: string): Promise<Result<IngestResult, Error>> {
+export async function ingestPdf(
+  filePath: string,
+  capturedBytes?: Buffer,
+): Promise<Result<IngestResult, Error>> {
   // --- 1. Read raw bytes ---------------------------------------------------
   let buffer: Buffer;
   try {
-    buffer = await readFile(filePath);
+    buffer = capturedBytes ?? (await readFile(filePath));
   } catch (cause) {
     const message =
       cause instanceof Error && 'code' in cause && cause.code === 'ENOENT'

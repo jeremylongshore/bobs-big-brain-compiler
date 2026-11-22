@@ -127,13 +127,17 @@ const turndown = new TurndownService({
  *
  * Never throws — all failures are returned as `err(Error)`.
  *
+ * @param capturedBytes - Optional captured file bytes; when supplied, the path is not reopened.
  * @param filePath - Absolute path to the `.html` file to ingest.
  */
-export function ingestWebClip(filePath: string): Result<IngestResult, Error> {
+export function ingestWebClip(
+  filePath: string,
+  capturedBytes?: Buffer,
+): Result<IngestResult, Error> {
   let html: string;
 
   try {
-    html = readFileSync(filePath, 'utf-8');
+    html = capturedBytes?.toString('utf8') ?? readFileSync(filePath, 'utf-8');
   } catch (e) {
     return err(e instanceof Error ? e : new Error(String(e)));
   }
