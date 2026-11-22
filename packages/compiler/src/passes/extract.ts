@@ -21,7 +21,6 @@
  *
  * Never throws — all error paths return err(Error).
  */
-
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -37,6 +36,12 @@ import {
   scaledMaxTokens,
   wasTruncated,
 } from './batch-helper.js';
+import {
+  captureInput,
+  type InputClosure,
+  settleOutputCustody,
+  unionInputs,
+} from './input-custody.js';
 import { wikiOutputFilename } from './output-filename.js';
 import { checkModelOutput, type PassOutcome, stampPassProvenance } from './output-filter.js';
 import { assertWikiOutputOwnership } from './output-ownership.js';
@@ -196,10 +201,12 @@ export async function extractConcepts(
 
   // 2. Read all summary files.
   const summaryChunks: string[] = [];
+  const inputCustody: InputClosure[] = [];
   for (const relPath of summaryPaths) {
     const absPath = join(workspacePath, relPath);
     try {
       const content = readFileSync(absPath, 'utf-8');
+      inputCustody.push(captureInput(db, relPath, content));
       summaryChunks.push(`<!-- Source: ${relPath} -->\n${content}`);
     } catch (e) {
       return err(e instanceof Error ? e : new Error(String(e)));
@@ -212,7 +219,9 @@ export async function extractConcepts(
 
   // 3. Chunk into batches and call the API per batch, collecting raw pages.
   const batches = chunkArray(summaryChunks, batchSize);
+  const batchInputs = chunkArray(inputCustody, batchSize).map(unionInputs);
   const rawPages: string[] = [];
+  const rawPageInputs: InputClosure[] = [];
   const rawPageCalls: ModelCallProvenance[] = [];
   let inputTokens = 0;
   let outputTokens = 0;
@@ -263,6 +272,7 @@ export async function extractConcepts(
       if (trimmed.length > 0) {
         rawPages.push(trimmed);
         rawPageCalls.push(callProvenance);
+        rawPageInputs.push(batchInputs[batchIndex] ?? null);
       }
     }
   }
@@ -416,6 +426,13 @@ export async function extractConcepts(
 
     // 8b. Receipts are durable — make the page visible.
     try {
+      const custody = settleOutputCustody(
+        db,
+        outputPath,
+        pageContent,
+        page.custodyInputIndices.map((index) => rawPageInputs[index] ?? null),
+      );
+      if (!custody.ok) return err(custody.error);
       renameSync(tmpPath, absoluteOutputPath);
     } catch (e) {
       return err(e instanceof Error ? e : new Error(String(e)));

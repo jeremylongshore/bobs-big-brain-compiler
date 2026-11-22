@@ -223,3 +223,11 @@ export {
 
 // Faithfulness token-meter recorder (e06.8) — the eval's ONLY durable write.
 export { recordFaithfulnessTokens } from './evals/faithfulness-tokens.js';
+
+export {
+  readInputCustody,
+  recordInputCustody,
+  sourceInputCustody,
+  invalidateInputCustody,
+  type CustodyRoot,
+} from './input-custody.js';

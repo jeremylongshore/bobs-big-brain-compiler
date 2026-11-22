@@ -7,6 +7,31 @@ Version numbers follow the blueprint version, not the software release.
 
 ## [Unreleased]
 
+### Compilation input custody — 2026-11-22 (in development)
+
+The source implementation adds an independent, versioned input-custody table
+(migration 006). It binds exact output text/path to canonical source IDs and byte
+hashes. It does not replace advisory `compilation_sources` attribution or certify
+source identity, sensitivity, signing authority, or a live deployment. There is no
+historical backfill: existing lineage cannot establish complete input membership.
+
+Summarize checks the actual supplied source text against the source catalog.
+Cross-source passes carry the complete input closure for each map call, including
+shared concept context and sources represented in contradiction reduce digests.
+Privacy custody conservatively unions every grouped duplicate, while retained
+body/list model-call attribution keeps its existing semantics. The deterministic
+link pass adds referring-page custody when writing backlinks. Missing legacy or
+changed input receipts invalidate replacement output custody; unsupported signing
+must refuse these outputs. A conflicting or stale source version refuses custody
+settlement before the output rename. Checksums detect drift, not a malicious
+local writer who can rewrite both records and hashes.
+
+This is a source prerequisite for producer adoption in
+`compile-then-govern-39z.11.4.4.4.1`. Authenticated capture bindings, signing,
+Registrar capability negotiation, installed-consumer verification and operational
+enrollment remain unfinished parent work. No live migration or compilation is
+performed by these source changes.
+
 ### Documentation correction — 2026-10-26
 
 Reconcile the Phase 1 trace reference and entry points with source `9dc7488`
