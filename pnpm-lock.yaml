@@ -105,6 +105,9 @@ importers:
       '@intentsolutions/core':
         specifier: ^0.10.0
         version: 0.10.0
+      '@mixmark-io/domino':
+        specifier: 2.2.0
+        version: 2.2.0
       better-sqlite3:
         specifier: ^11.9.0
         version: 11.10.0
