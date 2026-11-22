@@ -1,7 +1,14 @@
 import { createHash } from 'node:crypto';
+import { realpathSync } from 'node:fs';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 import { err, ok, type Result } from '@ico/types';
 
+import {
+  type CaptureBinding,
+  readSourceCaptureBindings,
+  readStableCaptureBytes,
+} from './source-capture.js';
 import type { Database } from './state.js';
 
 /** Exact source version seen by a deterministic pass, not a sensitivity decision. */
@@ -127,5 +134,46 @@ export function invalidateInputCustody(db: Database, outputPath: string): Result
     return ok(undefined);
   } catch (error) {
     return err(error instanceof Error ? error : new Error(String(error)));
+  }
+}
+
+/** Resolve the complete deterministic closure against actual stored bytes and current catalog.
+ * This is a signing prerequisite, not signing authority or a single-profile aggregation.
+ */
+export function readBoundInputCustody(
+  db: Database,
+  outputPath: string,
+  outputContent: string,
+  workspacePath: string,
+  catalogPath: string,
+): Result<Array<CustodyRoot & { bindings: CaptureBinding[] }>, Error> {
+  try {
+    const custody = readInputCustody(db, outputPath, outputContent);
+    if (!custody.ok) throw custody.error;
+    const workspace = realpathSync(workspacePath);
+    const result = custody.value.map((root) => {
+      const source = db.prepare('SELECT path FROM sources WHERE id = ?').get(root.sourceId) as
+        | { path: string }
+        | undefined;
+      if (!source) throw new Error('Missing source');
+      const actual = realpathSync(resolve(workspace, source.path));
+      const rel = relative(workspace, actual);
+      if (
+        !rel ||
+        rel === '..' ||
+        rel.startsWith(`..${sep}`) ||
+        isAbsolute(rel) ||
+        createHash('sha256').update(readStableCaptureBytes(actual).bytes).digest('hex') !==
+          root.contentHash
+      ) {
+        throw new Error('Stored source bytes changed');
+      }
+      const bindings = readSourceCaptureBindings(db, root.sourceId, root.contentHash, catalogPath);
+      if (!bindings.ok) throw bindings.error;
+      return { ...root, bindings: bindings.value };
+    });
+    return ok(result);
+  } catch {
+    return err(new Error('Bound input custody is missing, ambiguous or stale.'));
   }
 }

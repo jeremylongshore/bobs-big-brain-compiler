@@ -124,6 +124,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   hooks.armed = false;
   closeDatabase(db);
   rmSync(resolve(workspacePath, '..'), { recursive: true, force: true });
@@ -171,6 +172,9 @@ describe('spool write ordering: a failure at any step never leaves a manifest-le
   });
 
   it('a hard kill leaving tmp files and an orphan manifest does not block or corrupt a retry', () => {
+    // This fixture exercises same-second filename reuse, independent of machine load.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-22T00:00:00.000Z'));
     const first = emit();
     expect(first.ok).toBe(true);
     if (!first.ok) return;

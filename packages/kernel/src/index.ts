@@ -226,8 +226,17 @@ export { recordFaithfulnessTokens } from './evals/faithfulness-tokens.js';
 
 export {
   readInputCustody,
+  readBoundInputCustody,
   recordInputCustody,
   sourceInputCustody,
   invalidateInputCustody,
   type CustodyRoot,
 } from './input-custody.js';
+
+export {
+  captureSource,
+  validateCaptureEvidence,
+  readSourceCaptureBindings,
+  type CaptureEvidence,
+  type CaptureBinding,
+} from './source-capture.js';

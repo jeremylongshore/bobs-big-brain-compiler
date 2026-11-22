@@ -29,12 +29,15 @@ import type { Command } from 'commander';
 import { hasIngestDisclosure, ingestSource, markSupersededCompilationsStale } from '@ico/compiler';
 import {
   appendAuditLog,
+  type CaptureEvidence,
+  captureSource,
   closeDatabase,
   findContainingMount,
   initDatabase,
   isSourceChanged,
   markMountIndexedAt,
   registerSource,
+  validateCaptureEvidence,
   writeTrace,
 } from '@ico/kernel';
 import type { Source } from '@ico/types';
@@ -347,13 +350,28 @@ export async function runIngest(
   //    (TOCTOU) race where the file changes between the check and the read.
   let rawBytes: Buffer;
   let sourceMode: number;
+  let capture: CaptureEvidence | undefined;
+  // Host-owned configuration only; no per-source profile or catalog command option.
+  const catalogPath = process.env['ICO_SOURCE_CATALOG'];
   try {
-    const sourceFd = openSync(filePath, 'r');
-    try {
-      rawBytes = readFileSync(sourceFd);
-      sourceMode = fstatSync(sourceFd).mode & 0o777;
-    } finally {
-      closeSync(sourceFd);
+    if (catalogPath !== undefined) {
+      const result = captureSource(
+        filePath,
+        catalogPath,
+        ingestOpts.force ? undefined : SIZE_LIMITS[detectSourceType(filePath)],
+      );
+      if (!result.ok) return result;
+      rawBytes = result.value.bytes;
+      sourceMode = result.value.mode;
+      capture = result.value.evidence;
+    } else {
+      const sourceFd = openSync(filePath, 'r');
+      try {
+        rawBytes = readFileSync(sourceFd);
+        sourceMode = fstatSync(sourceFd).mode & 0o777;
+      } finally {
+        closeSync(sourceFd);
+      }
     }
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -401,6 +419,7 @@ export async function runIngest(
       hash,
       rawBytes,
       sourceMode,
+      capture,
     }),
   );
   if (!lockResult.ok) return lockResult;
@@ -418,6 +437,7 @@ interface IngestMutationInput {
   hash: string;
   rawBytes: Buffer;
   sourceMode: number;
+  capture: CaptureEvidence | undefined;
 }
 
 /** Execute the state/filesystem mutation portion of ingest under the writer lock. */
@@ -434,7 +454,19 @@ function runIngestMutation(
     hash,
     rawBytes,
     sourceMode,
+    capture,
   } = input;
+
+  if (capture) {
+    if (createHash('sha256').update(rawBytes).digest('hex') !== hash) {
+      return {
+        ok: false,
+        error: new Error('Source capture refused: bytes changed before persistence.'),
+      };
+    }
+    const valid = validateCaptureEvidence(capture, hash);
+    if (!valid.ok) return valid;
+  }
 
   // 6. Build destination path: workspace/raw/<subdir>/<slug>
   const subdir = TYPE_TO_SUBDIR[sourceType];
@@ -472,6 +504,7 @@ function runIngestMutation(
         path: relPath,
         type: sourceType,
         hash,
+        ...(capture !== undefined && { capture }),
         ...(ingestOpts.title !== undefined && { title: ingestOpts.title }),
         ...(ingestOpts.author !== undefined && { author: ingestOpts.author }),
       });
@@ -517,6 +550,7 @@ function runIngestMutation(
       ...(containingMount !== null && { mountId: containingMount.id }),
       type: sourceType,
       hash,
+      ...(capture !== undefined && { capture }),
       ...(ingestOpts.title !== undefined && { title: ingestOpts.title }),
       ...(ingestOpts.author !== undefined && { author: ingestOpts.author }),
     });

@@ -14,6 +14,8 @@ import type { Database } from 'better-sqlite3';
 import { err, ok, type Result } from '@ico/types';
 import { type Source, SourceSchema } from '@ico/types';
 
+import { type CaptureEvidence, recordSourceCapture } from './source-capture.js';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -38,6 +40,8 @@ export interface RegisterSourceParams {
   metadata?: Record<string, unknown>;
   /** Pre-computed SHA-256 hex digest of the file content. */
   hash: string;
+  /** Opaque evidence from trusted-host capture; absence permanently records unknown origin. */
+  capture?: CaptureEvidence;
 }
 
 // ---------------------------------------------------------------------------
@@ -88,6 +92,32 @@ function parseRow(row: SourceRow): Result<Source, Error> {
  * @returns `ok(source)` on success or on duplicate, `err(error)` on unexpected failures.
  */
 export function registerSource(db: Database, params: RegisterSourceParams): Result<Source, Error> {
+  try {
+    return ok(
+      db
+        .transaction(() => {
+          const prior = db
+            .prepare('SELECT id FROM sources WHERE path = ? AND hash = ?')
+            .get(params.path, params.hash);
+          const result = registerSourceRow(db, params);
+          if (!result.ok) throw result.error;
+          recordSourceCapture(
+            db,
+            result.value.id,
+            params.hash,
+            prior === undefined,
+            params.capture,
+          );
+          return result.value;
+        })
+        .immediate(),
+    );
+  } catch {
+    return err(new Error('Source registration failed: invalid source or capture custody.'));
+  }
+}
+
+function registerSourceRow(db: Database, params: RegisterSourceParams): Result<Source, Error> {
   const id = crypto.randomUUID();
   const ingested_at = new Date().toISOString();
   const metadataJson = params.metadata != null ? JSON.stringify(params.metadata) : null;

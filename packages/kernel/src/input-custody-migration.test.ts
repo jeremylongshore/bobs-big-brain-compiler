@@ -40,6 +40,7 @@ it('upgrades a populated pre-custody database without backfilling or rewriting l
         ),
       ).toEqual(before);
       expect(db.prepare('SELECT * FROM compilation_input_custody').all()).toEqual([]);
+      expect(db.prepare('SELECT * FROM source_capture_custody').all()).toEqual([]);
       expect(readInputCustody(db, 'wiki/sources/legacy.md', 'legacy output').ok).toBe(false);
       const upgraded = db.serialize();
       expect(runMigrations(db, migrations).ok).toBe(true);
