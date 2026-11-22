@@ -95,13 +95,17 @@ function firstHeading(body: string): string | null {
  *
  * Never throws — all failures are returned as `err(Error)`.
  *
+ * @param capturedBytes - Optional captured file bytes; when supplied, the path is not reopened.
  * @param filePath - Absolute path to the `.md` file to ingest.
  */
-export function ingestMarkdown(filePath: string): Result<IngestResult, Error> {
+export function ingestMarkdown(
+  filePath: string,
+  capturedBytes?: Buffer,
+): Result<IngestResult, Error> {
   let raw: string;
 
   try {
-    raw = readFileSync(filePath, 'utf-8');
+    raw = capturedBytes?.toString('utf8') ?? readFileSync(filePath, 'utf-8');
   } catch (e) {
     return err(e instanceof Error ? e : new Error(String(e)));
   }

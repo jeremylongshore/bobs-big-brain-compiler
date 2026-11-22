@@ -65,6 +65,21 @@ describe('ingestSource', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  it.each([
+    ['markdown', '# Captured title\nBody'],
+    ['text', '# Captured title\nBody'],
+    ['html', '<html><title>Captured title</title><body>Body</body></html>'],
+  ] as const)('parses captured %s bytes without opening a missing path', async (type, text) => {
+    const captured = Buffer.from(text);
+    const before = Buffer.from(captured);
+    const result = await ingestSource(join(tmpDir, 'missing'), type, captured);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw result.error;
+    expect(result.value.metadata.title).toBe('Captured title');
+    expect(result.value.content).toContain('Body');
+    expect(captured.equals(before)).toBe(true);
+  });
+
   it('routes a .md file to the markdown adapter', async () => {
     const content = `---
 title: Registry Test

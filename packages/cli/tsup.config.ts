@@ -42,7 +42,7 @@ export default defineConfig({
   // Externalize:
   //   - native bindings (better-sqlite3)
   //   - CJS deps that use dynamic require/eval at runtime (gray-matter,
-  //     pdf-parse, turndown) — bundling them produces ESM that throws
+  //     pdf-parse, turndown, @mixmark-io/domino) — bundling them produces ESM that throws
   //     "Dynamic require is not supported" at the first call site.
   //   - large third-party SDKs (@anthropic-ai/sdk) where bundling
   //     duplicates code and slows install.
@@ -56,5 +56,6 @@ export default defineConfig({
     'js-yaml',
     'pdf-parse',
     'turndown',
+    '@mixmark-io/domino',
   ],
 });

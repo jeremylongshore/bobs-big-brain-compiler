@@ -70,24 +70,26 @@ export function detectSourceType(filePath: string): SourceType {
  * - `'html'`     → {@link ingestWebClip}
  * - `'text'`     → {@link ingestMarkdown} (plain text treated as markdown without frontmatter)
  *
+ * @param capturedBytes - Optional captured file bytes shared by parsing, hashing and persistence.
  * @param filePath     - Absolute path to the file to ingest.
  * @param typeOverride - Optional explicit source type; bypasses extension detection.
  */
 export async function ingestSource(
   filePath: string,
   typeOverride?: SourceType,
+  capturedBytes?: Buffer,
 ): Promise<Result<IngestResult, Error>> {
   const sourceType = typeOverride ?? detectSourceType(filePath);
 
   switch (sourceType) {
     case 'markdown':
-      return ingestMarkdown(filePath);
+      return ingestMarkdown(filePath, capturedBytes);
 
     case 'pdf':
       try {
         // Defer native PDF dependency initialization until this format is requested.
         const { ingestPdf } = await import('./pdf.js');
-        return await ingestPdf(filePath);
+        return await ingestPdf(filePath, capturedBytes);
       } catch (cause) {
         // Dynamic module loading and an adapter failure both obey the registry's
         // Result contract, including failures before the adapter's own catches.
@@ -100,9 +102,9 @@ export async function ingestSource(
       }
 
     case 'html':
-      return ingestWebClip(filePath);
+      return ingestWebClip(filePath, capturedBytes);
 
     case 'text':
-      return ingestMarkdown(filePath);
+      return ingestMarkdown(filePath, capturedBytes);
   }
 }

@@ -105,6 +105,33 @@ function writeTmp(name: string, content: string): string {
 // ---------------------------------------------------------------------------
 
 describe('ingestWebClip', () => {
+  it.each([
+    '<link ' + ' '.repeat(100_000),
+    '<link rel="canonical" ' + 'rel="canonical"'.repeat(10_000),
+    '<link href="!" ' + 'href="!"'.repeat(10_000),
+    '<time ' + ' '.repeat(100_000),
+    '<body'.repeat(20_000),
+    '<body>a'.repeat(20_000),
+  ])('handles malformed repeated HTML without regex backtracking (%#)', (html) => {
+    const result = ingestWebClip('/unused-captured.html', Buffer.from(html));
+    expect(result.ok).toBe(true);
+  });
+
+  it('reads quoted metadata and entities through the HTML parser', () => {
+    const html = `<title>One &amp; Two</title>
+      <link href='https://example.com/a?x=1&amp;y=2' rel='canonical'>
+      <meta content='Synthetic author' name='author'>
+      <time datetime='2026-11-22'>Today</time><p>Body text</p>`;
+    const result = ingestWebClip('/unused-captured.html', Buffer.from(html));
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw result.error;
+    expect(result.value.metadata.title).toBe('One & Two');
+    expect(result.value.metadata.sourceUrl).toBe('https://example.com/a?x=1&y=2');
+    expect(result.value.metadata.author).toBe('Synthetic author');
+    expect(result.value.metadata.date).toBe('2026-11-22');
+    expect(result.value.content).toContain('Body text');
+  });
+
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'ico-web-test-'));
   });

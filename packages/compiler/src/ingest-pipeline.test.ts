@@ -6,11 +6,20 @@
  * real (temporary) source files.
  */
 
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   closeDatabase,
@@ -21,6 +30,7 @@ import {
   readTraces,
 } from '@ico/kernel';
 
+import * as adapters from './adapters/registry.js';
 import { type IngestPipelineOptions, runIngestPipeline } from './ingest-pipeline.js';
 
 // ---------------------------------------------------------------------------
@@ -94,6 +104,7 @@ describe('runIngestPipeline', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     rmSync(base, { recursive: true, force: true });
     try {
       rmSync(env.sourceDir, { recursive: true, force: true });
@@ -101,6 +112,45 @@ describe('runIngestPipeline', () => {
       /* ignore */
     }
   });
+
+  it.each(['replace', 'remove'])(
+    'retains captured bytes and metadata when source changes: %s',
+    async (change) => {
+      const original = '# Original title\n\nOriginal captured content.\n';
+      const filePath = writeSource(env.sourceDir, 'snapshot.md', original);
+      chmodSync(filePath, 0o600);
+      const realIngest = adapters.ingestSource;
+      vi.spyOn(adapters, 'ingestSource').mockImplementationOnce(async (...args) => {
+        const parsed = await realIngest(...args);
+        if (change === 'remove') rmSync(filePath);
+        else {
+          writeFileSync(filePath, '# Replacement title\nDifferent bytes.');
+          chmodSync(filePath, 0o644);
+        }
+        return parsed;
+      });
+      const result = await runIngestPipeline(filePath, makeOptions(env));
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw result.error;
+      const destination = join(env.wsRoot, result.value.path);
+      expect(readFileSync(destination, 'utf8')).toBe(original);
+      expect(statSync(destination).mode & 0o777).toBe(0o600);
+      expect(result.value.title).toBe('Original title');
+      const hash = createHash('sha256').update(original).digest('hex');
+      expect(result.value.hash).toBe(hash);
+      const opened = initDatabase(env.dbPath);
+      if (!opened.ok) throw opened.error;
+      try {
+        const sources = listSources(opened.value);
+        if (!sources.ok) throw sources.error;
+        expect(sources.value).toHaveLength(1);
+        expect(sources.value[0]?.hash).toBe(hash);
+        expect(sources.value[0]?.title).toBe('Original title');
+      } finally {
+        closeDatabase(opened.value);
+      }
+    },
+  );
 
   // -------------------------------------------------------------------------
   // 1. Full pipeline

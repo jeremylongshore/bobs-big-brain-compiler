@@ -44,6 +44,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
     "@intentsolutions/core": "^0.10.0",
+    "@mixmark-io/domino": "2.2.0",
     "better-sqlite3": "^11.9.0",
     "commander": "^13.0.0",
     "gray-matter": "^4.0.3",

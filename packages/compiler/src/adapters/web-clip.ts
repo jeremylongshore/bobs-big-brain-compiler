@@ -27,67 +27,20 @@ const TurndownService = require('turndown') as unknown as new (
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Extract the text content of a single HTML tag, e.g. `<title>My Page</title>`.
- *
- * Returns `null` when the tag is absent or its body is whitespace-only.
- */
-function extractTag(html: string, tag: string): string | null {
-  const match = html.match(new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`, 'i'));
-  return match?.[1]?.trim() ?? null;
+interface ParsedElement {
+  textContent: string | null;
+  getAttribute(name: string): string | null;
+}
+interface ParsedDocument {
+  body: import('turndown').Node;
+  querySelector(selector: string): ParsedElement | null;
 }
 
-/**
- * Extract a `content` attribute from a `<meta>` element identified by a
- * given attribute name/value pair.
- *
- * Handles both attribute orderings:
- *   `<meta name="author" content="Jane">`
- *   `<meta content="Jane" name="author">`
- */
-function extractMeta(html: string, attr: string, value: string): string | null {
-  const pattern = new RegExp(
-    `<meta\\s+(?:${attr}="${value}"\\s+content="([^"]*)")|(?:content="([^"]*)"\\s+${attr}="${value}")`,
-    'i',
-  );
-  const match = html.match(pattern);
-  return match?.[1] ?? match?.[2] ?? null;
-}
-
-/**
- * Extract the `href` from `<link rel="canonical" href="...">`.
- *
- * Returns `null` when absent.
- */
-function extractCanonical(html: string): string | null {
-  const match = html.match(/<link\s+[^>]*rel="canonical"[^>]*href="([^"]+)"/i);
-  if (match?.[1] !== undefined) return match[1];
-
-  // Also handle reversed attribute order
-  const match2 = html.match(/<link\s+[^>]*href="([^"]+)"[^>]*rel="canonical"/i);
-  return match2?.[1] ?? null;
-}
-
-/**
- * Extract the `datetime` attribute from the first `<time>` element.
- *
- * Returns `null` when absent.
- */
-function extractTimeDate(html: string): string | null {
-  const match = html.match(/<time\s+[^>]*datetime="([^"]+)"/i);
-  return match?.[1]?.trim() ?? null;
-}
-
-/**
- * Return the inner content of `<body>…</body>`.
- *
- * Falls back to the full HTML string when no `<body>` tag is found so that
- * fragment inputs still receive conversion.
- */
-function extractBody(html: string): string {
-  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-  return bodyMatch?.[1] ?? html;
-}
+// Use Turndown's existing HTML parser for metadata too. Parsing HTML with
+// overlapping wildcard regexes made malformed tags an unbounded backtracking path.
+const htmlParser = require('@mixmark-io/domino') as {
+  createDocument(html: string, force: boolean): ParsedDocument;
+};
 
 /**
  * Count words by splitting on whitespace sequences and discarding empty tokens.
@@ -127,49 +80,57 @@ const turndown = new TurndownService({
  *
  * Never throws — all failures are returned as `err(Error)`.
  *
+ * @param capturedBytes - Optional captured file bytes; when supplied, the path is not reopened.
  * @param filePath - Absolute path to the `.html` file to ingest.
  */
-export function ingestWebClip(filePath: string): Result<IngestResult, Error> {
+export function ingestWebClip(
+  filePath: string,
+  capturedBytes?: Buffer,
+): Result<IngestResult, Error> {
   let html: string;
 
   try {
-    html = readFileSync(filePath, 'utf-8');
+    html = capturedBytes?.toString('utf8') ?? readFileSync(filePath, 'utf-8');
   } catch (e) {
     return err(e instanceof Error ? e : new Error(String(e)));
   }
 
-  // --- Metadata extraction ---------------------------------------------------
+  try {
+    const document = htmlParser.createDocument(html, true);
+    const attribute = (selector: string, name: string): string | null =>
+      document.querySelector(selector)?.getAttribute(name) ?? null;
+    const title = document.querySelector('title')?.textContent?.trim() ?? null;
+    const sourceUrl =
+      attribute('link[rel="canonical"]', 'href') ??
+      attribute('meta[property="og:url"]', 'content') ??
+      undefined;
+    const author =
+      attribute('meta[name="author"]', 'content') ??
+      attribute('meta[property="article:author"]', 'content');
+    const date =
+      attribute('meta[property="article:published_time"]', 'content') ??
+      attribute('time[datetime]', 'datetime')?.trim() ??
+      null;
+    const content = turndown.turndown(document.body);
+    const wordCount = countWords(content);
 
-  const title = extractTag(html, 'title');
+    // --- Result assembly ------------------------------------------------------
 
-  const sourceUrl = extractCanonical(html) ?? extractMeta(html, 'property', 'og:url') ?? undefined;
-
-  const author =
-    extractMeta(html, 'name', 'author') ?? extractMeta(html, 'property', 'article:author') ?? null;
-
-  const date =
-    extractMeta(html, 'property', 'article:published_time') ?? extractTimeDate(html) ?? null;
-
-  // --- Content conversion ---------------------------------------------------
-
-  const bodyHtml = extractBody(html);
-  const content = turndown.turndown(bodyHtml);
-  const wordCount = countWords(content);
-
-  // --- Result assembly ------------------------------------------------------
-
-  return ok({
-    content,
-    metadata: {
-      title,
-      author,
-      date,
-      tags: [],
-      wordCount,
-      // exactOptionalPropertyTypes requires omitting the key entirely when the
-      // value would be `undefined` rather than assigning `undefined` explicitly.
-      ...(sourceUrl !== undefined ? { sourceUrl } : {}),
-    },
-    sourceType: 'html',
-  });
+    return ok({
+      content,
+      metadata: {
+        title,
+        author,
+        date,
+        tags: [],
+        wordCount,
+        // exactOptionalPropertyTypes requires omitting the key entirely when the
+        // value would be `undefined` rather than assigning `undefined` explicitly.
+        ...(sourceUrl !== undefined ? { sourceUrl } : {}),
+      },
+      sourceType: 'html',
+    });
+  } catch (cause) {
+    return err(cause instanceof Error ? cause : new Error(String(cause)));
+  }
 }
