@@ -23,6 +23,7 @@
     "@anthropic-ai/sdk": "^0.91.1",
     "@ico/kernel": "workspace:*",
     "@ico/types": "workspace:*",
+    "@mixmark-io/domino": "2.2.0",
     "gray-matter": "^4.0.3",
     "pdf-parse": "^2.4.5",
     "turndown": "^7.2.4"
