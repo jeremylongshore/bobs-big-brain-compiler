@@ -26,17 +26,15 @@ import { createInterface } from 'node:readline';
 
 import type { Command } from 'commander';
 
-import { ingestSource, markSupersededCompilationsStale } from '@ico/compiler';
+import { hasIngestDisclosure, ingestSource, markSupersededCompilationsStale } from '@ico/compiler';
 import {
   appendAuditLog,
   closeDatabase,
-  disclosureLabel,
   findContainingMount,
   initDatabase,
   isSourceChanged,
   markMountIndexedAt,
   registerSource,
-  scanForDisclosure,
   writeTrace,
 } from '@ico/kernel';
 import type { Source } from '@ico/types';
@@ -227,7 +225,7 @@ export async function runBatchIngest(
   for (const file of files) {
     const result = await runIngest(file, ingestOpts, globalOpts);
     if (!result.ok) {
-      summary.errors.push({ file, message: result.error.message });
+      summary.errors.push({ file: sourceLabel(file), message: result.error.message });
       summary.skipped++;
     } else if (result.value.alreadyIngested === true) {
       summary.alreadyIngested++;
@@ -290,6 +288,31 @@ export function slugify(filename: string): string {
 // Core logic (extracted so tests can call it without spawning a process)
 // ---------------------------------------------------------------------------
 
+function disclosureError(): Error {
+  return new Error('Disclosure check failed: compensation or PII content detected.');
+}
+
+function sourceLabel(filePath: string): string {
+  return hasIngestDisclosure([filePath, slugify(filePath)]) ? '[redacted source]' : filePath;
+}
+
+/** Inspect the captured bytes and decoded values before mutation or preview output. */
+async function screenSource(filePath: string, sourceType: SourceType, rawBytes: Buffer) {
+  if (hasIngestDisclosure([filePath, slugify(filePath), rawBytes.toString('utf8')])) {
+    return { ok: false as const, error: disclosureError() };
+  }
+  try {
+    const parsed = await ingestSource(filePath, sourceType, rawBytes);
+    if (!parsed.ok) return { ok: false as const, error: new Error('Source decoding failed.') };
+    if (hasIngestDisclosure([parsed.value.content, parsed.value.metadata])) {
+      return { ok: false as const, error: disclosureError() };
+    }
+    return parsed;
+  } catch {
+    return { ok: false as const, error: new Error('Source decoding failed.') };
+  }
+}
+
 /**
  * Run the full ingest sequence for a single file.
  *
@@ -304,6 +327,11 @@ export async function runIngest(
   ingestOpts: IngestOptions,
   globalOpts: GlobalOptions,
 ): Promise<{ ok: true; value: IngestResult } | { ok: false; error: Error }> {
+  // Keep the screened overrides stable across adapter awaits and lock acquisition.
+  ingestOpts = { ...ingestOpts };
+  if (hasIngestDisclosure([filePath, slugify(filePath), ingestOpts])) {
+    return { ok: false, error: disclosureError() };
+  }
   // 1. Resolve workspace
   const wsResolveOpts =
     globalOpts.workspace !== undefined ? { workspace: globalOpts.workspace } : {};
@@ -355,26 +383,9 @@ export async function runIngest(
   // 5. Hash the captured bytes, never reopen a mutable source after scanning.
   const hash = createHash('sha256').update(rawBytes).digest('hex');
 
-  // 5b. Disclosure pre-check — reject comp/PII at the source, before any write.
-  //     The governed brain is append-only and must never hold compensation,
-  //     comp-splits, anyone's pay, or PII. `ico ingest` copies the source into the
-  //     workspace + SQLite *before* it spools to INTKB, so this is the source-side
-  //     choke (mirrors intent-os/ci/disclosure-gate.sh + INTKB's intake filter).
-  //     Scans the bytes read in step 2 as UTF-8 — complete for markdown/html/text
-  //     (the corpus); a PDF's compressed text is not reached here, but INTKB's
-  //     repository-layer choke backstops the spool path. Runs before the DB is
-  //     opened so a rejection leaks no resources and leaves no trace/audit entry.
-  const violation = scanForDisclosure(rawBytes.toString('utf-8'));
-  if (violation) {
-    return {
-      ok: false,
-      error: new Error(
-        `Disclosure check failed: ${disclosureLabel(violation.category)} content detected ` +
-          `("${violation.match}") in ${basename(filePath)}. The governed brain must never hold ` +
-          `compensation or PII — move it to Jeremy-private and leave a pointer, then re-ingest.`,
-      ),
-    };
-  }
+  // Decode the same captured bytes before taking the writer lock or persisting anything.
+  const screened = await screenSource(filePath, sourceType, rawBytes);
+  if (!screened.ok) return screened;
 
   // The expensive read/disclosure work above is intentionally outside the
   // critical section. Only the DB + raw/ + trace/audit mutation phase takes
@@ -622,8 +633,19 @@ async function confirm(message: string): Promise<boolean> {
  * @param type     - Detected source type.
  * @param fileSize - File size in bytes.
  */
-async function showPreview(filePath: string, type: SourceType, fileSize: number): Promise<void> {
-  const adapterResult = await ingestSource(filePath, type);
+export async function showPreview(
+  filePath: string,
+  type: SourceType,
+  fileSize: number,
+): Promise<Error | undefined> {
+  let adapterResult;
+  try {
+    const bytes = readFileSync(filePath);
+    adapterResult = await screenSource(filePath, type, bytes);
+  } catch {
+    return new Error('Source preview failed.');
+  }
+  if (!adapterResult.ok) return adapterResult.error;
 
   const title = adapterResult.ok
     ? (adapterResult.value.metadata.title ?? '(untitled)')
@@ -644,6 +666,7 @@ async function showPreview(filePath: string, type: SourceType, fileSize: number)
   process.stdout.write(formatInfo(`Size:        ${sizeMb} MB`) + '\n');
   process.stdout.write(formatInfo(`Est. tokens: ~${estTokens.toLocaleString()}`) + '\n');
   process.stdout.write('\n');
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -682,6 +705,12 @@ export function register(program: Command): void {
         ...(globalOpts.workspace !== undefined && { workspace: globalOpts.workspace }),
       };
 
+      if (hasIngestDisclosure([filePath, slugify(filePath), ingestOpts])) {
+        process.stderr.write(formatError(disclosureError().message) + '\n');
+        process.exit(1);
+        return;
+      }
+
       const skipConfirm = opts.yes === true || globalOpts.yes === true;
 
       // ------------------------------------------------------------------
@@ -719,7 +748,13 @@ export function register(program: Command): void {
               /* non-fatal */
             }
             const previewType = detectSourceType(file);
-            await showPreview(file, previewType, fileSize);
+            const previewError = await showPreview(file, previewType, fileSize);
+            if (previewError) {
+              process.stderr.write(formatError(previewError.message) + '\n');
+              batchErrors.push({ file: sourceLabel(file), message: previewError.message });
+              batchSkipped++;
+              continue;
+            }
             const confirmed = await confirm('Ingest this file? [Y/n] ');
             if (!confirmed) {
               process.stdout.write(formatWarning(`Skipped: ${basename(file)}`) + '\n');
@@ -735,8 +770,10 @@ export function register(program: Command): void {
 
           const result = await runIngest(file, ingestOpts, global);
           if (!result.ok) {
-            process.stderr.write(formatError(`${basename(file)}: ${result.error.message}`) + '\n');
-            batchErrors.push({ file, message: result.error.message });
+            process.stderr.write(
+              formatError(`${basename(sourceLabel(file))}: ${result.error.message}`) + '\n',
+            );
+            batchErrors.push({ file: sourceLabel(file), message: result.error.message });
             batchLockBusy ||= isBrainWriteLockBusyError(result.error);
             batchSkipped++;
           } else if (result.value.alreadyIngested === true) {
@@ -779,7 +816,12 @@ export function register(program: Command): void {
         }
 
         const previewType = detectSourceType(filePath);
-        await showPreview(filePath, previewType, fileSize);
+        const previewError = await showPreview(filePath, previewType, fileSize);
+        if (previewError) {
+          process.stderr.write(formatError(previewError.message) + '\n');
+          process.exit(1);
+          return;
+        }
 
         if (!process.stdin.isTTY) {
           process.stderr.write(
