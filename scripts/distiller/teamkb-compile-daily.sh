@@ -493,6 +493,7 @@ esac
 log "Invoking: ${AGENT_NAME} -p /teamkb-compile $TARGET $NEXT --$MODE (timeout ${TIMEOUT_SECS}s, max-turns ${TEAMKB_MAX_TURNS}, pty-wrapped)"
 # Explicit per-attempt context reaches Bash tools independently of PTY stdout.
 # These are progress diagnostics, not proof that any phase succeeded.
+export TEAMKB_PHASE_WRAPPED=1
 export TEAMKB_PHASE_HELPER="$SCRIPT_DIR/runtime-proof.py"
 export TEAMKB_PHASE_DATE="$TARGET" TEAMKB_PHASE_MODE="$MODE"
 TEAMKB_PHASE_LOG="$(realpath -m -- "$LOG")"
@@ -542,7 +543,7 @@ fi
 if ! python3 "$TEAMKB_PHASE_HELPER" phase-end >> "$LOG" 2>&1; then
   log "WARNING: phase summary unavailable; consult authoritative outcome receipts"
 fi
-unset TEAMKB_PHASE_HELPER TEAMKB_PHASE_LOG TEAMKB_PHASE_DATE TEAMKB_PHASE_MODE
+unset TEAMKB_PHASE_WRAPPED TEAMKB_PHASE_HELPER TEAMKB_PHASE_LOG TEAMKB_PHASE_DATE TEAMKB_PHASE_MODE
 unset TEAMKB_PHASE_DECISIONS TEAMKB_PHASE_DIGEST TEAMKB_PHASE_RECEIPTS TEAMKB_PHASE_ATTEMPT
 
 # ── Classify result ──────────────────────────────────────────────────────────

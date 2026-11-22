@@ -171,8 +171,10 @@ PHASE_PREFIX = "BBB_PHASE "
 def phase_event(event, phase=None):
     """Append diagnostic progress, never evidence of a governed outcome.
 
-    The wrapper owns context. An agent can report entry, not phase completion.
-    The log is not an authentication boundary; other local writers can alter it.
+    The wrapper supplies context, but every caller runs as the same OS user.
+    Event/source labels describe the requested record, not authenticated caller
+    identity. Even an end record reports entries, never phase completion.
+    Local writers can alter the log or choose another writable destination.
     """
     required = ("LOG", "ATTEMPT", "DATE", "MODE", "DECISIONS", "DIGEST", "RECEIPTS")
     context = {key: os.environ.get("TEAMKB_PHASE_" + key, "") for key in required}
@@ -195,9 +197,11 @@ def phase_event(event, phase=None):
     row = {"event": event, "attempt": context["ATTEMPT"], "date": context["DATE"],
            "mode": context["MODE"], "at": dt.datetime.now(dt.timezone.utc).isoformat(),
            "source": "agent_reported" if event == "phase" else "wrapper",
-           "meaning": "diagnostic_only"}
-    # Open the already-created wrapper log; do not create a missing destination
-    # or follow a substituted symlink. The descriptor owns validation and writes.
+           "meaning": "diagnostic_only", "attribution": "unverified"}
+    # This helper alone refuses a missing/nonregular destination or a symlink
+    # at the supplied final path. This is not a wrapper-wide path guarantee:
+    # existing wrapper logging creates the log and follows its configured path.
+    # Descriptor checks do not restrict other same-user processes or ancestors.
     fd = os.open(context["LOG"], os.O_RDWR | os.O_APPEND | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(fd, "r+", encoding="utf-8", errors="replace") as log:
         if not stat.S_ISREG(os.fstat(log.fileno()).st_mode):

@@ -94,7 +94,7 @@ if os.environ.get("FIXTURE_OUTCOME")=="success":
 
     def phase_agent(self, phases, fail=False):
         original = self.agent.read_text()
-        code = "import subprocess,sys\n"
+        code = "import subprocess,sys\nassert os.environ.get('TEAMKB_PHASE_WRAPPED') == '1'\n"
         code += "for phase in " + repr(phases) + ":\n"
         code += ' subprocess.run(["python3", os.environ["TEAMKB_PHASE_HELPER"], "phase", "--phase", phase], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n'
         if fail:
@@ -120,6 +120,7 @@ if os.environ.get("FIXTURE_OUTCOME")=="success":
                 self.assertEqual(rows[-1]["missing"], [])
                 self.assertEqual(rows[0]["artifacts"]["decisions"], str(self.decisions))
                 self.assertTrue(all(r["source"] == "agent_reported" for r in rows[1:-1]))
+                self.assertTrue(all(r["attribution"] == "unverified" for r in rows))
         starts = [r for r in self.phase_rows() if r["event"] == "start"]
         self.assertEqual(len({r["attempt"] for r in starts}), 2)
         self.assertNotIn("fixture-key-never-log", json.dumps(self.phase_rows()))
