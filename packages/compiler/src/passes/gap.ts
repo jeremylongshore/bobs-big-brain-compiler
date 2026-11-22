@@ -29,7 +29,6 @@
  *
  * Never throws — all error paths return err(Error).
  */
-
 import {
   existsSync,
   mkdirSync,
@@ -52,6 +51,12 @@ import {
   scaledMaxTokens,
   wasTruncated,
 } from './batch-helper.js';
+import {
+  captureInput,
+  type InputClosure,
+  settleOutputCustody,
+  unionInputs,
+} from './input-custody.js';
 import { wikiOutputFilename } from './output-filename.js';
 import { checkModelOutput, type PassOutcome, stampPassProvenance } from './output-filter.js';
 import { assertWikiOutputOwnership } from './output-ownership.js';
@@ -161,13 +166,19 @@ export interface GapResult {
  * Read all .md files from a wiki subdirectory.
  * Returns an empty array (not an error) if the directory does not exist.
  */
-function readWikiSubdir(workspacePath: string, subdir: string): string[] {
+function readWikiSubdir(
+  workspacePath: string,
+  subdir: string,
+  capture: (path: string, content: string) => void,
+): string[] {
   const dir = join(workspacePath, 'wiki', subdir);
   if (!existsSync(dir)) return [];
   try {
-    return readdirSync(dir)
+    const pages = readdirSync(dir)
       .filter((f) => f.endsWith('.md'))
-      .map((f) => readFileSync(join(dir, f), 'utf-8'));
+      .map((f) => ({ path: `wiki/${subdir}/${f}`, content: readFileSync(join(dir, f), 'utf-8') }));
+    for (const page of pages) capture(page.path, page.content);
+    return pages.map((page) => page.content);
   } catch {
     return [];
   }
@@ -213,8 +224,13 @@ export async function identifyGaps(
 
   // 1. Read all compiled pages from key subdirectories.
   const allChunks: string[] = [];
+  const inputCustody: InputClosure[] = [];
   for (const subdir of WIKI_SUBDIRS) {
-    const pages = readWikiSubdir(workspacePath, subdir);
+    const pageCustody: InputClosure[] = [];
+    const pages = readWikiSubdir(workspacePath, subdir, (path, content) =>
+      pageCustody.push(captureInput(db, path, content)),
+    );
+    if (pages.length > 0) inputCustody.push(...pageCustody);
     for (const page of pages) {
       allChunks.push(`<!-- wiki/${subdir} -->\n${page}`);
     }
@@ -227,7 +243,9 @@ export async function identifyGaps(
   // 2. Chunk the compiled pages and call the API per batch, collecting raw pages.
   //    A single batch (small corpus) reproduces the old single-call behavior.
   const batches = chunkArray(allChunks, batchSize);
+  const batchInputs = chunkArray(inputCustody, batchSize).map(unionInputs);
   const rawPages: string[] = [];
+  const rawPageInputs: InputClosure[] = [];
   const rawPageCalls: ModelCallProvenance[] = [];
   let inputTokens = 0;
   let outputTokens = 0;
@@ -280,6 +298,7 @@ export async function identifyGaps(
       if (trimmed.length > 0) {
         rawPages.push(trimmed);
         rawPageCalls.push(callProvenance);
+        rawPageInputs.push(batchInputs[batchIndex] ?? null);
       }
     }
   }
@@ -435,6 +454,13 @@ export async function identifyGaps(
 
     // 7b. Receipts are durable — make the page visible.
     try {
+      const custody = settleOutputCustody(
+        db,
+        outputPath,
+        pageContent,
+        page.custodyInputIndices.map((index) => rawPageInputs[index] ?? null),
+      );
+      if (!custody.ok) return err(custody.error);
       renameSync(tmpPath, absoluteOutputPath);
     } catch (e) {
       return err(e instanceof Error ? e : new Error(String(e)));

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Database } from '@ico/kernel';
+import { initDatabase } from '@ico/kernel';
 import { err } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
@@ -51,15 +51,11 @@ describe('exported response-token configuration reaches each batched pass', () =
         .fn<ClaudeClient['createCompletion']>()
         .mockResolvedValue(err(stop));
       const client: ClaudeClient = { createCompletion };
-      const databaseAccesses: string[] = [];
-      // The pass must reach the injected client without opening or using a DB.
-      // A property-denying test double makes premature DB access observable.
-      const database = new Proxy({} as Database, {
-        get(_target, property) {
-          databaseAccesses.push(String(property));
-          throw new Error('Unexpected database access before fixture completion');
-        },
-      });
+      // Custody reads precede the client; a failed completion must still write nothing.
+      const opened = initDatabase(':memory:');
+      if (!opened.ok) throw opened.error;
+      const database = opened.value;
+      const before = database.serialize();
 
       // Import AFTER stubbing the environment: each real pass captures its
       // configured default at module initialization, rather than per call.
@@ -90,7 +86,8 @@ describe('exported response-token configuration reaches each batched pass', () =
       );
       expect(createCompletion.mock.calls[0]?.[2]?.maxTokens).toBe(16000);
       expect(result).toEqual(err(stop));
-      expect(databaseAccesses).toEqual([]);
+      expect(database.serialize()).toEqual(before);
+      database.close();
       expect(readFileSync(join(workspace, summaryPath), 'utf8')).toBe(summary);
     },
   );

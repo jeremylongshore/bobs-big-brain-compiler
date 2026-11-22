@@ -119,3 +119,13 @@ export function sourceInputCustody(
     return err(error instanceof Error ? error : new Error(String(error)));
   }
 }
+
+/** Remove an earlier receipt when a replacement output has incomplete lineage. */
+export function invalidateInputCustody(db: Database, outputPath: string): Result<void, Error> {
+  try {
+    db.prepare('DELETE FROM compilation_input_custody WHERE output_path = ?').run(outputPath);
+    return ok(undefined);
+  } catch (error) {
+    return err(error instanceof Error ? error : new Error(String(error)));
+  }
+}

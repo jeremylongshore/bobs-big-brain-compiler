@@ -463,6 +463,8 @@ export function ensureFrontmatterFence(content: string): string {
 
 /** A page after dedupe/merge, carrying its normalized key and stable ID. */
 export interface MergedPage {
+  /** All grouped raw pages; conservative privacy lineage includes discarded duplicates. */
+  custodyInputIndices: number[];
   /** Raw-page positions contributing body or list membership to this merge. */
   inputIndices: number[];
   /** Normalized title key the page was grouped under. */
@@ -508,6 +510,7 @@ export function mergePages(rawPages: readonly string[], options: MergePagesOptio
       chosenIndex: number;
       ids: string[];
       listInputIndices: number[];
+      custodyInputIndices: number[];
     }
   >();
   const order: string[] = [];
@@ -523,11 +526,13 @@ export function mergePages(rawPages: readonly string[], options: MergePagesOptio
         title,
         chosen: page,
         chosenIndex: inputIndex,
+        custodyInputIndices: [inputIndex],
         ids: [...ids],
         listInputIndices: ids.length > 0 ? [inputIndex] : [],
       });
       order.push(key);
     } else {
+      existing.custodyInputIndices.push(inputIndex);
       // Keep the longest page as the canonical body/definition.
       if (page.length > existing.chosen.length) {
         existing.chosen = page;
@@ -562,6 +567,13 @@ export function mergePages(rawPages: readonly string[], options: MergePagesOptio
     const inputIndices = [...new Set([group.chosenIndex, ...group.listInputIndices])].sort(
       (a, b) => a - b,
     );
-    return { key, id, title: group.title, content, inputIndices };
+    return {
+      key,
+      id,
+      title: group.title,
+      content,
+      inputIndices,
+      custodyInputIndices: group.custodyInputIndices,
+    };
   });
 }

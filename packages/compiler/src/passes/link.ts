@@ -10,7 +10,6 @@
  *
  * Never throws — all error paths return err(Error).
  */
-
 import { existsSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, extname, join, relative } from 'node:path';
 
@@ -19,6 +18,7 @@ import { err, ok, type Result } from '@ico/types';
 
 import type { ClaudeClient } from '../api/claude-client.js';
 import { wikiReferenceResolver, wikiReferences } from '../wiki-references.js';
+import { captureInput, type InputClosure, settleOutputCustody } from './input-custody.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -165,6 +165,9 @@ export async function addBacklinks(
   // Resolve by page object, so duplicate stems in different directories cannot
   // overwrite each other's graph entries. Ambiguous targets remain unresolved.
   const resolveReference = wikiReferenceResolver(allPages);
+  const inputCustody = new Map(
+    allPages.map((page) => [page, captureInput(db, page.relPath, page.content)]),
+  );
   const backRefs = new Map<PageInfo, Set<PageInfo>>();
   for (const page of allPages) {
     for (const reference of wikiReferences(stripBacklinksSection(page.content))) {
@@ -189,7 +192,13 @@ export async function addBacklinks(
   // receipted content). No ordering can produce an unreceipted visible page.
   let pagesUpdated = 0;
   let totalBacklinks = 0;
-  const pendingRenames: Array<{ tmpPath: string; absPath: string }> = [];
+  const pendingRenames: Array<{
+    tmpPath: string;
+    absPath: string;
+    relPath: string;
+    content: string;
+    inputs: InputClosure[];
+  }> = [];
 
   for (const page of allPages) {
     const incoming = backRefs.get(page);
@@ -208,7 +217,13 @@ export async function addBacklinks(
     } catch (e) {
       return err(e instanceof Error ? e : new Error(String(e)));
     }
-    pendingRenames.push({ tmpPath, absPath: page.absPath });
+    pendingRenames.push({
+      tmpPath,
+      absPath: page.absPath,
+      relPath: page.relPath,
+      content: newContent,
+      inputs: [page, ...referrers].map((input) => inputCustody.get(input) ?? null),
+    });
 
     pagesUpdated++;
   }
@@ -224,8 +239,10 @@ export async function addBacklinks(
     }
 
     // 7. Receipt is durable — make the updated pages visible.
-    for (const { tmpPath, absPath } of pendingRenames) {
+    for (const { tmpPath, absPath, relPath, content, inputs } of pendingRenames) {
       try {
+        const custody = settleOutputCustody(db, relPath, content, inputs);
+        if (!custody.ok) return err(custody.error);
         renameSync(tmpPath, absPath);
       } catch (e) {
         return err(e instanceof Error ? e : new Error(String(e)));
