@@ -241,8 +241,15 @@ export async function runIngestPipeline(
   }
 
   // Refuse known disclosure patterns before parsing or opening persistent state.
+  // The original filename enters audit text; the normalized slug enters paths.
   // Use a generic error: neither matched text nor source metadata belongs in logs.
-  if (scanForDisclosure(capturedBytes.toString('utf8')) !== null) {
+  const sourceName = basename(filePath);
+  const slug = slugify(sourceName);
+  if (
+    scanForDisclosure(sourceName) !== null ||
+    scanForDisclosure(slug) !== null ||
+    scanForDisclosure(capturedBytes.toString('utf8')) !== null
+  ) {
     return err(new Error('Disclosure check failed: source content is not permitted.'));
   }
 
@@ -282,7 +289,6 @@ export async function runIngestPipeline(
   try {
     // 8. Determine destination relative path and check for duplicate.
     const subdir = TYPE_SUBDIRS[type];
-    const slug = slugify(basename(filePath));
     const relPath = join('raw', subdir, slug);
 
     const changedResult = isSourceChanged(db, relPath, hash);
@@ -393,8 +399,8 @@ export async function runIngestPipeline(
 
     // 13. Append audit log entry.
     const auditMessage = isReingest
-      ? `Re-ingested ${basename(filePath)} (updated content)`
-      : `Ingested ${basename(filePath)}`;
+      ? `Re-ingested ${sourceName} (updated content)`
+      : `Ingested ${sourceName}`;
     const auditResult = appendAuditLog(options.workspacePath, traceEventType, auditMessage);
     if (!auditResult.ok) {
       return err(auditResult.error);

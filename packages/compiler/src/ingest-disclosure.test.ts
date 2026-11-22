@@ -74,6 +74,8 @@ describe('library ingestion disclosure boundary', () => {
   });
 
   it.each([
+    ['sa!lary.md', '# Neutral title\n\nUseful facts', 'salary', false],
+    ['salary.md', '# Neutral title\n\nUseful facts', 'salary', false],
     ['raw.md', '# Private\n\nsalary', 'salary', false],
     ['raw.txt', 'date of birth', 'date of birth', false],
     ['body.html', '<html><body><p>s&#97;lary</p></body></html>', 'salary', true],
