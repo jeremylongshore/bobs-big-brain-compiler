@@ -5,6 +5,9 @@ import argparse
 import datetime as dt
 import importlib.util
 import hashlib
+import fcntl
+import re
+import stat
 import json
 import os
 from pathlib import Path
@@ -160,16 +163,102 @@ def mcp_read(config, name):
             child.wait()
 
 
+
+PHASES = ("setup", "gather", "distill", "govern", "audit", "digest")
+PHASE_PREFIX = "BBB_PHASE "
+
+
+def phase_event(event, phase=None):
+    """Append diagnostic progress, never evidence of a governed outcome.
+
+    The wrapper owns context. An agent can report entry, not phase completion.
+    The log is not an authentication boundary; other local writers can alter it.
+    """
+    required = ("LOG", "ATTEMPT", "DATE", "MODE", "DECISIONS", "DIGEST", "RECEIPTS")
+    context = {key: os.environ.get("TEAMKB_PHASE_" + key, "") for key in required}
+    if any(not value or len(value) > 4096 or any(ord(c) < 32 for c in value)
+           for value in context.values()):
+        raise ValueError("phase logging unavailable: missing or invalid wrapper context")
+    if not re.fullmatch(r"[0-9a-f]{32}", context["ATTEMPT"]):
+        raise ValueError("invalid phase attempt")
+    if dt.date.fromisoformat(context["DATE"]).isoformat() != context["DATE"]:
+        raise ValueError("invalid phase date")
+    if context["MODE"] not in ("auto", "digest"):
+        raise ValueError("invalid phase mode")
+    if event == "phase" and phase not in PHASES:
+        raise ValueError("invalid phase name")
+    if event not in ("start", "phase", "end"):
+        raise ValueError("invalid phase event")
+    for key in ("LOG", "DECISIONS", "DIGEST", "RECEIPTS"):
+        if not Path(context[key]).is_absolute():
+            raise ValueError("phase paths must be absolute")
+    row = {"event": event, "attempt": context["ATTEMPT"], "date": context["DATE"],
+           "mode": context["MODE"], "at": dt.datetime.now(dt.timezone.utc).isoformat(),
+           "source": "agent_reported" if event == "phase" else "wrapper",
+           "meaning": "diagnostic_only"}
+    # Open the already-created wrapper log; do not create a missing destination
+    # or follow a substituted symlink. The descriptor owns validation and writes.
+    fd = os.open(context["LOG"], os.O_RDWR | os.O_APPEND | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, "r+", encoding="utf-8", errors="replace") as log:
+        if not stat.S_ISREG(os.fstat(log.fileno()).st_mode):
+            raise ValueError("phase log must be a regular file")
+        fcntl.flock(log.fileno(), fcntl.LOCK_EX)
+        history = []
+        # Bounded line reads avoid loading a transcript into memory. Only our
+        # fixed-prefix records for this attempt participate in the diagnostic.
+        while True:
+            line = log.readline(32768)
+            if not line:
+                break
+            if line.startswith(PHASE_PREFIX):
+                try:
+                    previous = json.loads(line[len(PHASE_PREFIX):])
+                except ValueError:
+                    continue
+                if isinstance(previous, dict) and previous.get("attempt") == context["ATTEMPT"]:
+                    history.append(previous)
+                    if len(history) > 32:
+                        raise ValueError("too many phase records for one attempt")
+        names = [item.get("phase") for item in history if item.get("event") == "phase"]
+        if event == "start":
+            if history:
+                raise ValueError("phase attempt already exists")
+            row["artifacts"] = {key.lower(): context[key] for key in ("DECISIONS", "DIGEST", "RECEIPTS")}
+        else:
+            if not history or history[0].get("event") != "start" or any(item.get("event") == "end" for item in history):
+                raise ValueError("phase attempt is not active")
+            if event == "phase":
+                row["phase"] = phase
+                row["sequence_ok"] = len(names) < len(PHASES) and phase == PHASES[len(names)] and names == list(PHASES[:len(names)])
+            else:
+                row["entered"] = names
+                row["missing"] = [name for name in PHASES if name not in names]
+                row["sequence_ok"] = names == list(PHASES)
+                row["last_entered"] = names[-1] if names else None
+        log.write(PHASE_PREFIX + json.dumps(row, separators=(",", ":")) + "\n")
+        log.flush()
+        os.fsync(log.fileno())
+    return row
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["completed", "verified", "verify", "pending", "audit", "clean-digest-count"])
+    parser.add_argument("action", choices=["completed", "verified", "verify", "pending", "audit", "clean-digest-count", "phase-start", "phase", "phase-end"])
     parser.add_argument("--decisions")
     parser.add_argument("--date")
     parser.add_argument("--mode", default="auto", choices=["auto", "digest"])
     parser.add_argument("--config")
     parser.add_argument("--output")
     parser.add_argument("--receipts-dir")
+    parser.add_argument("--phase", choices=PHASES)
     args = parser.parse_args()
+    if args.action in ("phase-start", "phase", "phase-end"):
+        try:
+            phase_event({"phase-start": "start", "phase": "phase", "phase-end": "end"}[args.action], args.phase)
+        except (OSError, ValueError, TypeError):
+            print("compile-proof: phase logging unavailable or invalid", file=sys.stderr)
+            return 1
+        return 0
     if args.action == "clean-digest-count":
         print(clean_digest_nights(args.decisions, args.date, args.receipts_dir))
         return 0
