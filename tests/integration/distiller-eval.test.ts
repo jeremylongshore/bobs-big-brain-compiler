@@ -17,10 +17,10 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -345,5 +345,71 @@ describe('CLI', () => {
     const r = runHarness(['--date', '2026-07-18']);
     expect(r.status).toBe(2);
     expect(r.stderr).toContain('usage error');
+  });
+});
+
+describe('release entry points', () => {
+  function releasePaths(): string[] {
+    const release = join(scratch, 'releases', 'build #1%');
+    mkdirSync(release, { recursive: true });
+    const target = join(release, 'eval-distiller-output.mjs');
+    copyFileSync(harness, target);
+    const current = join(scratch, 'current');
+    symlinkSync(release, current, 'dir');
+    const fileLink = join(scratch, 'eval-link.mjs');
+    symlinkSync(target, fileLink, 'file');
+    return [target, join(current, 'eval-distiller-output.mjs'), fileLink];
+  }
+
+  it.each(['pass', 'fail', 'skip', 'usage'] as const)(
+    'executes %s through real, directory-symlink and file-symlink entry points',
+    (scenario) => {
+      writeFileSync(join(kbExport, 'guides', 'source.md'), 'reliable deployment evidence');
+      if (scenario !== 'skip') {
+        writeDecisions([
+          {
+            date: '2026-07-18',
+            candidates: [
+              {
+                title:
+                  scenario === 'fail' ? 'fabricated lunar cheese' : 'reliable deployment evidence',
+                disposition: 'promoted',
+                citation: 'qmd://kb-guides/source.md',
+              },
+            ],
+          },
+        ]);
+      }
+      const args =
+        scenario === 'usage'
+          ? []
+          : ['--decisions', decisionsPath, '--date', '2026-07-18', '--kb-export', kbExport];
+      for (const entry of releasePaths()) {
+        const result = spawnSync(process.execPath, [entry, ...args], {
+          encoding: 'utf-8',
+          timeout: 10000,
+        });
+        expect(result.error).toBeUndefined();
+        expect(result.status).toBe(scenario === 'fail' ? 1 : scenario === 'usage' ? 2 : 0);
+        if (scenario === 'usage') expect(result.stdout + result.stderr).toMatch(/usage/i);
+        else expect(result.stdout).toContain(scenario.toUpperCase());
+        if (scenario === 'pass' || scenario === 'fail')
+          expect(result.stdout).toContain('promoted candidates');
+      }
+    },
+  );
+
+  it('imports a symlinked release without running the CLI', () => {
+    const entry = releasePaths()[1]!;
+    const importer = join(scratch, 'importer.mjs');
+    writeFileSync(
+      importer,
+      `import ${JSON.stringify(pathToFileURL(entry).href)}; console.log('imported');`,
+    );
+    const result = spawnSync(process.execPath, [importer], { encoding: 'utf-8', timeout: 10000 });
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe('imported\n');
+    expect(result.stderr).toBe('');
   });
 });
