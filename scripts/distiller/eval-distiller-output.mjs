@@ -35,8 +35,9 @@
  * Exit codes: 0 pass or skip · 1 groundedness below --min-score · 2 usage error.
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // ---------------------------------------------------------------------------
 // Citation contract (versioned)
@@ -332,6 +333,18 @@ function main() {
 }
 
 // Run only when invoked directly (not when imported by the test).
-if (import.meta.url === `file://${process.argv[1]}`) {
+function invokedDirectly() {
+  if (!process.argv[1]) return false;
+  try {
+    // Compare filesystem identities: argv can name a release symlink, while
+    // import.meta.url is resolved and URL-encoded (spaces, # and % included).
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+  } catch {
+    // An importing process need not have a resolvable filesystem entry point.
+    return false;
+  }
+}
+
+if (invokedDirectly()) {
   main();
 }
