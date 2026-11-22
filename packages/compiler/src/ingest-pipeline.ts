@@ -110,12 +110,12 @@ export interface IngestPipelineResult {
 // ---------------------------------------------------------------------------
 
 /** Scan decoded metadata strings without JSON escaping hiding whitespace. */
-function metadataHasDisclosure(value: unknown, seen = new Set<object>()): boolean {
+export function hasIngestDisclosure(value: unknown, seen = new Set<object>()): boolean {
   if (typeof value === 'string') return scanForDisclosure(value) !== null;
   if (value === null || typeof value !== 'object' || seen.has(value)) return false;
   seen.add(value);
   return Object.entries(value).some(
-    ([key, nested]) => scanForDisclosure(key) !== null || metadataHasDisclosure(nested, seen),
+    ([key, nested]) => scanForDisclosure(key) !== null || hasIngestDisclosure(nested, seen),
   );
 }
 
@@ -269,7 +269,7 @@ export async function runIngestPipeline(
   // database, raw-file, trace or audit writes. This uses the existing bounded
   // kernel pattern policy; it is not comprehensive PII detection.
   try {
-    if (scanForDisclosure(content) !== null || metadataHasDisclosure(metadata)) {
+    if (scanForDisclosure(content) !== null || hasIngestDisclosure(metadata)) {
       return err(new Error('Disclosure check failed: extracted content is not permitted.'));
     }
   } catch {

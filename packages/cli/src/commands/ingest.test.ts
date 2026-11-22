@@ -12,6 +12,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -40,6 +41,7 @@ import {
   runBatchIngest,
   runIngest,
   scanDirectory,
+  showPreview,
   slugify,
 } from './ingest.js';
 
@@ -59,6 +61,47 @@ function writeFile(filePath: string, content = 'test content'): void {
 // ---------------------------------------------------------------------------
 // Fixture setup
 // ---------------------------------------------------------------------------
+
+/** A real PDF with hex-encoded text: raw UTF-8 scanning cannot see its words. */
+function hexTextPdf(text: string): Buffer {
+  const stream = `BT /F1 12 Tf 100 700 Td <${Buffer.from(text).toString('hex')}> Tj ET\n`;
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /MediaBox [0 0 612 792] /Parent 2 0 R /Contents 4 0 R /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> >>',
+    `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}endstream`,
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  for (const [index, object] of objects.entries()) {
+    offsets.push(Buffer.byteLength(pdf));
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  }
+  const xref = Buffer.byteLength(pdf);
+  pdf += `xref\n0 5\n0000000000 65535 f \n`;
+  for (const offset of offsets.slice(1)) pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(pdf);
+}
+
+/** Include every file and directory, including SQLite, raw, trace and audit surfaces. */
+function snapshot(root: string, prefix = ''): Map<string, Buffer> {
+  const result = new Map<string, Buffer>();
+  for (const entry of readdirSync(join(root, prefix), { withFileTypes: true })) {
+    const relative = join(prefix, entry.name);
+    if (entry.isDirectory()) {
+      result.set(`${relative}/`, Buffer.alloc(0));
+      for (const [name, bytes] of snapshot(root, relative)) result.set(name, bytes);
+    } else result.set(relative, readFileSync(join(root, relative)));
+  }
+  return result;
+}
+
+function expectUnchanged(root: string, before: Map<string, Buffer>): void {
+  const after = snapshot(root);
+  expect([...after.keys()].sort()).toEqual([...before.keys()].sort());
+  for (const [name, bytes] of before) expect(after.get(name)?.equals(bytes), name).toBe(true);
+}
 
 describe('runIngest', () => {
   let tempBase: string;
@@ -421,6 +464,121 @@ describe('runIngest', () => {
   // -------------------------------------------------------------------------
   // Disclosure guard — reject comp/PII at the source, before any write
   // -------------------------------------------------------------------------
+
+  it.each([
+    ['body.html', '<html><body><p>s&#97;lary</p></body></html>', {}, 'salary'],
+    [
+      'author.html',
+      '<html><head><meta name="author" content="s&#97;lary"></head><body>Neutral body</body></html>',
+      {},
+      'salary',
+    ],
+    [
+      'lines.html',
+      '<html><head><meta name="author" content="50&#47;50&#10;split"></head><body>Neutral body</body></html>',
+      {},
+      '50/50',
+    ],
+    ['encoded.pdf', hexTextPdf('salary'), {}, 'salary'],
+    ['salary.md', 'Neutral source', {}, 'salary'],
+    ['sa!lary.md', 'Neutral source', {}, 'salary'],
+    ['salary/source.md', 'Neutral source', {}, 'salary'],
+    ['title.txt', 'Neutral source', { title: 'salary' }, 'salary'],
+    ['author.txt', 'Neutral source', { author: 'salary' }, 'salary'],
+    ['raw.txt', 'salary', {}, 'salary'],
+  ] as const)(
+    'refuses disclosure without workspace mutation or echoed matches: %s',
+    async (name, content, overrides, forbidden) => {
+      const seed = join(tempBase, 'seed.txt');
+      writeFile(seed, 'Existing neutral knowledge');
+      const seeded = await runIngest(seed, {}, globalOpts());
+      expect(seeded.ok).toBe(true);
+      const path = join(tempBase, name);
+      mkdirSync(join(tempBase, 'salary'), { recursive: true });
+      writeFileSync(path, content);
+      const before = snapshot(workspaceRoot);
+      const lock = vi.spyOn(writeLock, 'withBrainWriteLock');
+      vi.spyOn(process.stdout, 'write').mockClear();
+      vi.spyOn(process.stderr, 'write').mockClear();
+      const result = await runIngest(path, { ...overrides, force: true }, globalOpts());
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.message).toMatch(/disclosure check failed/i);
+      expect(result.error.message).not.toContain(forbidden);
+      expect(result.error.cause).toBeUndefined();
+      expect(lock).not.toHaveBeenCalled();
+      expect(vi.spyOn(process.stdout, 'write')).not.toHaveBeenCalled();
+      expect(vi.spyOn(process.stderr, 'write')).not.toHaveBeenCalled();
+      expectUnchanged(workspaceRoot, before);
+    },
+  );
+
+  it.each([
+    ['preview.html', '<html><head><title>s&#97;lary</title></head><body>Neutral</body></html>'],
+    ['preview.pdf', hexTextPdf('salary')],
+    ['salary.txt', 'Neutral source'],
+  ] as const)(
+    'refuses preview before printing decoded or path content: %s',
+    async (name, content) => {
+      const path = join(tempBase, name);
+      writeFileSync(path, content);
+      const before = snapshot(workspaceRoot);
+      const error = await showPreview(path, detectSourceType(path), Buffer.byteLength(content));
+      expect(error?.message).toMatch(/disclosure check failed/i);
+      expect(error?.message).not.toContain('salary');
+      expect(vi.spyOn(process.stdout, 'write')).not.toHaveBeenCalled();
+      expect(vi.spyOn(process.stderr, 'write')).not.toHaveBeenCalled();
+      expectUnchanged(workspaceRoot, before);
+    },
+  );
+
+  it.each([
+    [
+      'clean.html',
+      '<html><head><title>Useful notes</title></head><body>Neutral facts</body></html>',
+    ],
+    ['clean.pdf', hexTextPdf('Neutral facts')],
+  ] as const)('preserves clean decoded formats: %s', async (name, content) => {
+    const path = join(tempBase, name);
+    const bytes = Buffer.from(content);
+    writeFileSync(path, bytes);
+    expect(await showPreview(path, detectSourceType(path), bytes.length)).toBeUndefined();
+    const result = await runIngest(path, {}, globalOpts());
+    if (!result.ok) throw result.error;
+    expect(readFileSync(join(workspaceRoot, result.value.path)).equals(bytes)).toBe(true);
+  });
+
+  it('persists the screened override snapshot if the caller changes options at the lock', async () => {
+    const path = join(tempBase, 'stable.txt');
+    writeFile(path, 'Neutral source');
+    const options: IngestOptions = { title: 'Approved title', author: 'Approved author' };
+    const originalLock = writeLock.withBrainWriteLock;
+    vi.spyOn(writeLock, 'withBrainWriteLock').mockImplementation(async (fn) => {
+      options.title = 'salary';
+      options.author = 'salary';
+      return originalLock(fn);
+    });
+    const result = await runIngest(path, options, globalOpts());
+    if (!result.ok) throw result.error;
+    const opened = initDatabase(join(workspaceRoot, '.ico/state.db'));
+    if (!opened.ok) throw opened.error;
+    try {
+      expect(
+        opened.value.prepare('SELECT title, author FROM sources WHERE id = ?').get(result.value.id),
+      ).toEqual({ title: 'Approved title', author: 'Approved author' });
+    } finally {
+      closeDatabase(opened.value);
+    }
+  });
+
+  it('redacts prohibited paths in batch errors', async () => {
+    const directory = join(tempBase, 'batch');
+    mkdirSync(directory);
+    writeFile(join(directory, 'salary.txt'), 'Neutral source');
+    const result = await runBatchIngest(directory, {}, globalOpts());
+    expect(result.errors).toHaveLength(1);
+    expect(JSON.stringify(result)).not.toContain('salary');
+  });
 
   it('rejects a source containing compensation content and writes nothing', async () => {
     const srcFile = join(tempBase, 'offer.md');

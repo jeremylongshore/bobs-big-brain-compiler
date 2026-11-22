@@ -3,6 +3,7 @@ export { detectSourceType, ingestSource, type SourceType } from './adapters/regi
 export type { IngestResult, IngestMetadata } from './adapters/types.js';
 export {
   runIngestPipeline,
+  hasIngestDisclosure,
   type IngestPipelineOptions,
   type IngestPipelineResult,
 } from './ingest-pipeline.js';
