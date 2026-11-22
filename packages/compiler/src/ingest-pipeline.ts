@@ -32,6 +32,7 @@ import {
   listSources,
   recordProvenance,
   registerSource,
+  scanForDisclosure,
   writeTrace,
 } from '@ico/kernel';
 import { err, ok, type Result } from '@ico/types';
@@ -108,6 +109,16 @@ export interface IngestPipelineResult {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
+/** Scan decoded metadata strings without JSON escaping hiding whitespace. */
+function metadataHasDisclosure(value: unknown, seen = new Set<object>()): boolean {
+  if (typeof value === 'string') return scanForDisclosure(value) !== null;
+  if (value === null || typeof value !== 'object' || seen.has(value)) return false;
+  seen.add(value);
+  return Object.entries(value).some(
+    ([key, nested]) => scanForDisclosure(key) !== null || metadataHasDisclosure(nested, seen),
+  );
+}
+
 /**
  * Converts an arbitrary filename into a safe slug suitable for the `raw/`
  * directory.
@@ -147,7 +158,7 @@ function slugify(filename: string): string {
  *      parent directory (symlink-escape guard).
  *  3.  Check file size against `maxFileSize` (skipped when `force` is `true`).
  *  4.  Detect the source type (or use `typeOverride`).
- *  5.  Run the appropriate adapter over captured bytes to extract content and metadata.
+ *  5.  Screen captured bytes, run the adapter, and screen extracted content and metadata.
  *  6.  Compute the SHA-256 hash of those same captured bytes.
  *  7.  Open the SQLite database.
  *  8.  Determine the destination relative path: `raw/<subdir>/<slugified-name>`.
@@ -229,6 +240,19 @@ export async function runIngestPipeline(
     );
   }
 
+  // Refuse known disclosure patterns before parsing or opening persistent state.
+  // The original filename enters audit text; the normalized slug enters paths.
+  // Use a generic error: neither matched text nor source metadata belongs in logs.
+  const sourceName = basename(filePath);
+  const slug = slugify(sourceName);
+  if (
+    scanForDisclosure(sourceName) !== null ||
+    scanForDisclosure(slug) !== null ||
+    scanForDisclosure(capturedBytes.toString('utf8')) !== null
+  ) {
+    return err(new Error('Disclosure check failed: source content is not permitted.'));
+  }
+
   // 4. Detect source type.
   const type: SourceType = options.typeOverride ?? detectSourceType(resolvedPath);
 
@@ -238,7 +262,19 @@ export async function runIngestPipeline(
     return err(ingestResult.error);
   }
 
-  const { metadata } = ingestResult.value;
+  const { content, metadata } = ingestResult.value;
+
+  // Decoding HTML entities or PDF text can reveal content absent from the raw
+  // UTF-8 representation. Screen both extracted text and all metadata before any
+  // database, raw-file, trace or audit writes. This uses the existing bounded
+  // kernel pattern policy; it is not comprehensive PII detection.
+  try {
+    if (scanForDisclosure(content) !== null || metadataHasDisclosure(metadata)) {
+      return err(new Error('Disclosure check failed: extracted content is not permitted.'));
+    }
+  } catch {
+    return err(new Error('Disclosure check failed: extracted metadata could not be checked.'));
+  }
 
   // 6. Compute file hash.
   const hash = createHash('sha256').update(capturedBytes).digest('hex');
@@ -253,7 +289,6 @@ export async function runIngestPipeline(
   try {
     // 8. Determine destination relative path and check for duplicate.
     const subdir = TYPE_SUBDIRS[type];
-    const slug = slugify(basename(filePath));
     const relPath = join('raw', subdir, slug);
 
     const changedResult = isSourceChanged(db, relPath, hash);
@@ -364,8 +399,8 @@ export async function runIngestPipeline(
 
     // 13. Append audit log entry.
     const auditMessage = isReingest
-      ? `Re-ingested ${basename(filePath)} (updated content)`
-      : `Ingested ${basename(filePath)}`;
+      ? `Re-ingested ${sourceName} (updated content)`
+      : `Ingested ${sourceName}`;
     const auditResult = appendAuditLog(options.workspacePath, traceEventType, auditMessage);
     if (!auditResult.ok) {
       return err(auditResult.error);
