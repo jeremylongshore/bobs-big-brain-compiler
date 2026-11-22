@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -168,6 +168,34 @@ describe('actual compiler pass input custody', () => {
     const lineage = closure('wiki/sources/a.md');
     expect(lineage.ok).toBe(true);
     if (lineage.ok) expect(lineage.value.map((x) => x.sourceId)).toEqual([idA, idB]);
+  });
+  it('refuses source-version drift during a completion before making output visible', async () => {
+    seed(idA, 'wiki/sources/a.md');
+    const response = page('concept', 'Changed during completion');
+    const completion: ClaudeClient = {
+      createCompletion: vi.fn().mockImplementation(() => {
+        db.prepare('UPDATE sources SET hash = ? WHERE id = ?').run(hash('changed version'), idA);
+        return Promise.resolve(
+          ok({
+            content: response,
+            inputTokens: 20,
+            outputTokens: 30,
+            model: 'fixture',
+            stopReason: 'end_turn',
+          }),
+        );
+      }),
+    };
+    const result = await extractConcepts(completion, db, root, ['wiki/sources/a.md']);
+    expect(result.ok).toBe(false);
+    expect(readdirSync(join(root, 'wiki/concepts')).filter((name) => name.endsWith('.md'))).toEqual(
+      [],
+    );
+    expect(
+      db
+        .prepare("SELECT * FROM compilation_input_custody WHERE output_path LIKE 'wiki/concepts/%'")
+        .all(),
+    ).toEqual([]);
   });
   it('legacy and altered input pages cannot inherit a previous same-byte receipt', async () => {
     seed(idA, 'wiki/sources/a.md');
