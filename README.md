@@ -134,6 +134,49 @@ implementation; it is not a current feature audit of other products.
 
 ---
 
+## Operator-bound source capture
+
+Linux hosts can opt into capture bindings with `ICO_SOURCE_CATALOG=/absolute/catalog.json`
+for CLI ingestion, or the `captureCatalogPath` library option. Trusted host code must
+obtain that option from host configuration; this package cannot enforce where a
+library caller obtained the path. Operators provision the catalog; the capture code
+does not consult document metadata or model attribution to select a binding. This is a prerequisite for evidence handoff, not a signing or
+production-rollout feature.
+
+The catalog is version 1 JSON with `id`, positive integer `revision`, and `roots`.
+Each root requires `id`, canonical absolute `path`, filesystem `device` and `inode`
+as decimal strings, `repositoryId`, `profileId`, positive integer `profileRevision`,
+and a lowercase SHA-256 `profileDigest`. Profile references are operator assertions:
+this package validates syntax and consistency with the current catalog, not their
+validity against separate approved records. Authority-registry verification remains
+a prerequisite for future signing integration. Use `JSON.stringify(catalog)` or
+`JSON.stringify(catalog, null, 2)` encoding; duplicate keys are refused.
+
+Roots must exist and cannot overlap. Capture checks the opened file descriptor and
+pins root identity. The catalog and its immediate directory must be owned by the
+current user or root and cannot be group/world writable. Operators must also protect
+ancestor directories, source placement, the database and host access. A filesystem
+mapping does not independently authenticate a remote repository.
+
+Catalogs are limited to 1 MiB and 256 roots. Identifiers must match
+`[A-Za-z0-9][A-Za-z0-9._:-]{0,127}`. Registration retains up to 256 origin bindings
+per deduplicated source; distinct source paths consume separate binding slots.
+Exceeding the limit refuses registration instead of dropping an origin.
+Unconfigured imports remain supported but record unknown origin. Legacy missing
+history and unknown origins stay unknown through normal registration flows after a
+later configured import; this is not protection against privileged database rewrites. Catalog
+changes, including formatting changes, invalidate existing bindings; reimporting does
+not erase older bindings. Automatic recertification is intentionally unavailable.
+
+`readBoundInputCustody` checks complete deterministic input custody, stored raw bytes,
+and every recorded binding against the current catalog. It refuses missing, altered
+or stale records and does not choose a single permissive profile from mixed origins.
+Local record hashes detect drift; a privileged database writer can rewrite them.
+No signing keys, live source enrollment, or remote handoff are configured by this
+feature.
+
+---
+
 ## The six layers (architecture in one screen)
 
 ```

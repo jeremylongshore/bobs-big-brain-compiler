@@ -26,6 +26,8 @@ import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 
 
 import {
   appendAuditLog,
+  type CaptureEvidence,
+  captureSource,
   closeDatabase,
   initDatabase,
   isSourceChanged,
@@ -33,6 +35,7 @@ import {
   recordProvenance,
   registerSource,
   scanForDisclosure,
+  validateCaptureEvidence,
   writeTrace,
 } from '@ico/kernel';
 import { err, ok, type Result } from '@ico/types';
@@ -77,6 +80,8 @@ export interface IngestPipelineOptions {
   force?: boolean;
   /** Maximum allowed file size in bytes. Defaults to 50 MiB. */
   maxFileSize?: number;
+  /** Host callers must supply trusted configuration; this API cannot enforce path provenance. */
+  captureCatalogPath?: string;
 }
 
 /** The normalised result returned on a successful pipeline run. */
@@ -210,22 +215,36 @@ export async function runIngestPipeline(
   let fileSize: number;
   let capturedBytes: Buffer;
   let sourceMode: number;
+  let capture: CaptureEvidence | undefined;
   try {
-    const fd = openSync(resolvedPath, 'r');
-    try {
-      const sourceStat = fstatSync(fd);
-      sourceMode = sourceStat.mode & 0o777;
-      if (options.force !== true && sourceStat.size > maxFileSize) {
-        return err(
-          new Error(
-            `File too large: ${sourceStat.size} bytes exceeds limit of ${maxFileSize} bytes. Pass force: true to bypass.`,
-          ),
-        );
-      }
-      capturedBytes = readFileSync(fd);
+    if (options.captureCatalogPath !== undefined) {
+      const result = captureSource(
+        filePath,
+        options.captureCatalogPath,
+        options.force === true ? undefined : maxFileSize,
+      );
+      if (!result.ok) return result;
+      capturedBytes = result.value.bytes;
+      sourceMode = result.value.mode;
+      capture = result.value.evidence;
       fileSize = capturedBytes.length;
-    } finally {
-      closeSync(fd);
+    } else {
+      const fd = openSync(resolvedPath, 'r');
+      try {
+        const sourceStat = fstatSync(fd);
+        sourceMode = sourceStat.mode & 0o777;
+        if (options.force !== true && sourceStat.size > maxFileSize) {
+          return err(
+            new Error(
+              `File too large: ${sourceStat.size} bytes exceeds limit of ${maxFileSize} bytes. Pass force: true to bypass.`,
+            ),
+          );
+        }
+        capturedBytes = readFileSync(fd);
+        fileSize = capturedBytes.length;
+      } finally {
+        closeSync(fd);
+      }
     }
   } catch (e) {
     return err(e instanceof Error ? e : new Error(String(e)));
@@ -279,6 +298,11 @@ export async function runIngestPipeline(
   // 6. Compute file hash.
   const hash = createHash('sha256').update(capturedBytes).digest('hex');
 
+  if (capture) {
+    const valid = validateCaptureEvidence(capture, hash);
+    if (!valid.ok) return valid;
+  }
+
   // 7. Open the database.
   const dbResult = initDatabase(options.dbPath);
   if (!dbResult.ok) {
@@ -303,6 +327,7 @@ export async function runIngestPipeline(
         path: relPath,
         type,
         hash,
+        ...(capture !== undefined && { capture }),
         wordCount: metadata.wordCount,
         ...(metadata.title !== null && { title: metadata.title }),
         ...(metadata.author !== null && { author: metadata.author }),
@@ -366,6 +391,7 @@ export async function runIngestPipeline(
       path: relPath,
       type,
       hash,
+      ...(capture !== undefined && { capture }),
       wordCount: metadata.wordCount,
       ...(metadata.title !== null && { title: metadata.title }),
       ...(metadata.author !== null && { author: metadata.author }),
