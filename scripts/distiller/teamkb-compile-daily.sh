@@ -96,10 +96,12 @@ chmod 700 "$SCRATCH" 2>/dev/null || true   # tighten even if it pre-existed loos
 LOG="$LOG_DIR/run-${TARGET}.log"
 DIGEST="$SCRATCH/digest-${TARGET}.md"
 
-# Liveness markers for automation-liveness-sweep (own EXIT trap — don't use arm_fail_trap).
-_BEATDIR="$HOME/.local/state/notify-lib"
-mkdir -p "$_BEATDIR" 2>/dev/null || true
-: > "$_BEATDIR/teamkb-compile-daily.beat" 2>/dev/null || true
+# Liveness markers are written by the scheduler, not here: cron runs this script under
+# intent-os ops/runtime/with-liveness.sh, which writes .beat every run and .ok on exit 0 into
+# the directory the dev-box liveness sweep reads. The markers this script used to write went to
+# the retired ~/.local/state/notify-lib, so a healthy nightly compile showed as STOPPED
+# (intent-os INC-2026-11-22). Exit codes are the contract: 0 = compiled, verified or a
+# deliberate skip; non-zero = failed.
 
 log() { echo "[$(date -Is)] $*" | tee -a "$LOG"; }
 
@@ -664,10 +666,9 @@ esac
 
 NOTIFIED=1
 log "=== teamkb-compile-daily end (${STATUS}) ==="
-# .ok only on genuine success (rc 0 path). Independent of heartbeat.
+# Exit 0 only on genuine success; the liveness wrapper turns that into .ok.
 case "$STATUS" in
   OK*)
-    : > "$_BEATDIR/teamkb-compile-daily.ok" 2>/dev/null || true
     exit 0
     ;;
   *)
